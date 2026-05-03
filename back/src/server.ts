@@ -280,11 +280,9 @@ io.on('connection', (socket) => {
         });
         resolvedChatId = chat?._id?.toString();
       }
-
       const newCall = await Call.create({
         caller: data.from,
         receiver: data.userToCall,
-        receiverModel: 'User',
         chatId: resolvedChatId,
         type: data.callType || 'video',
         status: 'missed'
@@ -340,7 +338,7 @@ io.on('connection', (socket) => {
       } else if (data.caller && data.receiver && data.chatId) {
         // Fallback if callId was missed: Create it now
         callDoc = await Call.create({
-          caller: data.caller, receiver: data.receiver, receiverModel: data.receiverModel || 'User',
+          caller: data.caller, receiver: data.receiver,
           chatId: data.chatId, type: data.type || 'video', status: data.status || 'rejected', duration: data.duration || 0
         });
       }
@@ -376,7 +374,7 @@ io.on('connection', (socket) => {
       } else if (data.caller && data.receiver && data.chatId) {
         // Fallback creation
         callDoc = await Call.create({
-          caller: data.caller, receiver: data.receiver, receiverModel: data.receiverModel || 'User',
+          caller: data.caller, receiver: data.receiver,
           chatId: data.chatId, type: data.type || 'video', status: data.status || 'missed', duration: data.duration || 0
         });
       }
@@ -394,7 +392,7 @@ io.on('connection', (socket) => {
         io.to(effectiveChatId).emit('receive-message', savedMessage);
       }
       
-      const toId = data.to || (data.receiverModel === 'Group' ? data.chatId : data.receiver);
+      const toId = data.to || data.receiver;
       const receiverSocketId = userSocketMap.get(toId);
       if (receiverSocketId) io.to(receiverSocketId).emit('call-cancelled');
       console.log(`❌ Call [${data.callId || 'fallback'}] cancelled/missed`);
@@ -415,7 +413,7 @@ io.on('connection', (socket) => {
       } else if (data.caller && data.receiver && data.chatId) {
         // Fallback creation
         callDoc = await Call.create({
-          caller: data.caller, receiver: data.receiver, receiverModel: data.receiverModel || 'User',
+          caller: data.caller, receiver: data.receiver,
           chatId: data.chatId, type: data.type || 'video', status: data.status || 'ended', duration: data.duration || 0
         });
       }
@@ -441,7 +439,7 @@ io.on('connection', (socket) => {
         console.log(`⚠️ [end-call] No chatId — call_summary skipped for call ${data.callId}`);
       }
       
-      const toId = data.to || (data.receiverModel === 'Group' ? data.chatId : data.receiver);
+      const toId = data.to || data.receiver;
       const receiverSocketId = userSocketMap.get(toId);
       if (receiverSocketId) {
         io.to(receiverSocketId).emit('call-ended');
@@ -464,10 +462,8 @@ io.on('connection', (socket) => {
 
       const newCall = await Call.create({
         caller: data.callerId,
-        receiver: data.groupId,
-        receiverModel: 'Group',
         chatId: data.groupId,
-        type: data.callType || 'video', // ✅ Save actual type, NOT hardcoded 'group'
+        type: data.callType || 'video',
         status: 'missed'
       });
 
