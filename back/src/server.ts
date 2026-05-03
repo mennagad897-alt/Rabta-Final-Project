@@ -34,17 +34,35 @@ import { User } from './models/user';
 import * as chatService from './services/chat.service';
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = Number(process.env.PORT) || 5000;
 const BASE_URL = '/api/v1';
 
 // ==========================================
 // 🛡️ الميدلويرز الأساسية (CORS & JSON) - مكانها الصح هنا
 // ==========================================
-app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
-  credentials: true, 
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']
-}));
+const frontendOriginEnv = process.env.FRONTEND_URL?.trim();
+const allowedOrigins = [
+  frontendOriginEnv,
+  'http://localhost:5173',
+  'http://localhost:5174',
+  'http://localhost:3000',
+].filter(Boolean) as string[];
+
+const corsOptions = {
+  origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error(`CORS policy does not allow access from origin ${origin}`));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 app.use(express.json());
 app.use('/uploads', express.static('uploads'));
 
@@ -54,8 +72,15 @@ app.use('/uploads', express.static('uploads'));
 const server = http.createServer(app);
 export const io = new Server(server, {
   cors: {
-    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
-    methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE']
+    origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error(`Socket.io CORS policy does not allow access from origin ${origin}`));
+      }
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
   }
 });
 
@@ -150,7 +175,7 @@ io.on('connection', (socket) => {
   // ==========================================
   // 💬 إرسال واستقبال الرسائل (Chat Events)
   // ==========================================
-  socket.on('send-message', async (data: { chatId: string, content: string, messageType?: string }) => {
+  socket.on('send-message', async (data: { chatId: string, content: string, messageType?: string, tempId?: string }) => {
     try {
       // 🚫 Block Check: prevent messages between blocked users
       const Chat = require('./models/chat').default;
@@ -177,9 +202,15 @@ io.on('connection', (socket) => {
         messageType: data.messageType
       });
 
+      if (!savedMessage) return;
+
+      const messageToEmit = data.tempId 
+        ? { ...savedMessage.toObject(), tempId: data.tempId } 
+        : savedMessage;
+
       // بنبعت الرسالة لكل اللي في الـ room (الشات) - سواء فردي أو جماعي
       // io.to(roomId) بتبعت لكل اللي في الغرفة (بما فيهم المرسل)
-      io.to(data.chatId).emit('receive-message', savedMessage);
+      io.to(data.chatId).emit('receive-message', messageToEmit);
 
       console.log(`💬 Message from [${authenticatedUserId}] in chat [${data.chatId}]`);
     } catch (error: any) {
@@ -560,6 +591,27 @@ app.use(errorHandler);
 // ==========================================
 // 🌐 تشغيل السيرفر
 // ==========================================
+server.on('error', (error: NodeJS.ErrnoException) => {
+  if (error.syscall !== 'listen') {
+    throw error;
+  }
+
+  const bind = typeof PORT === 'string'
+    ? `Pipe ${PORT}`
+    : `Port ${PORT}`;
+
+  switch (error.code) {
+    case 'EACCES':
+      console.error(`${bind} requires elevated privileges.`);
+      process.exit(1);
+    case 'EADDRINUSE':
+      console.error(`${bind} is already in use.`);
+      process.exit(1);
+    default:
+      throw error;
+  }
+});
+
 server.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`🔗 Base URL is ready at: http://localhost:${PORT}${BASE_URL}`);

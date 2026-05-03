@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
 import toast from 'react-hot-toast';
-import axios from 'axios';
+import axiosInstance from '../../api/axiosInstance';
 import type { RootState } from "../../store/store";
 import { updateProfile } from '../../store/slices/authSlice';
 import { Input } from '../../components/ui/Input';
@@ -50,7 +50,7 @@ const EmployerSetup: React.FC = () => {
       setLoading(true);
       const loadingToast = toast.loading("Saving company profile...");
       
-      const response = await axios.patch('http://localhost:5001/api/v1/users/setup-profile', 
+      const response = await axiosInstance.patch('/profile/me', 
         { ...formData, profileCompleted: true },
         {
           headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }

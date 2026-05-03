@@ -5,6 +5,21 @@ import { logout } from "../store/slices/authSlice";
 import toast from "react-hot-toast";
 import { useNavigate } from "react-router-dom";
 
+interface SettingsState {
+  notifications: {
+    chatMessages: boolean;
+    communityMentions: boolean;
+    aiJobMatches: boolean;
+    inAppSounds: boolean;
+  };
+  privacy: {
+    showOnlineStatus: boolean;
+    showJobTitle: boolean;
+    publicProfile: boolean;
+  };
+  [key: string]: Record<string, boolean>;
+}
+
 export const Settings = () => {
   const user = useSelector((state: RootState) => state.auth.user);
   const navigate = useNavigate();
@@ -17,7 +32,7 @@ export const Settings = () => {
     return parts[0].slice(0, 2).toUpperCase();
   };
   
-  const [settings, setSettings] = useState(user?.settings || {
+  const [settings, setSettings] = useState<SettingsState>(user?.settings || {
     notifications: {
       chatMessages: true,
       communityMentions: true,
@@ -40,7 +55,7 @@ export const Settings = () => {
   };
 
   const handleToggle = (section: string, field: string) => {
-    setSettings((prev: any) => ({
+    setSettings((prev: SettingsState) => ({
       ...prev,
       [section]: {
         ...prev[section],
@@ -64,6 +79,7 @@ export const Settings = () => {
 
         {/* Profile Card */}
         <div onClick={() => navigate('/profile')} className="flex items-center gap-4 p-4 mb-6 bg-white dark:bg-[#262626] rounded-2xl border border-gray-100 dark:border-white/5 cursor-pointer hover:bg-gray-50 dark:hover:bg-white/[0.02] transition-all group">
+        <div className="flex items-center gap-4 p-4 mb-6 bg-white dark:bg-[#262626] rounded-2xl border border-gray-100 dark:border-white/5 cursor-pointer hover:bg-gray-50 dark:hover:bg-white/2 transition-all group">
           <div className="relative">
             {user?.avatar ? (
               <img 
@@ -81,12 +97,15 @@ export const Settings = () => {
           <div className="flex-1">
             <h2 className="text-lg font-bold text-[#171717] dark:text-[#F5F5F5]">{user?.fullName || "Guest User"}</h2>
             <p className="text-sm text-gray-500 dark:text-white/40 capitalize">
-              ITI {user?.track || "IT"} Track Graduate • Cairo
+              {user?.jobTitle && user?.location 
+                ? `${user.jobTitle} • ${user.location}`
+                : user?.jobTitle 
+                  ? user.jobTitle
+                  : user?.location 
+                    ? user.location
+                    : ""}
             </p>
           </div>
-          <span className="text-[#7C3AED] dark:text-[#8B5CF6] transform group-hover:translate-x-1 transition-transform">
-            <span className="material-icons-round">chevron_right</span>
-          </span>
         </div>
 
         <div className="space-y-4">
@@ -97,19 +116,10 @@ export const Settings = () => {
               Account
             </div>
             
-            <div onClick={() => navigate('/edit-profile')} className="flex items-center gap-4 p-4 hover:bg-gray-50 dark:hover:bg-white/[0.02] cursor-pointer transition-colors border-b border-gray-50 dark:border-white/5">
-              <div className="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 dark:text-blue-400">
-                <span className="material-icons-round">person</span>
-              </div>
-              <div className="flex-1">
-                <h4 className="text-sm font-semibold text-[#171717] dark:text-[#F5F5F5]">Profile & Identity</h4>
-                <p className="text-xs text-gray-400">Name, Bio, ITI Track</p>
-              </div>
-              <span className="text-gray-400"><span className="material-icons-round">chevron_right</span></span>
-            </div>
+           
 
             <div 
-              className="flex items-center gap-4 p-4 hover:bg-gray-50 dark:hover:bg-white/[0.02] cursor-pointer transition-colors"
+              className="flex items-center gap-4 p-4 hover:bg-gray-50 dark:hover:bg-white/2 cursor-pointer transition-colors"
               onClick={() => navigate('/privacy')}
             >
               <div className="w-10 h-10 rounded-xl bg-green-100 dark:bg-green-900/30 flex items-center justify-center text-green-600 dark:text-green-400">
@@ -117,7 +127,7 @@ export const Settings = () => {
               </div>
               <div className="flex-1">
                 <h4 className="text-sm font-semibold text-[#171717] dark:text-[#F5F5F5]">Privacy</h4>
-                <p className="text-xs text-gray-400">Last seen, Profile photo, Blocked users</p>
+                <p className="text-xs text-gray-400">Last seen</p>
               </div>
               <span className="text-gray-400">
                 <span className="material-icons-round">chevron_right</span>
@@ -132,7 +142,7 @@ export const Settings = () => {
             </div>
 
             <div 
-              className="flex items-center gap-4 p-4 hover:bg-gray-50 dark:hover:bg-white/[0.02] cursor-pointer transition-colors border-b border-gray-50 dark:border-white/5" 
+              className="flex items-center gap-4 p-4 hover:bg-gray-50 dark:hover:bg-white/2 cursor-pointer transition-colors border-b border-gray-50 dark:border-white/5" 
               onClick={toggleTheme}
             >
               <div className="w-10 h-10 rounded-xl bg-orange-100 dark:bg-indigo-900/30 flex items-center justify-center text-orange-500 dark:text-indigo-400 transition-colors">
@@ -149,7 +159,7 @@ export const Settings = () => {
             </div>
 
             <div 
-              className="flex items-center gap-4 p-4 hover:bg-gray-50 dark:hover:bg-white/[0.02] cursor-pointer transition-colors border-b border-gray-50 dark:border-white/5"
+              className="flex items-center gap-4 p-4 hover:bg-gray-50 dark:hover:bg-white/2 cursor-pointer transition-colors border-b border-gray-50 dark:border-white/5"
               onClick={() => navigate('/notifications')}
             >
               <div className="w-10 h-10 rounded-xl bg-red-100 dark:bg-red-900/30 flex items-center justify-center text-red-600 dark:text-red-400">
@@ -165,7 +175,7 @@ export const Settings = () => {
             </div>
 
             <div 
-              className="flex items-center gap-4 p-4 hover:bg-gray-50 dark:hover:bg-white/[0.02] cursor-pointer transition-colors"
+              className="flex items-center gap-4 p-4 hover:bg-gray-50 dark:hover:bg-white/2 cursor-pointer transition-colors"
               onClick={() => handleToggle('notifications', 'aiJobMatches')}
             >
               <div className="w-10 h-10 rounded-xl bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center text-purple-600 dark:text-purple-400">
@@ -202,6 +212,7 @@ export const Settings = () => {
 
         </div>
       </div>
+    </div>
     </div>
   );
 };

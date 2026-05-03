@@ -57,14 +57,23 @@ export const addComment = catchAsync(async (req: Request, res: Response, next: N
 });
 
 export const createPost = catchAsync(async (req: Request, res: Response) => {
-  const { content, media, communityId } = req.body;
+  const { content, communityId } = req.body;
   const authorId = (req.user as any)._id;
+
+  // Handle uploaded files if any
+  let media: any[] = [];
+  if (req.files && Array.isArray(req.files)) {
+    media = (req.files as Express.Multer.File[]).map(file => ({
+      url: `/uploads/avatars/${file.filename}`, // Using existing avatar path for now
+      type: file.mimetype.startsWith('image') ? 'image' : 'file'
+    }));
+  }
 
   const post = await Post.create({
     authorId,
     content,
     media,
-    communityId
+    communityId: communityId || undefined
   });
 
   res.status(201).json({

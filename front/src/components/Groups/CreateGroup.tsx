@@ -100,7 +100,7 @@ const CreateGroup: React.FC = () => {
         isPublic: formData.privacy === 'public'
       };
 
-      await axiosInstance.post('/communities', payload);
+      await axiosInstance.post('/groups', payload);
       
       toast.success('Group created successfully!');
       navigate('/groups');
@@ -234,7 +234,7 @@ const CreateGroup: React.FC = () => {
                   onChange={(e) => setSkillInput(e.target.value)}
                   onKeyDown={handleAddSkill}
                   placeholder="Type a skill and press Enter..." 
-                  className="flex-1 bg-transparent min-w-[200px] px-2 py-1.5 focus:outline-none text-sm dark:text-white"
+                  className="flex-1 bg-transparent min-w-50 px-2 py-1.5 focus:outline-none text-sm dark:text-white"
                 />
               </div>
             </div>

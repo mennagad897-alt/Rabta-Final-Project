@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import axiosInstance from '../api/axiosInstance';
 import axios from 'axios';
 
 // ==========================================
@@ -59,24 +60,20 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
     try {
       setIsSubmitting(true);
       setError(null);
-      const token = localStorage.getItem('test_token') || "";
-
-      // 💡 استخدمنا FormData عشان نقدر نبعت صور وملفات مع النص
       const formData = new FormData();
       formData.append('content', content);
+      formData.append('communityId', groupId); // 💡 Pass the group ID to the backend
       
       selectedFiles.forEach((file) => {
-        formData.append('media', file); // 'media' ده الاسم اللي الباك-إند هيستقبله
+        formData.append('media', file);
       });
 
-      // ⚠️ Endpoint افتراضي لرفع البوست داخل الجروب
-      await axios.post(
-        `http://localhost:5000/api/v1/groups/${groupId}/posts`,
+      await axiosInstance.post(
+        `/posts`,
         formData,
         { 
           headers: { 
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'multipart/form-data' // 💡 مهم جداً عشان الملفات
+            'Content-Type': 'multipart/form-data' 
           } 
         }
       );

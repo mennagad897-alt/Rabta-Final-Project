@@ -2,10 +2,10 @@ import { Request, Response, NextFunction } from 'express';
 import Community from '../models/Community';
 import Post from '../models/Post';
 import Message from '../models/Message';
+import Chat from '../models/chat';
 import { catchAsync } from '../utils/catchAsync';
 import { AppError } from '../utils/AppError';
 import * as aiService from '../services/ai.service';
-import Chat from '../models/chat';
 
 export const listCommunities = catchAsync(async (req: Request, res: Response) => {
   const { category } = req.query;
@@ -54,6 +54,7 @@ export const createCommunity = catchAsync(async (req: Request, res: Response) =>
     admins: [owner]
   });
 
+  // 2. Create the community linked to the chat
   const community = await Community.create({
     name,
     description,
@@ -81,9 +82,17 @@ export const joinCommunity = catchAsync(async (req: Request, res: Response, next
     return next(new AppError('You are already a member of this community', 400));
   }
 
+  // 1. Add to community members
   community.members.push(userId);
   await community.save();
 
+  if (community.chatId) {
+    await Chat.findByIdAndUpdate(community.chatId, {
+      $addToSet: { users: userId }
+    });
+  }
+
+  // 2. Add to associated group chat users
   if (community.chatId) {
     await Chat.findByIdAndUpdate(community.chatId, {
       $addToSet: { users: userId }
@@ -116,5 +125,38 @@ export const aiQuery = catchAsync(async (req: Request, res: Response) => {
   res.status(200).json({
     status: 'success',
     data: result
+  });
+});
+
+// ==========================================
+// 💬 جلب الشات المرتبط بالمجتمع (Community Chat)
+// ==========================================
+// الفرونت-إند محتاج يعرف الـ chatId عشان:
+// 1. يطلب تاريخ الرسائل من الـ REST API
+// 2. ينضم للـ Socket room الصح باستخدام الـ chatId كـ roomId
+export const getCommunityChat = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+  const community = await Community.findById(req.params.id).populate('chatId');
+  if (!community) return next(new AppError('Community not found', 404));
+
+  // التأكد إن المستخدم عضو في المجتمع قبل ما نديه الشات
+  const userId = (req.user as any)._id.toString();
+  const isMember = community.members.some((m) => m.toString() === userId);
+  if (!isMember) return next(new AppError('You must be a member to access this chat', 403));
+
+  if (!community.chatId) return next(new AppError('This community does not have a chat yet', 404));
+
+  // جلب آخر 30 رسالة مع بيانات المرسل
+  const messages = await Message.find({ chatId: community.chatId })
+    .populate('senderId', 'fullName avatar')
+    .sort({ createdAt: -1 })
+    .limit(30);
+
+  res.status(200).json({
+    status: 'success',
+    data: {
+      chatId: community.chatId,
+      communityName: community.name,
+      messages: messages.reverse() // الأقدم أولاً
+    }
   });
 });

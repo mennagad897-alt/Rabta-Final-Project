@@ -463,7 +463,7 @@ export const getCommunityById = async (communityId: string) => {
 // 📋 جلب محادثات اليوزر (كل الشاتات اللي هو عضو فيها)
 // ==========================================
 export const getUserChats = async (userId: string) => {
-  const chats = await Chat.find({ users: userId, isGroup: false }) // ✅ Strictly 1-to-1 only
+  const chats = await Chat.find({ users: userId, isGroup: false })
     .populate('users', 'fullName avatar status')
     .populate({
       path: 'latestMessage',

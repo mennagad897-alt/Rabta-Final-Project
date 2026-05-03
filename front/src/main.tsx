@@ -6,14 +6,17 @@ import App from "./App.tsx";
 import "./index.css";
 import { Toaster } from "react-hot-toast";
 import { store } from "./store/store";
+import { ChatProvider } from "./context/ChatContext";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <Provider store={store}>
-      <BrowserRouter>
-        <Toaster position="top-center" reverseOrder={false} />
-        <App />
-      </BrowserRouter>
+      <ChatProvider>
+        <BrowserRouter>
+          <Toaster position="top-center" reverseOrder={false} />
+          <App />
+        </BrowserRouter>
+      </ChatProvider>
     </Provider>
   </StrictMode>,
 );

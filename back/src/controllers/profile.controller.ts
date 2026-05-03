@@ -117,6 +117,7 @@ export const uploadProfileAvatar = catchAsync(async (req: Request, res: Response
     const avatarUrl = `${req.protocol}://${req.get('host')}/uploads/avatars/${req.file.filename}`;
 
     console.log('🔗 Generated URL:', avatarUrl);
+    console.log('🔗 Generated URL:', avatarUrl);
     // 3. تحديث اليوزر باللينك الجديد في قاعدة البيانات
     const updatedUser = await User.findByIdAndUpdate(
       (req.user as any)._id,
@@ -148,6 +149,8 @@ export const searchUsers = catchAsync(async (req: Request, res: Response, next: 
 
     queryObj.$or = [
       { fullName: searchRegex },
+      { email: searchRegex },
+      { phoneNumber: searchRegex },
       { skills: searchRegex },
       { bio: searchRegex }
     ];
@@ -165,8 +168,8 @@ export const searchUsers = catchAsync(async (req: Request, res: Response, next: 
 
   // 3. تنفيذ البحث في قاعدة البيانات
   const users = await User.find(queryObj)
-    // حماية: بنحدد الداتا اللي هترجع عشان منبعتش الباسورد أو بيانات حساسة
-    .select('fullName avatar jobTitle skills bio companyName status role')
+    // حماية: بنحدد الداتا اللي هترجع (ضفنا الإيميل والموبايل عشان الشات يحتاجهم)
+    .select('fullName avatar jobTitle email phoneNumber skills bio companyName status role') 
     .skip(skip)
     .limit(limit)
     .sort('-createdAt'); // ترتيب من الأحدث للأقدم

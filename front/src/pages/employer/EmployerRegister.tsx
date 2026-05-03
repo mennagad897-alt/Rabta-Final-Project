@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import axios from 'axios';
+import axiosInstance from '../../api/axiosInstance';
 import toast from 'react-hot-toast';
 import { useDispatch } from 'react-redux';
 import { setCredentials } from '../../store/slices/authSlice';
@@ -41,7 +41,7 @@ const EmployerRegister: React.FC = () => {
 
     const validate = async () => {
       try {
-        const response = await axios.get(`http://localhost:5001/api/v1/employer/validate-token/${token}`);
+        const response = await axiosInstance.get(`/employer/validate-token/${token}`);
         setCompanyInfo({
           name: response.data.data.companyName,
           email: response.data.data.companyEmail
@@ -59,7 +59,7 @@ const EmployerRegister: React.FC = () => {
 
   const onSubmit = async (data: RegisterFormData) => {
     try {
-      const response = await axios.post('http://localhost:5001/api/v1/employer/register', {
+      const response = await axiosInstance.post('/employer/register', {
         token,
         fullName: data.fullName,
         password: data.password

@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import axios from 'axios';
+import axiosInstance from '../../api/axiosInstance';
 import toast from 'react-hot-toast';
 import { Input } from '../../components/ui/Input';
 
@@ -33,7 +33,7 @@ const RequestAccess: React.FC = () => {
   const onSubmit = async (data: RequestFormData) => {
     try {
       setLoading(true);
-      await axios.post('http://localhost:5001/api/v1/employer/request', data);
+      await axiosInstance.post('/employer/request', data);
       setSubmitted(true);
       toast.success("Request submitted successfully!");
     } catch (error: any) {

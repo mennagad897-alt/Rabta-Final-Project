@@ -6,7 +6,7 @@ export const ViewContact: React.FC = () => {
 
   return (
     <main className="flex-1 h-full overflow-y-auto relative custom-scrollbar bg-[#F8F7FC] dark:bg-[#121212] transition-colors duration-500">
-      <div className="absolute top-0 left-0 w-full h-64 bg-gradient-to-b from-[#8B5CF6]/10 to-transparent z-0 pointer-events-none"></div>
+      <div className="absolute top-0 left-0 w-full h-64 bg-linear-to-b from-[#8B5CF6]/10 to-transparent z-0 pointer-events-none"></div>
 
       <div className="relative max-w-5xl mx-auto px-4 sm:px-6 py-10 z-10">
         <button onClick={() => navigate(-1)} className="inline-flex items-center gap-2 text-[#8B5CF6] font-bold transition-all w-fit hover:-translate-x-1 mb-8 focus:outline-none">
@@ -19,7 +19,7 @@ export const ViewContact: React.FC = () => {
           <div className="lg:col-span-2 flex flex-col gap-8">
             <article className="bg-white dark:bg-[#1E1E1E] rounded-3xl shadow-sm border border-[#8B5CF6]/10 transition-all duration-500 overflow-hidden relative">
               {/* Cover */}
-              <div className="h-32 w-full bg-gradient-to-r from-[#8B5CF6]/40 to-blue-500/40 relative">
+              <div className="h-32 w-full bg-linear-to-r from-[#8B5CF6]/40 to-blue-500/40 relative">
                 <div className="absolute top-6 right-6 bg-white/20 backdrop-blur-md border border-white/30 text-white text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5">
                   <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span> Online
                 </div>
@@ -45,7 +45,7 @@ export const ViewContact: React.FC = () => {
 
                 {/* Action Buttons */}
                 <div className="flex flex-wrap items-center gap-3 sm:gap-4 mb-8 pb-8 border-b border-gray-100 dark:border-gray-800">
-                  <button onClick={() => navigate('/chats')} className="flex-1 min-w-[120px] bg-[#8B5CF6] hover:bg-[#7C3AED] text-white py-3 sm:py-3.5 rounded-2xl font-bold text-sm transition-all hover:shadow-lg hover:shadow-[#8B5CF6]/20 active:scale-95 flex items-center justify-center gap-2">
+                  <button onClick={() => navigate('/chats')} className="flex-1 min-w-30 bg-[#8B5CF6] hover:bg-[#7C3AED] text-white py-3 sm:py-3.5 rounded-2xl font-bold text-sm transition-all hover:shadow-lg hover:shadow-[#8B5CF6]/20 active:scale-95 flex items-center justify-center gap-2">
                     <span className="material-icons-round text-xl">chat</span> Message
                   </button>
                   <button className="w-12 h-12 sm:w-14 sm:h-14 bg-gray-50 dark:bg-[#121212] border border-gray-100 dark:border-gray-800 text-gray-600 dark:text-gray-300 hover:text-[#8B5CF6] rounded-2xl flex items-center justify-center transition-colors hover:border-[#8B5CF6]/30">

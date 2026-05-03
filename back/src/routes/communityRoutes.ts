@@ -6,7 +6,8 @@ import {
   createCommunity,
   joinCommunity,
   getCommunityFeed,
-  aiQuery
+  aiQuery,
+  getCommunityChat
 } from '../controllers/community.controller';
 
 const router = Router();
@@ -17,6 +18,7 @@ router.get('/', listCommunities);
 router.post('/', restrictTo('employer'), createCommunity);
 router.post('/:id/join', joinCommunity);
 router.get('/:id/feed', getCommunityFeed);
+router.get('/:id/chat', getCommunityChat);
 router.post('/:id/ai/query', aiQuery);
 
 export default router;

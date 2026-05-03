@@ -23,6 +23,7 @@ import { JobsBoard } from './pages/JobsBoard';
 import { JobDetails } from './pages/JobDetails';
 import { CallsPage } from './pages/CallsPage';
 import { SharedContent } from './pages/SharedContent';
+import { NewContact } from './pages/NewContact';
 
 import CreateGroup from './components/Groups/CreateGroup'; 
 import JoinGroup from './components/Groups/JoinGroup';
@@ -74,6 +75,7 @@ function App() {
       <Route element={<ProtectedRoute />}>
         <Route element={<MainLayout />}>
           <Route path="/chats" element={<HomeFeed />} />
+          <Route path="/chats/new-contact" element={<NewContact />} />
           <Route path="/groups" element={<GroupsFeed />} />
           <Route path="/groups/:id" element={<GroupDetails />} />
           <Route path="/jobs" element={<JobsBoard />} />
