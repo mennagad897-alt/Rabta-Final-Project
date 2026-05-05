@@ -36,10 +36,47 @@ const SetupProfile: React.FC = () => {
     industry: ''
   });
 
+  const [skillInput, setSkillInput] = useState('');
+
   // --- دوال التحكم (Handlers) ---
 
   const handleInputChange = (field: string, value: string) => {
     setFormData({ ...formData, [field]: value });
+  };
+
+  // ✅ Handle adding skills (on Enter key or Add button click)
+  const handleAddSkill = (e?: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e && e.key !== 'Enter') return;
+    if (e) e.preventDefault();
+
+    const trimmedSkill = skillInput.trim().toLowerCase();
+    if (!trimmedSkill) return;
+
+    // Prevent duplicate skills
+    if (formData.skills.includes(trimmedSkill)) {
+      toast.error('This skill has already been added');
+      return;
+    }
+
+    // Enforce maximum 15 skills limit (matching backend)
+    if (formData.skills.length >= 15) {
+      toast.error('You can add up to 15 skills maximum');
+      return;
+    }
+
+    setFormData({
+      ...formData,
+      skills: [...formData.skills, trimmedSkill]
+    });
+    setSkillInput('');
+  };
+
+  // ✅ Handle removing a skill
+  const handleRemoveSkill = (skillToRemove: string) => {
+    setFormData({
+      ...formData,
+      skills: formData.skills.filter(s => s !== skillToRemove)
+    });
   };
 
   const handleLinkChange = (id: number, field: string, value: string) => {
@@ -113,15 +150,43 @@ const SetupProfile: React.FC = () => {
     e.preventDefault();
     try {
       const loadingToast = toast.loading("Saving profile...");
-      const response = await axiosInstance.patch('/profile/me', 
-        { ...formData, profileCompleted: true }
-      );
+      
+      // ✅ CRITICAL: Ensure payload exactly matches backend schema expectations
+      // Backend Mongoose User schema accepts:
+      // - fullName, bioHeadline, jobTitle, about, location, skills (string[])
+      // - companyName, industry, portfolio, website, socialLinks, status, profileComplete
+      const payload = {
+        fullName: formData.fullName.trim(),
+        bioHeadline: formData.bioHeadline.trim(),
+        jobTitle: formData.jobTitle.trim(),
+        about: formData.detailedAbout.trim(),  // Map detailedAbout → about
+        location: formData.location.trim(),
+        skills: formData.skills,  // Array of strings, normalized to lowercase
+        companyName: formData.companyName.trim(),
+        industry: formData.industry.trim(),
+        profileComplete: true  // Backend expects profileComplete, not profileCompleted
+      };
+      
+      console.log('📤 Submitting profile with payload:', payload);
+      
+      const response = await axiosInstance.patch('/profile/me', payload);
+      
+      console.log('✅ Profile update response:', response.data);
       dispatch(updateProfile({ ...response.data.data.user, profileCompleted: true }));
       toast.success("Profile setup complete!", { id: loadingToast });
       navigate('/profile');
-    } catch (error) {
-      console.error(error);
-      toast.error("Failed to save profile.");
+    } catch (error: any) {
+      console.error("🔴 Profile update failed:");
+      console.error("Status Code:", error.response?.status);
+      console.error("Status Text:", error.response?.statusText);
+      console.error("Backend Error Message:", error.response?.data?.message);
+      console.error("Validation Errors:", error.response?.data?.errors);
+      console.error("Full Backend Response:", error.response?.data);
+      console.error("Full Error:", error);
+      
+      // Show user-friendly error message
+      const errorMsg = error.response?.data?.message || "Failed to save profile.";
+      toast.error(errorMsg, { id: error.response?.data?.errors ? undefined : loadingToast });
     }
   };
 
@@ -301,7 +366,32 @@ const SetupProfile: React.FC = () => {
                     <div>
                       <label className="block text-sm font-bold mb-2">Technical Skills</label>
                       <div className="w-full bg-[#FAFAFA] dark:bg-[#171717] border border-[#171717]/10 dark:border-[#F5F5F5]/10 rounded-lg p-2 flex flex-wrap gap-2 focus-within:border-[#7C3AED] dark:focus-within:border-[#8B5CF6] transition-all duration-300">
-                        <input type="text" placeholder="Type a skill and press Enter..." className="bg-transparent border-none focus:outline-none grow min-w-50 px-2 py-1 text-[#171717] dark:text-[#F5F5F5] placeholder-[#171717]/40 dark:placeholder-[#F5F5F5]/40" />
+                        {/* Display existing skills as tags */}
+                        {formData.skills.map((skill) => (
+                          <div key={skill} className="bg-[#7C3AED] text-white px-3 py-1 rounded-full text-sm font-medium flex items-center gap-2 group">
+                            <span>{skill}</span>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveSkill(skill)}
+                              className="hover:text-red-300 transition-colors cursor-pointer"
+                            >
+                              <span className="material-icons-round text-sm">close</span>
+                            </button>
+                          </div>
+                        ))}
+                        
+                        {/* Input field for new skills */}
+                        <input
+                          type="text"
+                          placeholder="Type a skill and press Enter..."
+                          value={skillInput}
+                          onChange={(e) => setSkillInput(e.target.value)}
+                          onKeyDown={handleAddSkill}
+                          className="bg-transparent border-none focus:outline-none grow min-w-50 px-2 py-1 text-[#171717] dark:text-[#F5F5F5] placeholder-[#171717]/40 dark:placeholder-[#F5F5F5]/40"
+                        />
+                      </div>
+                      <div className="text-xs text-gray-400 mt-1">
+                        {formData.skills.length}/15 skills added
                       </div>
                     </div>
                   </>

@@ -71,8 +71,9 @@ export const SavedContent = () => {
   const savedFreelancersCount = user?.savedFreelancers?.length || 0;
 
   useEffect(() => {
-    // Don't fetch until we know who the user is
+    // Don't fetch until we know who the user is and they have a valid role for saved items
     if (!user?._id) return;
+    if (user.role !== 'freelancer' && user.role !== 'employer') return;
 
     const fetchSavedItems = async () => {
       try {
@@ -87,9 +88,9 @@ export const SavedContent = () => {
         } else {
           setSavedJobs(items);
         }
-      } catch (error) {
+      } catch (error: any) {
         // Only set error on real network / server failures (4xx, 5xx)
-        console.error('Failed to fetch saved items:', error);
+        console.error('Failed to fetch saved items. Response:', error.response?.data);
         setFetchError('Failed to load your saved items. Please check your connection and try again.');
       } finally {
         setIsLoading(false);

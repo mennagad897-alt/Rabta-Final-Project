@@ -7,13 +7,13 @@ import {
   createPost
 } from '../controllers/post.controller';
 
-import { uploadAvatar } from '../middlewares/upload.middleware';
+import { uploadMedia } from '../middlewares/upload.middleware';
 
 const router = Router();
 
 router.use(protect);
 
-router.post('/', uploadAvatar.array('media', 5), createPost);
+router.post('/', uploadMedia.array('media', 5), createPost);
 router.get('/:id', getPostDetail);
 router.post('/:id/like', toggleLike);
 router.post('/:id/comments', addComment);

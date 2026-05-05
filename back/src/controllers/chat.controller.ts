@@ -314,6 +314,35 @@ export const sendAudioMessage = catchAsync(async (req: Request, res: Response, n
   });
 });
 
+export const sendFileMessage = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+  const id = req.params.id as string;
+  const senderId = (req.user as any)._id.toString();
+
+  if (!req.file) return next(new AppError('File is required', 400));
+
+  const fileUrl = `/uploads/${req.file.destination.split('uploads/')[1]}/${req.file.filename}`;
+  const isAudio = req.file.mimetype.startsWith('audio') || req.file.mimetype.includes('webm');
+  const isImage = req.file.mimetype.startsWith('image');
+  const messageType = isAudio ? 'audio' : isImage ? 'image' : 'file';
+
+  const message = await chatService.createMessage({
+    chatId: id,
+    senderId,
+    content: fileUrl,
+    messageType,
+    attachments: [{
+      fileUrl,
+      fileType: req.file.mimetype,
+      fileSize: req.file.size
+    }]
+  });
+
+  const io = req.app.get('io');
+  io.to(id).emit('receive-message', message);
+
+  res.status(201).json({ status: 'success', data: { message } });
+});
+
 export const markMessagesAsRead = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
   const { id } = req.params; // chatId
   const userId = (req.user as any)._id.toString();

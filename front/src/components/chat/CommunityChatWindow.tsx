@@ -47,27 +47,24 @@ const MessageBubble = React.memo(
       );
     }
 
-    return (
-      <div className={`flex gap-2.5 ${isMine ? "flex-row-reverse" : "flex-row"} group mb-1`}>
-        {/* Avatar — only shown for others */}
+      <div className={`flex flex-col w-full ${isMine ? "items-end" : "items-start"} mb-2`}>
+        {/* Sender Info (Avatar + Name) Above Bubble */}
         {!isMine && (
-          <div className="w-8 h-8 rounded-full bg-[#7C3AED]/10 border border-[#7C3AED]/20 flex items-center justify-center shrink-0 overflow-hidden self-end mb-5">
-            {getSenderAvatar(msg) ? (
-              <img src={getSenderAvatar(msg)} alt="" className="w-full h-full object-cover" />
-            ) : (
-              <span className="material-icons-round text-[#7C3AED] text-sm">person</span>
-            )}
+          <div className="flex items-center gap-2 mb-1 px-1">
+            <div className="w-6 h-6 rounded-full bg-[#7C3AED]/10 border border-[#7C3AED]/20 flex items-center justify-center overflow-hidden shrink-0">
+              {getSenderAvatar(msg) ? (
+                <img src={getSenderAvatar(msg)} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <span className="material-icons-round text-[#7C3AED] text-[10px]">person</span>
+              )}
+            </div>
+            <span className="text-[11px] font-bold text-[#7C3AED]">
+              {getSenderName(msg)}
+            </span>
           </div>
         )}
 
         <div className={`flex flex-col max-w-[72%] ${isMine ? "items-end" : "items-start"}`}>
-          {/* Sender name for group context */}
-          {!isMine && (
-            <span className="text-[11px] font-semibold text-[#7C3AED] mb-1 pl-1">
-              {getSenderName(msg)}
-            </span>
-          )}
-
           {/* Bubble */}
           <div
             className={`transition-opacity ${
@@ -75,8 +72,8 @@ const MessageBubble = React.memo(
                 ? "text-4xl py-1"
                 : `px-4 py-2.5 rounded-2xl shadow-sm text-sm leading-relaxed ${
                     isMine
-                      ? `bg-[#7C3AED] text-white rounded-br-sm ${msg.isPending ? "opacity-60" : "opacity-100"}`
-                      : "bg-white dark:bg-[#262626] text-[#171717] dark:text-[#F5F5F5] border border-gray-200 dark:border-gray-800 rounded-bl-sm"
+                      ? `bg-[#7C3AED] text-white rounded-tr-sm ${msg.isPending ? "opacity-60" : "opacity-100"}`
+                      : "bg-white dark:bg-[#262626] text-[#171717] dark:text-[#F5F5F5] border border-gray-200 dark:border-gray-800 rounded-tl-sm"
                   }`
             }`}
           >
@@ -235,13 +232,22 @@ export const CommunityChatWindow: React.FC<CommunityChatWindowProps> = ({
 
   // Handle File Selection
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      const selectedFile = e.target.files[0];
-      // TODO: Upload file to an endpoint, get URL, then sendMessage(url, "file")
-      console.log("Selected file for chat upload:", selectedFile);
-      alert(`File selected: ${selectedFile.name}\nReady to be uploaded to backend API.`);
-      
-      // Reset input
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('messageType', 'file');
+
+    try {
+      // Use existing chat endpoint for uploads
+      await axiosInstance.post(`/chats/${communityId}/messages`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      // Real-time update happens via socket broadcast handled in useCommunityChat hook
+    } catch (err) {
+      console.error("Failed to upload file to community chat", err);
+    } finally {
       e.target.value = '';
     }
   };
@@ -329,17 +335,17 @@ export const CommunityChatWindow: React.FC<CommunityChatWindowProps> = ({
             <span className="material-icons-round animate-spin text-3xl text-[#7C3AED]">sync</span>
             <p className="text-sm">Loading messages…</p>
           </div>
-        ) : messages.length === 0 ? (
+        ) : !messages?.length ? (
           <div className="flex flex-col items-center justify-center h-full gap-3 text-gray-400">
             <span className="material-icons-round text-5xl opacity-20">forum</span>
             <p className="text-sm font-medium">No messages yet. Start the conversation!</p>
           </div>
         ) : (
           <>
-
-            {messages.map((msg) => (
+            {/* ✅ Safe optional chaining - messages?.map prevents crashes */}
+            {messages?.map((msg) => (
               <MessageBubble
-                key={msg._id}
+                key={msg?._id}
                 msg={msg}
                 isMine={getSenderId(msg) === currentUser?._id}
               />
@@ -348,7 +354,7 @@ export const CommunityChatWindow: React.FC<CommunityChatWindowProps> = ({
         )}
 
         {/* Typing indicator */}
-        <TypingIndicator count={typingUsers.length} />
+        <TypingIndicator count={typingUsers?.length ?? 0} />
 
         {/* Auto-scroll anchor */}
         <div ref={bottomRef} />

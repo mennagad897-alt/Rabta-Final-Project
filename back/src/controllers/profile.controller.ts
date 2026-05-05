@@ -138,55 +138,60 @@ export const uploadProfileAvatar = catchAsync(async (req: Request, res: Response
 
 // 6. البحث عن المستخدمين (للتوظيف أو التواصل)
 export const searchUsers = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
-  // 1. تجهيز أوبجكت الفلترة الفاضي
-  const queryObj: any = {};
+  try {
+    // 1. تجهيز أوبجكت الفلترة الفاضي
+    const queryObj: any = {};
 
-  // أ. البحث بكلمة مفتاحية (Keyword) في الاسم أو المهارات أو النبذة
-  if (req.query.keyword) {
-    // استخدمنا Regex عشان نبحث عن جزء من الكلمة (حتى لو مش الكلمة كاملة)
-    // حرف الـ 'i' معناه (Case-insensitive) عشان يتجاهل الحروف الكابيتال والسمول
-    const searchRegex = new RegExp(req.query.keyword as string, 'i');
+    // أ. البحث بكلمة مفتاحية (Keyword) في الاسم أو المهارات أو النبذة
+    if (req.query.keyword) {
+      // Escape special characters to prevent regex crashes (e.g. phone numbers with +)
+      const escapedKeyword = (req.query.keyword as string).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const searchRegex = new RegExp(escapedKeyword, 'i');
 
-    queryObj.$or = [
-      { fullName: searchRegex },
-      { email: searchRegex },
-      { phoneNumber: searchRegex },
-      { skills: searchRegex },
-      { bio: searchRegex }
-    ];
+      queryObj.$or = [
+        { fullName: searchRegex },
+        { email: searchRegex },
+        { phoneNumber: searchRegex },
+        { skills: searchRegex },
+        { bio: searchRegex }
+      ];
+    }
+
+    // ب. الفلترة المباشرة باسم المسمى الوظيفي
+    if (req.query.jobTitle) {
+      queryObj.jobTitle = req.query.jobTitle;
+    }
+
+    // 2. إعدادات تقسيم الصفحات (Pagination)
+    const page = parseInt(req.query.page as string) || 1; // الصفحة الافتراضية 1
+    const limit = parseInt(req.query.limit as string) || 10; // عدد اليوزرز في الصفحة 10
+    const skip = (page - 1) * limit; // هنفوت كام يوزر عشان نجيب الصفحة اللي بعدها
+
+    // 3. تنفيذ البحث في قاعدة البيانات
+    const users = await User.find(queryObj)
+      // حماية: بنحدد الداتا اللي هترجع (ضفنا الإيميل والموبايل عشان الشات يحتاجهم)
+      .select('fullName avatar jobTitle email phoneNumber skills bio companyName status role') 
+      .skip(skip)
+      .limit(limit)
+      .sort('-createdAt'); // ترتيب من الأحدث للأقدم
+
+    // 4. حساب العدد الكلي (مهم جداً للفرونت إند عشان يعمل زراير الـ Next و الـ Prev)
+    const totalUsers = await User.countDocuments(queryObj);
+
+    res.status(200).json({
+      status: 'success',
+      results: users.length, // عدد اليوزرز في الصفحة دي
+      pagination: {
+        currentPage: page,
+        totalPages: Math.ceil(totalUsers / limit),
+        totalUsers: totalUsers
+      },
+      data: { users }
+    });
+  } catch (error: any) {
+    console.error('SEARCH ERROR:', error);
+    return next(new AppError('Failed to search users. Invalid query or internal error.', 400));
   }
-
-  // ب. الفلترة المباشرة باسم المسمى الوظيفي
-  if (req.query.jobTitle) {
-    queryObj.jobTitle = req.query.jobTitle;
-  }
-
-  // 2. إعدادات تقسيم الصفحات (Pagination)
-  const page = parseInt(req.query.page as string) || 1; // الصفحة الافتراضية 1
-  const limit = parseInt(req.query.limit as string) || 10; // عدد اليوزرز في الصفحة 10
-  const skip = (page - 1) * limit; // هنفوت كام يوزر عشان نجيب الصفحة اللي بعدها
-
-  // 3. تنفيذ البحث في قاعدة البيانات
-  const users = await User.find(queryObj)
-    // حماية: بنحدد الداتا اللي هترجع (ضفنا الإيميل والموبايل عشان الشات يحتاجهم)
-    .select('fullName avatar jobTitle email phoneNumber skills bio companyName status role') 
-    .skip(skip)
-    .limit(limit)
-    .sort('-createdAt'); // ترتيب من الأحدث للأقدم
-
-  // 4. حساب العدد الكلي (مهم جداً للفرونت إند عشان يعمل زراير الـ Next و الـ Prev)
-  const totalUsers = await User.countDocuments(queryObj);
-
-  res.status(200).json({
-    status: 'success',
-    results: users.length, // عدد اليوزرز في الصفحة دي
-    pagination: {
-      currentPage: page,
-      totalPages: Math.ceil(totalUsers / limit),
-      totalUsers: totalUsers
-    },
-    data: { users }
-  });
 });
 
 // 7. Request Verification (Employer)
@@ -304,29 +309,35 @@ export const clearSavedItems = catchAsync(async (req: Request, res: Response, ne
 
 // 10. Get Saved Items (Projects for Freelancers, Freelancers for Employers)
 export const getSavedItems = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
-  const user = req.user as any;
+  try {
+    const user = req.user as any;
 
-  let populatedUser;
-  if (user.role === 'freelancer') {
-    populatedUser = await User.findById(user._id).populate('savedProjects');
-  } else if (user.role === 'employer') {
-    populatedUser = await User.findById(user._id).populate('savedFreelancers', 'fullName avatar jobTitle skills bio companyName status');
-  } else {
-    return next(new AppError('Invalid user role.', 400));
+    let populatedUser;
+    if (user.role === 'freelancer') {
+      populatedUser = await User.findById(user._id).populate('savedProjects');
+    } else if (user.role === 'employer') {
+      populatedUser = await User.findById(user._id).populate('savedFreelancers', 'fullName avatar jobTitle skills bio companyName status');
+    } else {
+return res.status(200).json({ status: 'success', data: { savedItems: [] } });
+    }
+
+    if (!populatedUser) {
+      return next(new AppError('User not found.', 404));
+    }
+
+    res.status(200).json({
+      status: 'success',
+      data: {
+        savedItems: user.role === 'freelancer' ? populatedUser.savedProjects : populatedUser.savedFreelancers
+      }
+    });
+  } catch (error: any) {
+    console.error('GET SAVED ITEMS ERROR:', error.message);
+    res.status(500).json({
+      status: 'error',
+      message: 'Internal Server Error fetching saved items: ' + error.message
+    });
   }
-
-  if (!populatedUser) {
-    return next(new AppError('User not found.', 404));
-  }
-
-  const savedItems = user.role === 'freelancer'
-    ? (populatedUser.savedProjects || [])
-    : (populatedUser.savedFreelancers || []);
-
-  res.status(200).json({
-    status: 'success',
-    data: { savedItems }
-  });
 });
 
 // 11. Get My Contacts (Role-based visibility)
@@ -409,5 +420,43 @@ export const addConnection = catchAsync(async (req: Request, res: Response, next
     status: 'success',
     message: 'Added to your connections successfully.',
     data: { user: updatedUser }
+  });
+});
+
+// 14. Save Custom Contact
+export const saveContact = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+  const user = req.user as IUser;
+  const { firstName, lastName, phoneNumber, email, nickname, userId } = req.body;
+
+  if (!firstName || !phoneNumber) {
+    return next(new AppError('First name and phone number are required.', 400));
+  }
+
+  // Check if contact already exists by phone number
+  const existingContact = user.customContacts?.find(c => c.phoneNumber === phoneNumber);
+  
+  if (existingContact) {
+    return next(new AppError('A contact with this phone number already exists.', 400));
+  }
+
+  const newContact = {
+    firstName,
+    lastName,
+    phoneNumber,
+    email,
+    nickname,
+    userId
+  };
+
+  const updatedUser = await User.findByIdAndUpdate(
+    user._id,
+    { $push: { customContacts: newContact } },
+    { new: true, runValidators: true }
+  );
+
+  res.status(201).json({
+    status: 'success',
+    message: 'Contact saved successfully.',
+    data: { contact: newContact, user: updatedUser }
   });
 });
