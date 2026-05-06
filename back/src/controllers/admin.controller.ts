@@ -4,6 +4,7 @@ import { User } from '../models/user';
 import Job from '../models/Job';
 import Chat from '../models/chat';
 import Community from '../models/Community';
+import AdminLog from '../models/adminLog.model';
 import { AppError } from '../utils/AppError';
 
 // =======================
@@ -51,9 +52,71 @@ export const toggleBanUser = catchAsync(async (req: Request, res: Response, next
   user.isBanned = !user.isBanned;
   await user.save({ validateBeforeSave: false });
 
+  // Create admin log
+  await AdminLog.create({
+    adminId: (req as any).user._id,
+    adminName: (req as any).user.fullName || 'Admin',
+    actionType: user.isBanned ? 'BAN_USER' : 'UNBAN_USER',
+    targetName: user.email || user.fullName,
+  });
+
   res.status(200).json({
     status: 'success',
     message: `User has been successfully ${user.isBanned ? 'banned' : 'unbanned'}`,
+    data: { user }
+  });
+});
+
+export const deleteUser = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+  const user = await User.findById(req.params.id);
+  if (!user) {
+    return next(new AppError('User not found', 404));
+  }
+  
+  if (user.role === 'admin') {
+    return next(new AppError('You cannot delete an admin', 400));
+  }
+
+  await User.findByIdAndDelete(req.params.id);
+
+  // Create admin log
+  await AdminLog.create({
+    adminId: (req as any).user._id,
+    adminName: (req as any).user.fullName || 'Admin',
+    actionType: 'DELETE_USER',
+    targetName: user.email || user.fullName,
+  });
+
+  res.status(200).json({
+    status: 'success',
+    message: 'User has been successfully deleted'
+  });
+});
+
+export const promoteAdmin = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+  const user = await User.findById(req.params.id);
+  if (!user) {
+    return next(new AppError('User not found', 404));
+  }
+  
+  if (user.role === 'admin') {
+    return next(new AppError('User is already an admin', 400));
+  }
+
+  user.role = 'admin';
+  await user.save({ validateBeforeSave: false });
+
+  // Create admin log
+  await AdminLog.create({
+    adminId: (req as any).user._id,
+    adminName: (req as any).user.fullName || 'Admin',
+    actionType: 'PROMOTED_ADMIN',
+    targetName: user.email || user.fullName,
+  });
+
+  res.status(200).json({
+    status: 'success',
+    message: 'User has been promoted to admin successfully',
     data: { user }
   });
 });
@@ -75,6 +138,15 @@ export const deleteJob = catchAsync(async (req: Request, res: Response, next: Ne
   if (!job) {
     return next(new AppError('Job not found', 404));
   }
+  
+  // Create admin log
+  await AdminLog.create({
+    adminId: (req as any).user._id,
+    adminName: (req as any).user.fullName || 'Admin',
+    actionType: 'DELETE_JOB',
+    targetName: job.title || 'Unknown Job',
+  });
+
   res.status(200).json({
     status: 'success',
     message: 'Job has been successfully deleted'
@@ -112,8 +184,28 @@ export const deleteGroup = catchAsync(async (req: Request, res: Response, next: 
   // Optionally, you could also delete all messages related to this group
   // await Message.deleteMany({ chatId: group._id });
 
+  // Create admin log
+  await AdminLog.create({
+    adminId: (req as any).user._id,
+    adminName: (req as any).user.fullName || 'Admin',
+    actionType: 'DELETE_GROUP',
+    targetName: group.name || 'Unknown Community',
+  });
+
   res.status(200).json({
     status: 'success',
     message: 'Group has been successfully deleted'
+  });
+});
+
+// =======================
+// Activity Logs
+// =======================
+export const getAdminLogs = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+  const logs = await AdminLog.find().sort('-createdAt').limit(100);
+  res.status(200).json({
+    status: 'success',
+    results: logs.length,
+    data: { logs }
   });
 });
