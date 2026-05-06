@@ -1,4 +1,5 @@
 import { Routes, Route, Navigate } from "react-router-dom";
+import { Toaster } from "react-hot-toast";
 import { ProtectedRoute } from "./components/layout/ProtectedRoute";
 import { PublicRoute } from "./components/layout/PublicRoute";
 import { Login } from "./pages/Login";
@@ -51,13 +52,26 @@ import { AdminOverview } from "./pages/admin/AdminOverview";
 import { AdminUsers } from "./pages/admin/AdminUsers";
 import { AdminJobs } from "./pages/admin/AdminJobs";
 import { AdminGroups } from "./pages/admin/AdminGroups";
+import { AdminLogs } from "./pages/admin/AdminLogs";
+import { AddAdmin } from "./pages/admin/AddAdmin";
 
 function App() {
   const user = useSelector((state: RootState) => state.auth.user);
 
   return (
-    <Routes>
-      <Route path="/" element={<Splash />} />
+    <>
+      <Toaster 
+        position="top-right" 
+        toastOptions={{
+          className: 'dark:bg-[#141419] dark:text-white dark:border dark:border-white/10',
+          style: {
+            background: 'var(--tw-bg-opacity)',
+            color: 'var(--tw-text-opacity)',
+          },
+        }} 
+      />
+      <Routes>
+        <Route path="/" element={<Splash />} />
 
       {/* صفحة الـ Login والـ Signup */}
       <Route path="/login-success" element={<LoginSuccess />} />
@@ -119,12 +133,15 @@ function App() {
           <Route path="users" element={<AdminUsers />} />
           <Route path="jobs" element={<AdminJobs />} />
           <Route path="groups" element={<AdminGroups />} />
+          <Route path="logs" element={<AdminLogs />} />
+          <Route path="add-admin" element={<AddAdmin />} />
         </Route>
       </Route>
 
       {/* استخدام Navigate هنا عشان أي لينك غلط يرجع للسبلاش */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    </>
   );
 }
 

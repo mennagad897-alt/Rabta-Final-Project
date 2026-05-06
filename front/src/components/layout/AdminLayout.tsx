@@ -73,6 +73,22 @@ export const AdminLayout = () => {
             <i className="fa-solid fa-layer-group text-lg w-5 text-center"></i>
             Communities
           </NavLink>
+          
+          <NavLink 
+            to="/admin/logs" 
+            className={({ isActive }) => `flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${isActive ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5 hover:text-gray-900 dark:hover:text-white'}`}
+          >
+            <i className="fa-solid fa-clipboard-list text-lg w-5 text-center"></i>
+            Activity Logs
+          </NavLink>
+
+          <NavLink 
+            to="/admin/add-admin" 
+            className={({ isActive }) => `flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${isActive ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5 hover:text-gray-900 dark:hover:text-white'}`}
+          >
+            <i className="fa-solid fa-user-plus text-lg w-5 text-center"></i>
+            Add Admin
+          </NavLink>
         </nav>
 
         <div className="p-4 space-y-2 border-t border-gray-200 dark:border-white/5">
