@@ -13,7 +13,7 @@ import { protect } from '../middlewares/auth.middleware';
 import { catchAsync } from '../utils/catchAsync';
 import { AppError } from '../utils/AppError';
 
-import { getMyProfile, updateMyProfile, getUserProfile, deleteMyAccount, searchUsers, getMyContacts, findByPhone, addConnection, saveContact } from '../controllers/profile.controller';
+import { getMyProfile, updateMyProfile, getUserProfile, deleteMyAccount, searchUsers, getMyContacts, findByPhone, addConnection } from '../controllers/profile.controller';
 import { toggleBlockUser, sendFriendRequest } from '../controllers/chat.controller';
 
 import { uploadAvatar } from '../middlewares/upload.middleware';
@@ -50,8 +50,8 @@ router.get('/test', (req: Request, res: Response) => {
 });
 
 // مسار جلب كل المستخدمين
-router.get('/users', protect, catchAsync(async (req: Request, res: Response, next: NextFunction) => {
-  const users = await User.find().select('fullName avatar jobTitle'); // Filter fields for safety
+router.get('/users', catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+  const users = await User.find();
   res.status(200).json(users);
 }));
 
@@ -101,7 +101,6 @@ router.put('/users/verify-request', protect, requestVerification);
 
 // Saved Items — MUST be above /users/:id to prevent wildcard capture
 router.get('/users/my-contacts', protect, getMyContacts);
-router.post('/users/contacts', protect, saveContact);
 router.get('/users/find-by-phone', protect, findByPhone);
 router.post('/users/add-connection', protect, addConnection);
 router.get('/users/saved-items', protect, getSavedItems);

@@ -3,8 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import axiosInstance from '../api/axiosInstance';
 import toast from 'react-hot-toast';
 import { AiAssistant } from '../components/shared/AiAssistant';
-import { ChatWindow, type MessageType } from '../components/chat/ChatWindow';
-import { useChat } from "../context/ChatContext";
+import { ChatWindow } from '../components/chat/ChatWindow';
 
 interface Community {
   _id: string;
@@ -25,51 +24,14 @@ export const GroupsFeed = () => {
   const [communities, setCommunities] = useState<Community[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
-  const [messages, setMessages] = useState<MessageType[]>([]);
   const [isSideBarOpen, setIsSideBarOpen] = useState(true);
   const navigate = useNavigate();
-  const { socket } = useChat();
 
-  useEffect(() => {
-    if (!socket) return;
-    const handleNewMessage = (msg: any) => {
-      const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
-      const currentUserId = currentUser._id || currentUser.id;
-      const senderId = typeof msg.senderId === 'object' ? msg.senderId._id || msg.senderId.id : msg.senderId;
-
-      setCommunities(prev => prev.map(c => {
-        const communityChatId = c.chatId?._id || c.chatId;
-        const isMatched = communityChatId === msg.chatId || c._id === msg.chatId;
-        
-        if (isMatched) {
-          // If we are currently looking at this community OR I sent the message, keep unread at 0
-          const isCurrentlyActive = (c._id === activeGroupId);
-          const shouldIncrement = !isCurrentlyActive && senderId !== currentUserId;
-          
-          return {
-            ...c,
-            unreadCount: shouldIncrement ? (c.unreadCount || 0) + 1 : 0,
-            chatId: {
-              ...(typeof c.chatId === 'object' ? c.chatId : {}),
-              latestMessage: {
-                content: msg.content,
-                senderId: msg.senderId,
-                createdAt: msg.createdAt
-              }
-            }
-          };
-        }
-        return c;
-      }));
-    };
-    socket.on('receive-message', handleNewMessage);
-    return () => {
-      socket.off('receive-message', handleNewMessage);
-    };
-  }, [socket, activeGroupId]);
-
+  // Derived: only allow collapsing when a group is actually selected
   const isChatSelected = !!activeGroupId;
 
+  // If no chat is selected, always force the sidebar open so the user
+  // can't end up staring at an empty screen with no list visible.
   useEffect(() => {
     if (!isChatSelected) setIsSideBarOpen(true);
   }, [isChatSelected]);
@@ -92,39 +54,9 @@ export const GroupsFeed = () => {
     fetchCommunities();
   }, [activeFilter]);
 
-  useEffect(() => {
-    if (!activeGroupId) return;
-
-    const fetchMessages = async () => {
-      try {
-        const community = communities.find(c => c._id === activeGroupId);
-        if (!community) return;
-        
-        const targetChatId = community.chatId?._id || community.chatId || activeGroupId;
-        const response = await axiosInstance.get(`/chats/${targetChatId}/messages`);
-        const messagesArray = response.data?.data?.messages || response.data?.messages || [];
-        
-        if (!Array.isArray(messagesArray)) return;
-
-        const formatted: MessageType[] = messagesArray.map((m: any) => ({
-          id: m._id,
-          type: (m.messageType === 'file' ? 'file' : 'text') as 'text' | 'file' | 'audio' | 'call_summary',
-          content: m.content,
-          time: new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          isMine: (typeof m.senderId === 'string' ? m.senderId : m.senderId._id) === currentUserId
-        }));
-        
-        setMessages(formatted);
-      } catch (error: any) {
-        console.error("Failed to fetch group messages:", error);
-      }
-    };
-
-    fetchMessages();
-  }, [activeGroupId, currentUserId]);
-
   return (
     <div className="flex w-full h-full bg-[#FAFAFA] dark:bg-[#171717]">
+      {/* عمود المجتمعات (Communities List) */}
       <aside className={`flex flex-col h-full bg-[#FAFAFA] dark:bg-[#171717] transition-all duration-300 ease-in-out z-40 relative min-h-0 shrink-0 ${
         isSideBarOpen
           ? 'w-80 md:w-96 opacity-100 border-r border-gray-200 dark:border-gray-800'
@@ -133,7 +65,10 @@ export const GroupsFeed = () => {
         <div className="p-4 flex flex-col gap-4 shrink-0">
           
           <div className="flex items-center justify-between text-[#171717] dark:text-[#F5F5F5]">
-            <span className="text-xl font-bold tracking-tight">Groups</span>
+            <span className="text-xl font-bold tracking-tight">
+              Groups
+            </span>
+            {/* Hamburger close button — only visible when a chat is selected */}
             {isChatSelected ? (
               <button
                 onClick={() => setIsSideBarOpen(false)}
@@ -165,6 +100,7 @@ export const GroupsFeed = () => {
             />
           </div>
 
+          {/* الفلاتر */}
           <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar pb-1">
             {filters.map((filter) => (
               <button
@@ -182,6 +118,7 @@ export const GroupsFeed = () => {
           </div>
         </div>
 
+        {/* قائمة الجروبات */}
         <div className="flex-1 overflow-y-auto hide-scrollbar">
           {isLoading ? (
             <div className="flex justify-center p-8">
@@ -195,17 +132,10 @@ export const GroupsFeed = () => {
             communities.map((community) => (
               <div 
                 key={community._id}
-                onClick={async () => {
+                onClick={() => {
                   setActiveGroupId(community._id);
+                  // Mark as read locally
                   setCommunities(prev => prev.map(c => c._id === community._id ? { ...c, unreadCount: 0 } : c));
-                  
-                  // Mark messages as read in backend
-                  try {
-                    const targetChatId = community.chatId?._id || community.chatId || community._id;
-                    await axiosInstance.put(`/chats/${targetChatId}/read`);
-                  } catch (err) {
-                    console.error("Failed to mark messages as read", err);
-                  }
                 }}
                 className={`flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors border-b border-gray-100 dark:border-gray-800 ${
                   activeGroupId === community._id 
@@ -227,12 +157,10 @@ export const GroupsFeed = () => {
                     </h3>
                   </div>
                   <p className={`text-xs truncate ${community.unreadCount ? 'font-bold text-[#171717] dark:text-[#F5F5F5]' : 'text-gray-500 dark:text-gray-400'}`}>
-                    {community.chatId?.latestMessage 
-                      ? `${community.chatId.latestMessage.senderId?.fullName?.split(' ')[0]}: ${community.chatId.latestMessage.content}` 
-                      : community.description}
+                    {community.chatId?.latestMessage ? `${community.chatId.latestMessage.senderId?.fullName?.split(' ')[0]}: ${community.chatId.latestMessage.content}` : community.description}
                   </p>
                 </div>
-                {Number(community.unreadCount) > 0 && (
+                {!!community.unreadCount && (
                   <div className="w-5 h-5 bg-[#10B981] text-white text-[10px] font-bold flex items-center justify-center rounded-full shrink-0">
                     {community.unreadCount}
                   </div>
@@ -242,6 +170,7 @@ export const GroupsFeed = () => {
           )}
         </div>
 
+        {/* AI Assistant - Positioned at bottom of sidebar */}
         <div className="p-4 mt-auto border-t border-gray-100 dark:border-gray-800">
           <AiAssistant 
             className="relative !items-center !justify-center" 
@@ -253,6 +182,7 @@ export const GroupsFeed = () => {
       {activeGroupId && communities.find(c => c._id === activeGroupId) ? (
         (() => {
           const activeCommunity = communities.find(c => c._id === activeGroupId);
+          // Handle both string IDs and populated objects in members array
           const isMember = activeCommunity?.members?.some((m: any) => 
             (typeof m === 'string' ? m : m._id) === currentUserId
           );
@@ -277,6 +207,7 @@ export const GroupsFeed = () => {
                       try {
                         await axiosInstance.post(`/groups/${activeGroupId}/join`);
                         toast.success(`Joined ${activeCommunity?.name}!`);
+                        // Refresh communities to reflect membership
                         const response = await axiosInstance.get('/groups');
                         setCommunities(response.data.data.communities);
                       } catch (err) {
@@ -298,8 +229,7 @@ export const GroupsFeed = () => {
               chatName={activeCommunity?.name || "Group Chat"} 
               isOnline={true} 
               isGroup={true}
-              messages={messages} 
-              setMessages={setMessages}
+              messages={[]} 
               groupMembers={activeCommunity?.members?.map((m: any) => m.fullName || '')}
               isChatListOpen={isSideBarOpen}
               onOpenChatList={() => setIsSideBarOpen(true)}

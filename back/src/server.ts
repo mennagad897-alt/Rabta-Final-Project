@@ -3,14 +3,6 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
-process.on('uncaughtException', (err) => { 
-  console.error('Uncaught Exception:', err); 
-});
-
-process.on('unhandledRejection', (err) => { 
-  console.error('Unhandled Rejection:', err); 
-});
-
 console.log("👀 GOOGLE_CLIENT_ID IS:", process.env.GOOGLE_CLIENT_ID);
 console.log("👀 GOOGLE_CLIENT_SECRET IS:", process.env.GOOGLE_CLIENT_SECRET);
 
@@ -40,7 +32,6 @@ import jwt from 'jsonwebtoken';
 import Call from './models/Call'; 
 import { User } from './models/user';
 import * as chatService from './services/chat.service';
-import Chat from './models/chat';
 
 const app = express();
 const PORT = Number(process.env.PORT) || 5000;
@@ -138,29 +129,18 @@ io.use(async (socket, next) => {
 });
 
 io.on('connection', (socket) => {
-  try {
-    const authenticatedUserId = (socket as any).userId;
-    console.log(`🟢 A new device connected to the switchboard, line number: ${socket.id}`);
+  const authenticatedUserId = (socket as any).userId;
+  console.log(`🟢 A new device connected to the switchboard, line number: ${socket.id}`);
 
-    // ==========================================
-    // 📝 تسجيل اليوزر تلقائياً بعد المصادقة
-    // ==========================================
-    // بما إن اليوزر اتأكدنا من هويته في الـ middleware
-    // بنسجله تلقائياً في الـ userSocketMap
-    if (authenticatedUserId) {
-      userSocketMap.set(authenticatedUserId, socket.id);
-      console.log(`✅ [Auto] The user [${authenticatedUserId}] registered via auth middleware on line [${socket.id}]`);
-      
-      // ✅ Join all chat rooms the user belongs to so they get updates for everything
-      Chat.find({ users: authenticatedUserId }).then((chats: any[]) => {
-        if (Array.isArray(chats)) {
-          chats.forEach(chat => {
-            socket.join(chat._id.toString());
-            console.log(`🏠 Joined background room: ${chat._id}`);
-          });
-        }
-      }).catch(err => console.error("Error joining rooms on connect:", err));
-    }
+  // ==========================================
+  // 📝 تسجيل اليوزر تلقائياً بعد المصادقة
+  // ==========================================
+  // بما إن اليوزر اتأكدنا من هويته في الـ middleware
+  // بنسجله تلقائياً في الـ userSocketMap
+  if (authenticatedUserId) {
+    userSocketMap.set(authenticatedUserId, socket.id);
+    console.log(`✅ [Auto] The user [${authenticatedUserId}] registered via auth middleware on line [${socket.id}]`);
+  }
 
   // التسجيل اليدوي (للتوافق مع الكود القديم)
   socket.on('register-user', (userId: string) => {
@@ -483,7 +463,7 @@ io.on('connection', (socket) => {
       const newCall = await Call.create({
         caller: data.callerId,
         chatId: data.groupId,
-        type: 'group',
+        type: data.callType || 'video',
         status: 'missed'
       });
 
@@ -546,21 +526,14 @@ io.on('connection', (socket) => {
   });
 
   socket.on('disconnect', () => {
-    try {
-      console.log(`🔴 Line disconnected: ${socket.id}`);
-      for (let [userId, socketId] of userSocketMap.entries()) {
-        if (socketId === socket.id) {
-          userSocketMap.delete(userId);
-          break;
-        }
+    console.log(`🔴 Line disconnected: ${socket.id}`);
+    for (let [userId, socketId] of userSocketMap.entries()) {
+      if (socketId === socket.id) {
+        userSocketMap.delete(userId);
+        break;
       }
-    } catch (err) {
-      console.error('Socket Disconnect Error:', err);
     }
   });
-  } catch (error) {
-    console.error('Global Socket Connection Error:', error);
-  }
 });
 
 // ==========================================

@@ -14,8 +14,7 @@ export interface ChatItem {
   avatar?: string;
   initials?: string;
   isOnline?: boolean;
-  isGroup?: boolean;
-  unreadCount?: number;
+  isGroup?: boolean; // لو جروب بياخد لون برتقالي، لو شات عادي بياخد بنفسجي
 }
 
 interface ChatsListProps {
@@ -59,61 +58,43 @@ export const ChatsList: React.FC<ChatsListProps> = ({ chats, activeChatId, onSel
       </div>
 
       <div className="flex-1 overflow-y-auto hide-scrollbar">
-        {/* ✅ Safe optional chaining - prevent crashes if chats is undefined/null */}
-        {chats?.length ? (
-          chats.map((chat) => (
-            <div
-              key={chat?._id}
-              onClick={() => onSelectChat(chat?._id!)}
-              className={`flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors ${
-                activeChatId === chat?._id 
-                  ? 'bg-white dark:bg-[#262626] border-l-4 border-[#7C3AED]' // حالة لو الشات مفتوح
-                  : 'hover:bg-gray-100 dark:hover:bg-gray-800/50' // حالة لو الشات مش مفتوح
-              }`}
-            >
-              <div className="relative shrink-0">
-                {chat?.avatar ? (
-                  <img className="w-12 h-12 rounded-full object-cover" src={chat?.avatar} alt={chat?.name} />
-                ) : (
-                  <div
-                    className={`w-12 h-12 shrink-0 rounded-full flex items-center justify-center font-bold text-sm ${
-                      chat?.isGroup
-                        ? 'bg-orange-100 text-orange-600 dark:bg-orange-900/30'
-                        : 'bg-[#7C3AED]/10 text-[#7C3AED]'
-                    }`}
-                  >
-                    {chat?.initials}
-                  </div>
-                )}
-                {chat?.isOnline && (
-                  <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white dark:border-[#262626] rounded-full" />
-                )}
-              </div>
+        {chats.map((chat) => (
+          <div
+            key={chat._id}
+            onClick={() => onSelectChat(chat._id)}
+            className={`flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors ${
+              activeChatId === chat._id 
+                ? 'bg-white dark:bg-[#262626] border-l-4 border-[#7C3AED]' // حالة لو الشات مفتوح
+                : 'hover:bg-gray-100 dark:hover:bg-gray-800/50' // حالة لو الشات مش مفتوح
+            }`}
+          >
+            <div className="relative shrink-0">
+              {chat.avatar ? (
+                <img className="w-12 h-12 rounded-full object-cover" src={chat.avatar} alt={chat.name} />
+              ) : (
+                <div
+                  className={`w-12 h-12 shrink-0 rounded-full flex items-center justify-center font-bold text-sm ${
+                    chat.isGroup
+                      ? 'bg-orange-100 text-orange-600 dark:bg-orange-900/30'
+                      : 'bg-[#7C3AED]/10 text-[#7C3AED]'
+                  }`}
+                >
+                  {chat.initials}
+                </div>
+              )}
+              {chat.isOnline && (
+                <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white dark:border-[#262626] rounded-full" />
+              )}
+            </div>
 
-              <div className="flex-1 min-w-0">
-                <div className="flex justify-between items-baseline">
-                  <h3 className={`text-[#171717] dark:text-[#F5F5F5] ${chat?.unreadCount ? 'font-bold' : 'font-semibold'} text-sm truncate`}>{chat?.name}</h3>
-                  <span className={`${activeChatId === chat?._id ? 'text-[#7C3AED]' : 'text-gray-400'} text-xs font-medium`}>{chat?.time}</span>
-                </div>
-                <div className="flex justify-between items-center mt-0.5">
-                  <p className={`text-xs truncate flex-1 pr-2 ${chat?.unreadCount ? 'text-[#171717] dark:text-white font-bold' : 'text-gray-500 dark:text-gray-400'}`}>
-                    {chat?.lastMessage}
-                  </p>
-                  {Number(chat?.unreadCount) > 0 && (
-                    <div className="min-w-[18px] h-[18px] bg-[#10B981] text-white text-[10px] font-bold flex items-center justify-center rounded-full px-1 shrink-0 shadow-sm">
-                      {chat.unreadCount}
-                    </div>
-                  )}
-                </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex justify-between items-baseline">
+                <h3 className="text-[#171717] dark:text-[#F5F5F5] font-semibold text-sm truncate">{chat.name}</h3>
+                <span className={`${activeChatId === chat.id ? 'text-[#7C3AED]' : 'text-gray-400'} text-xs font-medium`}>{chat.time}</span>
               </div>
             </div>
-          ))
-        ) : (
-          <div className="flex flex-col items-center justify-center h-full text-gray-400 gap-3">
-            <span className="material-icons-round text-4xl opacity-30">forum</span>
-            <p className="text-sm">No chats yet</p>
           </div>
-        )}
+        ))}
       </div>
 
       <div className="p-4 mt-auto border-t border-gray-100 dark:border-gray-800">

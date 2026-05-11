@@ -5,14 +5,12 @@ import { useSelector } from "react-redux";
 import type { RootState } from "../../store/store";
 
 export const PublicRoute = () => {
-  // ✅ CRITICAL: Move ALL hooks to the top BEFORE any conditional logic
   // بنشيك على الـ token من الـ Redux state
   const isAuthenticated = useSelector((state: RootState) => state.auth.isAuthenticated);
-  // Call this hook unconditionally - DO NOT move it inside the if statement
-  const user = useSelector((state: RootState) => state.auth.user);
 
   // لو اليوزر مسجل دخول (معاه توكن) وبيحاول يفتح صفحة اللوجين أو الساين أب
   if (isAuthenticated) {
+    const user = useSelector((state: RootState) => state.auth.user);
     // لو اليوزر جديد ولسه مكملش بياناته الأساسية، بنوديه للـ Setup
     if (!user?.jobTitle && !user?.bioHeadline) {
       return <Navigate to="/setup-profile" replace />;

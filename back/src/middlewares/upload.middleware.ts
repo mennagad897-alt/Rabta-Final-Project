@@ -62,11 +62,7 @@ const audioStorage = multer.diskStorage({
 });
 
 const audioFilter = (req: any, file: any, cb: any) => {
-  if (
-    file.mimetype.startsWith('audio') ||
-    file.mimetype.includes('webm') ||
-    file.mimetype === 'video/webm'
-  ) {
+  if (file.mimetype.startsWith('audio') || file.mimetype.includes('webm')) {
     cb(null, true);
   } else {
     cb(new AppError('Not an audio file! Please upload only audio.', 400), false);
@@ -118,37 +114,4 @@ export const uploadDocument = multer({
   storage: documentStorage,
   fileFilter: documentFilter,
   limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit for documents
-});
-
-// ==========================================
-// 📱 إعداد رفع الوسائط للمنشورات (Post Media)
-// ==========================================
-const postUploadDir = path.join(process.cwd(), 'uploads', 'posts');
-if (!fs.existsSync(postUploadDir)) {
-  fs.mkdirSync(postUploadDir, { recursive: true });
-}
-
-const postStorage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, postUploadDir);
-  },
-  filename: (req, file, cb) => {
-    const userId = (req as any).user?._id || 'unknown';
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    cb(null, `post-${userId}-${uniqueSuffix}${path.extname(file.originalname)}`);
-  }
-});
-
-const mediaFilter = (req: any, file: any, cb: any) => {
-  if (file.mimetype.startsWith('image') || file.mimetype.startsWith('video')) {
-    cb(null, true);
-  } else {
-    cb(new AppError('Not a media file! Please upload images or videos.', 400), false);
-  }
-};
-
-export const uploadMedia = multer({
-  storage: postStorage,
-  fileFilter: mediaFilter,
-  limits: { fileSize: 50 * 1024 * 1024 } // 50MB limit
 });

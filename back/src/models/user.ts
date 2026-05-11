@@ -53,14 +53,6 @@ export interface IUser extends Document {
     };
   };
   savedProjects?: mongoose.Types.ObjectId[];
-  customContacts?: Array<{
-    firstName: string;
-    lastName?: string;
-    phoneNumber: string;
-    email?: string;
-    nickname?: string;
-    userId?: mongoose.Types.ObjectId;
-  }>;
   status: 'online' | 'offline' | 'busy';
   resetPasswordToken?: string;
   resetPasswordExpire?: Date;
@@ -195,14 +187,6 @@ const UserSchema: Schema = new Schema({
   savedProjects: [{ type: Schema.Types.ObjectId, ref: 'Job' }],
   savedFreelancers: [{ type: Schema.Types.ObjectId, ref: 'User' }],
   connections: [{ type: Schema.Types.ObjectId, ref: 'User' }],
-  customContacts: [{
-    firstName: { type: String, required: true },
-    lastName: String,
-    phoneNumber: { type: String, required: true },
-    email: String,
-    nickname: String,
-    userId: { type: Schema.Types.ObjectId, ref: 'User' }
-  }],
   status: {
     type: String,
     enum: ['online', 'offline', 'busy'],

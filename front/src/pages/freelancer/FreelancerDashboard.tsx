@@ -11,30 +11,11 @@ const FreelancerDashboard: React.FC = () => {
   useEffect(() => {
     const fetchApplications = async () => {
       try {
-        console.log('📥 Fetching /jobs/applied...');
         const response = await axiosInstance.get('/jobs/applied');
         setApplications(response.data.data.applications);
-      } catch (error: any) {
-        // ✅ Comprehensive error logging for 403 Forbidden
-        console.error("🔴 Failed to fetch applications:");
-        console.error("Status Code:", error.response?.status);
-        console.error("Status Text:", error.response?.statusText);
-        console.error("Backend Error Message:", error.response?.data?.message);
-        console.error("Backend Error Details:", error.response?.data);
-        
-        // ✅ Check Authorization header in request
-        console.log("📋 Request Headers:", {
-          authorization: error.response?.config?.headers?.authorization ? '✅ Present' : '❌ Missing',
-          contentType: error.response?.config?.headers?.['content-type']
-        });
-        
-        // 403 Forbidden usually means the user doesn't have the required role
-        if (error.response?.status === 403) {
-          console.warn("⚠️ 403 Forbidden: User likely doesn't have 'freelancer' role or is not authenticated");
-          toast.error("Access denied. Make sure your account role is set to 'Freelancer'.");
-        } else {
-          toast.error("Failed to load your applications.");
-        }
+      } catch (error) {
+        console.error("Failed to fetch applications:", error);
+        toast.error("Failed to load your applications.");
       } finally {
         setIsLoading(false);
       }

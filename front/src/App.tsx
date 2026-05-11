@@ -90,7 +90,6 @@ function App() {
         <Route element={<MainLayout />}>
           <Route path="/chats" element={<HomeFeed />} />
           <Route path="/chats/new-contact" element={<NewContact />} />
-          <Route path="/chats/:chatId" element={<HomeFeed />} />
           <Route path="/groups" element={<GroupsFeed />} />
           <Route path="/groups/:id" element={<GroupDetails />} />
           <Route path="/jobs" element={<JobsBoard />} />

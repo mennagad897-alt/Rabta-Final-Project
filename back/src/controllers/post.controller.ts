@@ -64,8 +64,8 @@ export const createPost = catchAsync(async (req: Request, res: Response) => {
   let media: any[] = [];
   if (req.files && Array.isArray(req.files)) {
     media = (req.files as Express.Multer.File[]).map(file => ({
-      url: `/uploads/posts/${file.filename}`,
-      type: file.mimetype.startsWith('image') ? 'image' : file.mimetype.startsWith('video') ? 'video' : 'file'
+      url: `/uploads/avatars/${file.filename}`, // Using existing avatar path for now
+      type: file.mimetype.startsWith('image') ? 'image' : 'file'
     }));
   }
 

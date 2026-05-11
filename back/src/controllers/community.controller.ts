@@ -135,34 +135,28 @@ export const aiQuery = catchAsync(async (req: Request, res: Response) => {
 // 1. يطلب تاريخ الرسائل من الـ REST API
 // 2. ينضم للـ Socket room الصح باستخدام الـ chatId كـ roomId
 export const getCommunityChat = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
-  let community = await Community.findById(req.params.id);
+  const community = await Community.findById(req.params.id).populate('chatId');
   if (!community) return next(new AppError('Community not found', 404));
 
+  // التأكد إن المستخدم عضو في المجتمع قبل ما نديه الشات
   const userId = (req.user as any)._id.toString();
   const isMember = community.members.some((m) => m.toString() === userId);
   if (!isMember) return next(new AppError('You must be a member to access this chat', 403));
 
-  // If no chatId exists, create one
-  if (!community.chatId) {
-    const newChat = await Chat.create({
-      isGroup: true,
-      groupName: community.name,
-      users: community.members,
-      admins: [community.owner]
-    });
-    community.chatId = newChat._id;
-    await community.save();
-  }
+  if (!community.chatId) return next(new AppError('This community does not have a chat yet', 404));
 
-  const populatedChat = await Chat.findById(community.chatId)
-    .populate('users', 'fullName avatar jobTitle')
-    .populate('latestMessage');
+  // جلب آخر 30 رسالة مع بيانات المرسل
+  const messages = await Message.find({ chatId: community.chatId })
+    .populate('senderId', 'fullName avatar')
+    .sort({ createdAt: -1 })
+    .limit(30);
 
   res.status(200).json({
     status: 'success',
     data: {
-      chat: populatedChat,
-      communityName: community.name
+      chatId: community.chatId,
+      communityName: community.name,
+      messages: messages.reverse() // الأقدم أولاً
     }
   });
 });

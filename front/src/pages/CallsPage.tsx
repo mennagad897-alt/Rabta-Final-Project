@@ -137,23 +137,12 @@ export const CallsPage: React.FC = () => {
     }
   };
 
-  const handleOpenChat = async () => {
-    if (!selectedCall || !selectedOtherUser) return;
-    if (selectedOtherUser.isGroup) {
-      navigate(`/groups/${selectedCall.chatId?._id || selectedCall.chatId || selectedOtherUser._id}`);
+  const handleOpenChat = () => {
+    if (!selectedCall) return;
+    if (selectedCall.chatId?.isGroup) {
+      navigate(`/groups/${selectedCall.chatId?._id || selectedCall.chatId}`);
     } else {
-      try {
-        let targetChatId = selectedCall.chatId?._id || selectedCall.chatId;
-        // If there's no chat ID associated with the call, forcefully fetch/create one
-        if (!targetChatId) {
-          const response = await axiosInstance.post('/chats', { userId: selectedOtherUser._id });
-          targetChatId = response.data.data.chat._id;
-        }
-        navigate('/chats', { state: { openChatId: targetChatId } });
-      } catch (error) {
-        console.error('Failed to open chat:', error);
-        toast.error('Failed to open chat window');
-      }
+      navigate('/chats'); // Note: For exact 1-to-1 routing, Rabta might need /chats to handle specific IDs if supported.
     }
   };
 
@@ -218,9 +207,7 @@ export const CallsPage: React.FC = () => {
                 }`}
               >
                 <div className="relative shrink-0">
-                  <div className="w-12 h-12 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center font-bold text-gray-500">
-                    {other?.fullName?.charAt(0) || '?'}
-                  </div>
+                  <img src={other.avatar || '/default-avatar.png'} className="w-12 h-12 rounded-full object-cover" alt={other.fullName} />
                   <span className={`material-icons-round absolute -bottom-1 -right-1 text-[14px] w-5 h-5 flex items-center justify-center rounded-full text-white ${
                     call.status === 'missed' ? 'bg-red-500' : 'bg-[#7C3AED]'
                   }`}>
@@ -230,7 +217,7 @@ export const CallsPage: React.FC = () => {
                 <div className="flex-1 min-w-0">
                   <div className="flex justify-between items-baseline">
                     <h4 className={`font-bold text-sm truncate ${call.status === 'missed' && direction === 'incoming' && !isSelected ? 'text-red-500' : ''}`}>
-                      {other?.fullName || 'Unknown User'}
+                      {other.fullName}
                     </h4>
                     <span className="text-[10px] text-gray-400">{new Date(call.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
                   </div>
@@ -257,17 +244,17 @@ export const CallsPage: React.FC = () => {
             </header>
 
             <div className="flex flex-col items-center py-10 px-4 border-b border-gray-100 dark:border-white/5">
-              <h1 className="text-2xl font-bold mb-1">{selectedOtherUser?.fullName || 'Unknown User'}</h1>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mb-8">{selectedOtherUser?.role || selectedOtherUser?.jobTitle || 'Professional'}</p>
+              <img src={selectedOtherUser.avatar || '/default-avatar.png'} className="w-28 h-28 rounded-full shadow-lg mb-4 object-cover border-4 border-white dark:border-[#262626]" alt="Selected User" />
+              <h1 className="text-2xl font-bold mb-1">{selectedOtherUser.fullName}</h1>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-8">{selectedOtherUser.role || 'Professional'}</p>
               
               <div className="flex gap-6">
                 <button 
                   onClick={() => {
-                    const chatId = selectedCall?.chatId?._id || selectedCall?.chatId;
                     if (selectedOtherUser.isGroup) {
                       callGroup(selectedOtherUser._id, selectedOtherUser.fullName, 'voice');
                     } else {
-                      callUser(selectedOtherUser._id, selectedOtherUser.fullName, 'voice', '', chatId);
+                      callUser(selectedOtherUser._id, selectedOtherUser.fullName, 'voice', selectedOtherUser.avatar);
                     }
                   }}
                   className="flex flex-col items-center gap-2 group"
@@ -279,11 +266,10 @@ export const CallsPage: React.FC = () => {
                 </button>
                 <button 
                   onClick={() => {
-                    const chatId = selectedCall?.chatId?._id || selectedCall?.chatId;
                     if (selectedOtherUser.isGroup) {
                       callGroup(selectedOtherUser._id, selectedOtherUser.fullName, 'video');
                     } else {
-                      callUser(selectedOtherUser._id, selectedOtherUser.fullName, 'video', '', chatId);
+                      callUser(selectedOtherUser._id, selectedOtherUser.fullName, 'video', selectedOtherUser.avatar);
                     }
                   }}
                   className="flex flex-col items-center gap-2 group"
