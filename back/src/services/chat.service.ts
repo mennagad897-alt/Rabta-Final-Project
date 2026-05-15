@@ -1,39 +1,56 @@
-﻿import mongoose from 'mongoose';
-import Chat from '../models/chat';
-import Message from '../models/Message';
-import Community from '../models/Community';
-import { User } from '../models/user';
-import { AppError } from '../utils/AppError';
-import * as aiService from './ai.service';
+﻿import mongoose from "mongoose";
+import Chat from "../models/chat";
+import Message from "../models/Message";
+import Community from "../models/Community";
+import { User } from "../models/user";
+import { AppError } from "../utils/AppError";
 
 /** Check block status between users in a direct chat. */
-export const checkDirectChatBlockStatus = async (senderId: string, chatId: string) => {
-  const chat = await Chat.findById(chatId).select('users isGroup');
-  if (!chat || chat.isGroup) return { senderBlockedOther: false, receiverBlockedSender: false };
+export const checkDirectChatBlockStatus = async (
+  senderId: string,
+  chatId: string,
+) => {
+  const chat = await Chat.findById(chatId).select("users isGroup");
+  if (!chat || chat.isGroup)
+    return { senderBlockedOther: false, receiverBlockedSender: false };
 
-  const otherUserId = chat.users.map((u) => u.toString()).find((id) => id !== senderId);
-  if (!otherUserId) return { senderBlockedOther: false, receiverBlockedSender: false };
+  const otherUserId = chat.users
+    .map((u) => u.toString())
+    .find((id) => id !== senderId);
+  if (!otherUserId)
+    return { senderBlockedOther: false, receiverBlockedSender: false };
 
   const [sender, receiver] = await Promise.all([
-    User.findById(senderId).select('blockedUsers'),
-    User.findById(otherUserId).select('blockedUsers')
+    User.findById(senderId).select("blockedUsers"),
+    User.findById(otherUserId).select("blockedUsers"),
   ]);
 
-  const senderBlockedOther = !!sender?.blockedUsers?.some((id: mongoose.Types.ObjectId) => id.toString() === otherUserId);
-  const receiverBlockedSender = !!receiver?.blockedUsers?.some((id: mongoose.Types.ObjectId) => id.toString() === senderId);
+  const senderBlockedOther = !!sender?.blockedUsers?.some(
+    (id: mongoose.Types.ObjectId) => id.toString() === otherUserId,
+  );
+  const receiverBlockedSender = !!receiver?.blockedUsers?.some(
+    (id: mongoose.Types.ObjectId) => id.toString() === senderId,
+  );
 
   return { senderBlockedOther, receiverBlockedSender };
 };
 
 /** Block check for calls when chat id may be unresolved â€” uses user pair only. */
-export const checkUsersBlockStatusPair = async (userA: string, userB: string) => {
+export const checkUsersBlockStatusPair = async (
+  userA: string,
+  userB: string,
+) => {
   const [a, b] = await Promise.all([
-    User.findById(userA).select('blockedUsers'),
-    User.findById(userB).select('blockedUsers')
+    User.findById(userA).select("blockedUsers"),
+    User.findById(userB).select("blockedUsers"),
   ]);
-  const aBlockedB = !!a?.blockedUsers?.some((id: mongoose.Types.ObjectId) => id.toString() === userB);
-  const bBlockedA = !!b?.blockedUsers?.some((id: mongoose.Types.ObjectId) => id.toString() === userA);
-  
+  const aBlockedB = !!a?.blockedUsers?.some(
+    (id: mongoose.Types.ObjectId) => id.toString() === userB,
+  );
+  const bBlockedA = !!b?.blockedUsers?.some(
+    (id: mongoose.Types.ObjectId) => id.toString() === userA,
+  );
+
   return { senderBlockedOther: aBlockedB, receiverBlockedSender: bBlockedA };
 };
 
@@ -54,7 +71,7 @@ export const createMessage = async (data: {
   senderId: string;
   content?: string;
   messageType?: string;
-  status?: 'sent' | 'delivered' | 'read' | 'sending';
+  status?: "sent" | "delivered" | "read" | "sending";
   audioUrl?: string;
   duration?: number;
   replyTo?: string;
@@ -63,47 +80,56 @@ export const createMessage = async (data: {
 }) => {
   // Ø§Ù„ØªØ£ÙƒØ¯ Ø¥Ù† Ø§Ù„Ø´Ø§Øª Ù…ÙˆØ¬ÙˆØ¯ ÙØ¹Ù„Ø§Ù‹
   const chat = await Chat.findById(data.chatId);
-  if (!chat) throw new AppError('Chat not found', 404);
+  if (!chat) throw new AppError("Chat not found", 404);
 
   // Ø§Ù„ØªØ£ÙƒØ¯ Ø¥Ù† Ø§Ù„Ù…Ø±Ø³Ù„ Ø¹Ø¶Ùˆ ÙÙŠ Ø§Ù„Ø´Ø§Øª Ø¯Ù‡ (Ø­Ù…Ø§ÙŠØ© Ù…Ù‡Ù…Ø©)
   const isMember = chat.users.some(
-    (userId) => userId.toString() === data.senderId
+    (userId) => userId.toString() === data.senderId,
   );
-  if (!isMember) throw new AppError('You are not a member of this chat', 403);
+  if (!isMember) throw new AppError("You are not a member of this chat", 403);
 
-  const blockStatus = await checkDirectChatBlockStatus(data.senderId, data.chatId);
+  const blockStatus = await checkDirectChatBlockStatus(
+    data.senderId,
+    data.chatId,
+  );
   if (blockStatus.senderBlockedOther || blockStatus.receiverBlockedSender) {
-    throw new AppError('You cannot interact with this user.', 403);
+    throw new AppError("You cannot interact with this user.", 403);
   }
 
   // Ø¥Ù†Ø´Ø§Ø¡ Ø§Ù„Ø±Ø³Ø§Ù„Ø© ÙÙŠ Ø§Ù„Ø¯Ø§ØªØ§ Ø¨ÙŠØ²
-  const signal = aiService.analyzeSignal(data.content || '');
-  
+  const signal = aiService.analyzeSignal(data.content || "");
+
   const newMessage = new Message({
     chatId: data.chatId,
     senderId: data.senderId,
     content: data.content,
     audioUrl: data.audioUrl,
     duration: data.duration,
-    messageType: data.messageType || 'text',
-    status: data.status || 'sent',
+    messageType: data.messageType || "text",
+    status: data.status || "sent",
     attachments: data.attachments || [],
     replyTo: data.replyTo,
     isForwarded: data.isForwarded || false,
-    signal
+    signal,
   });
   await newMessage.save();
 
   // Extract tasks in background
-  aiService.extractTasks(newMessage).catch(err => console.error('AI Extraction Error:', err));
+  aiService
+    .extractTasks(newMessage)
+    .catch((err) => console.error("AI Extraction Error:", err));
 
   // ØªØ­Ø¯ÙŠØ« Ø¢Ø®Ø± Ø±Ø³Ø§Ù„Ø© ÙÙŠ Ø§Ù„Ø´Ø§Øª Ø¹Ø´Ø§Ù† Ø§Ù„ÙØ±ÙˆÙ†Øª Ø¥Ù†Ø¯ ÙŠØ¹Ø±Ø¶Ù‡Ø§ ÙÙŠ Ù‚Ø§Ø¦Ù…Ø© Ø§Ù„Ù…Ø­Ø§Ø¯Ø«Ø§Øª
   await Chat.findByIdAndUpdate(data.chatId, { latestMessage: newMessage._id });
 
   // Ø¨Ù†Ø±Ø¬Ø¹ Ø§Ù„Ø±Ø³Ø§Ù„Ø© Ù…Ø¹ Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„Ù…Ø±Ø³Ù„ (Ø§Ù„Ø§Ø³Ù… ÙˆØ§Ù„ØµÙˆØ±Ø©)
   const populatedMessage = await Message.findById(newMessage._id)
-    .populate('senderId', 'fullName avatar')
-    .populate({ path: 'replyTo', select: 'content senderId messageType attachments', populate: { path: 'senderId', select: 'fullName' } });
+    .populate("senderId", "fullName avatar")
+    .populate({
+      path: "replyTo",
+      select: "content senderId messageType attachments",
+      populate: { path: "senderId", select: "fullName" },
+    });
 
   return populatedMessage;
 };
@@ -119,20 +145,19 @@ export const getChatMessages = async (
   chatId: string,
   userId: string,
   limit: number = 30,
-  before?: string // cursor: Ø§Ù„Ø±Ø³Ø§Ø¦Ù„ Ø§Ù„Ù„ÙŠ Ù‚Ø¨Ù„ Ø§Ù„Ù€ ID Ø¯Ù‡
+  before?: string, // cursor: Ø§Ù„Ø±Ø³Ø§Ø¦Ù„ Ø§Ù„Ù„ÙŠ Ù‚Ø¨Ù„ Ø§Ù„Ù€ ID Ø¯Ù‡
 ) => {
   // Ø§Ù„ØªØ£ÙƒØ¯ Ø¥Ù† Ø§Ù„Ø´Ø§Øª Ù…ÙˆØ¬ÙˆØ¯ ÙˆØ§Ù„ÙŠÙˆØ²Ø± Ø¹Ø¶Ùˆ ÙÙŠÙ‡
   const chat = await Chat.findById(chatId);
-  if (!chat) throw new AppError('Chat not found', 404);
+  if (!chat) throw new AppError("Chat not found", 404);
 
-  const isMember = chat.users.some(
-    (userId_) => userId_.toString() === userId
-  );
-  if (!isMember) throw new AppError('You are not a member of this chat', 403);
+  const isMember = chat.users.some((userId_) => userId_.toString() === userId);
+  if (!isMember) throw new AppError("You are not a member of this chat", 403);
 
   const userOid = new mongoose.Types.ObjectId(userId);
   const clearEntry = (chat as any).clearStates?.find(
-    (s: { user?: { toString: () => string }; clearedAt?: Date }) => s.user?.toString() === userId
+    (s: { user?: { toString: () => string }; clearedAt?: Date }) =>
+      s.user?.toString() === userId,
   );
 
   const query: Record<string, unknown> = { chatId };
@@ -146,8 +171,8 @@ export const getChatMessages = async (
     $or: [
       { hiddenFor: { $exists: false } },
       { hiddenFor: { $size: 0 } },
-      { hiddenFor: { $not: { $elemMatch: { $eq: userOid } } } }
-    ]
+      { hiddenFor: { $not: { $elemMatch: { $eq: userOid } } } },
+    ],
   });
 
   if (before) {
@@ -161,8 +186,12 @@ export const getChatMessages = async (
   const safeLimit = Math.min(Math.max(limit, 20), 50);
 
   const latestBatch = await Message.find(query)
-    .populate('senderId', 'fullName avatar')
-    .populate({ path: 'replyTo', select: 'content senderId messageType attachments', populate: { path: 'senderId', select: 'fullName' } })
+    .populate("senderId", "fullName avatar")
+    .populate({
+      path: "replyTo",
+      select: "content senderId messageType attachments",
+      populate: { path: "senderId", select: "fullName" },
+    })
     // Fetch newest first so limit returns the latest persisted messages
     .sort({ createdAt: -1 })
     .limit(safeLimit);
@@ -174,28 +203,40 @@ export const getChatMessages = async (
 // ==========================================
 // ðŸ¤ Ø¥Ù†Ø´Ø§Ø¡ Ø£Ùˆ Ø¬Ù„Ø¨ Ù…Ø­Ø§Ø¯Ø«Ø© ÙØ±Ø¯ÙŠØ© (One-to-One)
 // ==========================================
-export const accessOrCreateChat = async (currentUserId: string, otherUserId: string) => {
+export const accessOrCreateChat = async (
+  currentUserId: string,
+  otherUserId: string,
+) => {
   // Ø¨Ù†Ø¨Ø­Ø« Ù‡Ù„ ÙÙŠÙ‡ Ø´Ø§Øª ÙØ±Ø¯ÙŠ (Ù…Ø´ Ø¬Ø±ÙˆØ¨) Ø¨ÙŠÙ† Ø§Ù„ÙŠÙˆØ²Ø±ÙŠÙ† Ø¯ÙˆÙ„
   let chat = await Chat.findOne({
     isGroup: false,
-    users: { $all: [currentUserId, otherUserId], $size: 2 }
+    users: { $all: [currentUserId, otherUserId], $size: 2 },
   })
-    .populate('users', 'fullName avatar status showOnlineStatus')
-    .populate('latestMessage');
+    .populate("users", "fullName avatar status showOnlineStatus")
+    .populate("latestMessage");
 
   // Ù„Ùˆ Ù…Ø´ Ù…ÙˆØ¬ÙˆØ¯ Ø¨Ù†Ù†Ø´Ø¦ ÙˆØ§Ø­Ø¯ Ø¬Ø¯ÙŠØ¯
   if (!chat) {
     chat = await Chat.create({
       isGroup: false,
-      users: [currentUserId, otherUserId]
+      users: [currentUserId, otherUserId],
     });
-    chat = await Chat.findById(chat._id)
-      .populate('users', 'fullName avatar status showOnlineStatus');
+    chat = await Chat.findById(chat._id).populate(
+      "users",
+      "fullName avatar status showOnlineStatus",
+    );
   } else {
     // If the chat exists but was hidden by the user, unhide it
-    if (chat.hiddenBy && chat.hiddenBy.some(id => id.toString() === currentUserId)) {
-      await Chat.findByIdAndUpdate(chat._id, { $pull: { hiddenBy: currentUserId } });
-      chat.hiddenBy = chat.hiddenBy.filter(id => id.toString() !== currentUserId);
+    if (
+      chat.hiddenBy &&
+      chat.hiddenBy.some((id) => id.toString() === currentUserId)
+    ) {
+      await Chat.findByIdAndUpdate(chat._id, {
+        $pull: { hiddenBy: currentUserId },
+      });
+      chat.hiddenBy = chat.hiddenBy.filter(
+        (id) => id.toString() !== currentUserId,
+      );
     }
   }
 
@@ -209,27 +250,30 @@ export const createGroupChat = async (
   adminId: string,
   groupName: string,
   memberIds: string[],
-  isPrivate: boolean = false
+  isPrivate: boolean = false,
 ) => {
   // Ù„Ø§Ø²Ù… ÙŠÙƒÙˆÙ† ÙÙŠÙ‡ Ø¹Ù„Ù‰ Ø§Ù„Ø£Ù‚Ù„ Ø¹Ø¶ÙˆÙŠÙ† ØºÙŠØ± Ø§Ù„Ø£Ø¯Ù…Ù†
   if (!memberIds || memberIds.length < 2) {
-    throw new AppError('Group chat must have at least 2 members besides admin', 400);
+    throw new AppError(
+      "Group chat must have at least 2 members besides admin",
+      400,
+    );
   }
 
   // Ø§Ù„Ø£Ø¯Ù…Ù† Ø¨ÙŠÙƒÙˆÙ† Ø¹Ø¶Ùˆ ØªÙ„Ù‚Ø§Ø¦ÙŠØ§Ù‹
-  const allUsers = [adminId, ...memberIds.filter(id => id !== adminId)];
+  const allUsers = [adminId, ...memberIds.filter((id) => id !== adminId)];
 
   const groupChat = await Chat.create({
     isGroup: true,
     groupName,
     users: allUsers,
     admins: [adminId],
-    isPrivate
+    isPrivate,
   });
 
   const populatedChat = await Chat.findById(groupChat._id)
-    .populate('users', 'fullName avatar status showOnlineStatus')
-    .populate('admins', 'fullName avatar');
+    .populate("users", "fullName avatar status showOnlineStatus")
+    .populate("admins", "fullName avatar");
 
   return populatedChat;
 };
@@ -237,30 +281,42 @@ export const createGroupChat = async (
 // ==========================================
 // âž• Ø¥Ø¶Ø§ÙØ© Ø¹Ø¶Ùˆ Ù„Ù„Ø¬Ø±ÙˆØ¨ (Admin Only)
 // ==========================================
-export const addMemberToGroup = async (chatId: string, adminId: string, newMemberId: string) => {
+export const addMemberToGroup = async (
+  chatId: string,
+  adminId: string,
+  newMemberId: string,
+) => {
   const chat = await Chat.findById(chatId);
-  if (!chat) throw new AppError('Chat not found', 404);
-  if (!chat.isGroup) throw new AppError('This is not a group chat', 400);
+  if (!chat) throw new AppError("Chat not found", 404);
+  if (!chat.isGroup) throw new AppError("This is not a group chat", 400);
 
   // Check permissions based on group privacy
-  const isAdmin = chat.admins?.some(id => id.toString() === adminId);
+  const isAdmin = chat.admins?.some((id) => id.toString() === adminId);
   if (chat.isPrivate) {
-    if (!isAdmin) throw new AppError('Only the admin can add members to this private group', 403);
+    if (!isAdmin)
+      throw new AppError(
+        "Only the admin can add members to this private group",
+        403,
+      );
   } else {
-    const isMember = chat.users.some(id => id.toString() === adminId);
-    if (!isMember && !isAdmin) throw new AppError('Only existing members can add users to this group', 403);
+    const isMember = chat.users.some((id) => id.toString() === adminId);
+    if (!isMember && !isAdmin)
+      throw new AppError(
+        "Only existing members can add users to this group",
+        403,
+      );
   }
 
   // Ø§Ù„ØªØ£ÙƒØ¯ Ø¥Ù† Ø§Ù„Ø¹Ø¶Ùˆ Ù…Ø´ Ù…ÙˆØ¬ÙˆØ¯ Ø£ØµÙ„Ø§Ù‹
-  const alreadyMember = chat.users.some(id => id.toString() === newMemberId);
-  if (alreadyMember) throw new AppError('User is already a member', 400);
+  const alreadyMember = chat.users.some((id) => id.toString() === newMemberId);
+  if (alreadyMember) throw new AppError("User is already a member", 400);
 
   chat.users.push(new mongoose.Types.ObjectId(newMemberId));
   await chat.save();
 
   const updatedChat = await Chat.findById(chatId)
-    .populate('users', 'fullName avatar status showOnlineStatus')
-    .populate('admins', 'fullName avatar');
+    .populate("users", "fullName avatar status showOnlineStatus")
+    .populate("admins", "fullName avatar");
 
   return updatedChat;
 };
@@ -268,27 +324,35 @@ export const addMemberToGroup = async (chatId: string, adminId: string, newMembe
 // ==========================================
 // âž– Ø¥Ø²Ø§Ù„Ø© Ø¹Ø¶Ùˆ Ù…Ù† Ø§Ù„Ø¬Ø±ÙˆØ¨ (Admin Only)
 // ==========================================
-export const removeMemberFromGroup = async (chatId: string, adminId: string, memberId: string) => {
+export const removeMemberFromGroup = async (
+  chatId: string,
+  adminId: string,
+  memberId: string,
+) => {
   const chat = await Chat.findById(chatId);
-  if (!chat) throw new AppError('Chat not found', 404);
-  if (!chat.isGroup) throw new AppError('This is not a group chat', 400);
+  if (!chat) throw new AppError("Chat not found", 404);
+  if (!chat.isGroup) throw new AppError("This is not a group chat", 400);
 
-  const isAdmin = chat.admins?.some(id => id.toString() === adminId);
-  if (!isAdmin) throw new AppError('Only admins can remove members', 403);
+  const isAdmin = chat.admins?.some((id) => id.toString() === adminId);
+  if (!isAdmin) throw new AppError("Only admins can remove members", 403);
 
   // Ù…ÙŠÙ†ÙØ¹Ø´ Ø§Ù„Ø£Ø¯Ù…Ù† ÙŠØ´ÙŠÙ„ Ù†ÙØ³Ù‡ (Ù„Ø§Ø²Ù… ÙŠØ³ÙŠØ¨ Ø§Ù„Ø¬Ø±ÙˆØ¨ Ø¨Ø¯Ù„ ÙƒØ¯Ù‡)
-  if (memberId === adminId) throw new AppError('Admin cannot remove themselves, use leave instead', 400);
+  if (memberId === adminId)
+    throw new AppError(
+      "Admin cannot remove themselves, use leave instead",
+      400,
+    );
 
-  chat.users = chat.users.filter(id => id.toString() !== memberId);
+  chat.users = chat.users.filter((id) => id.toString() !== memberId);
   // Ù„Ùˆ Ø§Ù„Ø¹Ø¶Ùˆ ÙƒØ§Ù† Ø£Ø¯Ù…Ù† ÙƒÙ…Ø§Ù†ØŒ Ù†Ø´ÙŠÙ„Ù‡ Ù…Ù† Ø§Ù„Ø£Ø¯Ù…Ù†Ø²
   if (chat.admins) {
-    chat.admins = chat.admins.filter(id => id.toString() !== memberId);
+    chat.admins = chat.admins.filter((id) => id.toString() !== memberId);
   }
   await chat.save();
 
   const updatedChat = await Chat.findById(chatId)
-    .populate('users', 'fullName avatar status showOnlineStatus')
-    .populate('admins', 'fullName avatar');
+    .populate("users", "fullName avatar status showOnlineStatus")
+    .populate("admins", "fullName avatar");
 
   return updatedChat;
 };
@@ -298,16 +362,16 @@ export const removeMemberFromGroup = async (chatId: string, adminId: string, mem
 // ==========================================
 export const leaveGroup = async (chatId: string, userId: string) => {
   const chat = await Chat.findById(chatId);
-  if (!chat) throw new AppError('Chat not found', 404);
-  if (!chat.isGroup) throw new AppError('This is not a group chat', 400);
+  if (!chat) throw new AppError("Chat not found", 404);
+  if (!chat.isGroup) throw new AppError("This is not a group chat", 400);
 
-  const isMember = chat.users.some(id => id.toString() === userId);
-  if (!isMember) throw new AppError('You are not a member of this group', 400);
+  const isMember = chat.users.some((id) => id.toString() === userId);
+  if (!isMember) throw new AppError("You are not a member of this group", 400);
 
   // Ø´ÙŠÙ„ Ø§Ù„ÙŠÙˆØ²Ø± Ù…Ù† Ø§Ù„Ø£Ø¹Ø¶Ø§Ø¡ ÙˆØ§Ù„Ø£Ø¯Ù…Ù†Ø²
-  chat.users = chat.users.filter(id => id.toString() !== userId);
+  chat.users = chat.users.filter((id) => id.toString() !== userId);
   if (chat.admins) {
-    chat.admins = chat.admins.filter(id => id.toString() !== userId);
+    chat.admins = chat.admins.filter((id) => id.toString() !== userId);
   }
 
   // Ù„Ùˆ Ù…ÙÙŠØ´ Ø£Ø¯Ù…Ù†Ø² ØªØ§Ù†ÙŠØŒ Ø£ÙˆÙ„ Ø¹Ø¶Ùˆ ÙŠØ¨Ù‚Ù‰ Ø£Ø¯Ù…Ù† ØªÙ„Ù‚Ø§Ø¦ÙŠØ§Ù‹
@@ -320,13 +384,15 @@ export const leaveGroup = async (chatId: string, userId: string) => {
   // Remove the user from the related Community if it exists
   const community = await Community.findOne({ chatId: chat._id });
   if (community) {
-    community.members = community.members.filter((id: any) => id.toString() !== userId);
+    community.members = community.members.filter(
+      (id: any) => id.toString() !== userId,
+    );
     // If we updated admins in chat, also sync community admins
     community.admins = chat.admins || [];
     await community.save();
   }
 
-  return { message: 'You have left the group successfully' };
+  return { message: "You have left the group successfully" };
 };
 
 // ==========================================
@@ -336,14 +402,14 @@ export const createCommunity = async (
   ownerId: string,
   name: string,
   description: string,
-  tags?: string[]
+  tags?: string[],
 ) => {
   // Ø¨Ù†Ù†Ø´Ø¦ Ø´Ø§Øª Ø¬Ù…Ø§Ø¹ÙŠ Ù…Ø±ØªØ¨Ø· Ø¨Ø§Ù„Ù…Ø¬ØªÙ…Ø¹ ØªÙ„Ù‚Ø§Ø¦ÙŠØ§Ù‹
   const communityChat = await Chat.create({
     isGroup: true,
     groupName: name,
     users: [ownerId],
-    admins: [ownerId]
+    admins: [ownerId],
   });
 
   const community = await Community.create({
@@ -353,13 +419,13 @@ export const createCommunity = async (
     admins: [ownerId],
     members: [ownerId],
     chatId: communityChat._id,
-    tags: tags || []
+    tags: tags || [],
   });
 
   const populatedCommunity = await Community.findById(community._id)
-    .populate('owner', 'fullName avatar')
-    .populate('members', 'fullName avatar')
-    .populate('chatId');
+    .populate("owner", "fullName avatar")
+    .populate("members", "fullName avatar")
+    .populate("chatId");
 
   return populatedCommunity;
 };
@@ -369,15 +435,20 @@ export const createCommunity = async (
 // ==========================================
 export const joinCommunity = async (communityId: string, userId: string) => {
   const community = await Community.findById(communityId);
-  if (!community) throw new AppError('Community not found', 404);
+  if (!community) throw new AppError("Community not found", 404);
 
   // Ø§Ù„ØªØ£ÙƒØ¯ Ø¥Ù† Ø§Ù„ÙŠÙˆØ²Ø± Ù…Ø´ Ø¹Ø¶Ùˆ Ø£ØµÙ„Ø§Ù‹
-  const alreadyMember = community.members.some(id => id.toString() === userId);
-  if (alreadyMember) throw new AppError('You are already a member', 400);
+  const alreadyMember = community.members.some(
+    (id) => id.toString() === userId,
+  );
+  if (alreadyMember) throw new AppError("You are already a member", 400);
 
   // Ù„Ùˆ Ø§Ù„Ù…Ø¬ØªÙ…Ø¹ Ø®Ø§ØµØŒ Ù…ÙŠÙ†ÙØ¹Ø´ ÙŠÙ†Ø¶Ù… Ù…Ù† ØºÙŠØ± Ø¯Ø¹ÙˆØ©
   if (!community.isPublic) {
-    throw new AppError('This is a private community, you need an invitation', 403);
+    throw new AppError(
+      "This is a private community, you need an invitation",
+      403,
+    );
   }
 
   // Ø¶ÙŠÙ Ø§Ù„ÙŠÙˆØ²Ø± ÙƒØ¹Ø¶Ùˆ ÙÙŠ Ø§Ù„Ù…Ø¬ØªÙ…Ø¹ ÙˆÙÙŠ Ø§Ù„Ø´Ø§Øª Ø§Ù„Ù…Ø±ØªØ¨Ø·
@@ -387,11 +458,11 @@ export const joinCommunity = async (communityId: string, userId: string) => {
   // Ø¶ÙŠÙÙ‡ ÙÙŠ Ø§Ù„Ø´Ø§Øª Ø§Ù„Ø¬Ù…Ø§Ø¹ÙŠ ÙƒÙ…Ø§Ù†
   if (community.chatId) {
     await Chat.findByIdAndUpdate(community.chatId, {
-      $addToSet: { users: userId }
+      $addToSet: { users: userId },
     });
   }
 
-  return { message: 'Joined community successfully' };
+  return { message: "Joined community successfully" };
 };
 
 // ==========================================
@@ -399,39 +470,50 @@ export const joinCommunity = async (communityId: string, userId: string) => {
 // ==========================================
 export const leaveCommunity = async (communityId: string, userId: string) => {
   const community = await Community.findById(communityId);
-  if (!community) throw new AppError('Community not found', 404);
+  if (!community) throw new AppError("Community not found", 404);
 
   // ØµØ§Ø­Ø¨ Ø§Ù„Ù…Ø¬ØªÙ…Ø¹ Ù…ÙŠÙ†ÙØ¹Ø´ ÙŠØºØ§Ø¯Ø± (Ù„Ø§Ø²Ù… ÙŠÙ…Ø³Ø­ Ø§Ù„Ù…Ø¬ØªÙ…Ø¹ Ø£Ùˆ ÙŠÙ†Ù‚Ù„ Ø§Ù„Ù…Ù„ÙƒÙŠØ©)
   if (community.owner.toString() === userId) {
-    throw new AppError('Owner cannot leave the community, transfer ownership first', 400);
+    throw new AppError(
+      "Owner cannot leave the community, transfer ownership first",
+      400,
+    );
   }
 
-  community.members = community.members.filter(id => id.toString() !== userId);
-  community.admins = community.admins.filter(id => id.toString() !== userId);
+  community.members = community.members.filter(
+    (id) => id.toString() !== userId,
+  );
+  community.admins = community.admins.filter((id) => id.toString() !== userId);
   await community.save();
 
   // Ø´ÙŠÙ„Ù‡ Ù…Ù† Ø§Ù„Ø´Ø§Øª ÙƒÙ…Ø§Ù†
   if (community.chatId) {
     await Chat.findByIdAndUpdate(community.chatId, {
-      $pull: { users: userId }
+      $pull: { users: userId },
     });
   }
 
-  return { message: 'Left community successfully' };
+  return { message: "Left community successfully" };
 };
 
 // ==========================================
 // âž• Ø¥Ø¶Ø§ÙØ© Ø¹Ø¶Ùˆ Ù„Ù„Ù…Ø¬ØªÙ…Ø¹ (Admin Only)
 // ==========================================
-export const addMemberToCommunity = async (communityId: string, adminId: string, newMemberId: string) => {
+export const addMemberToCommunity = async (
+  communityId: string,
+  adminId: string,
+  newMemberId: string,
+) => {
   const community = await Community.findById(communityId);
-  if (!community) throw new AppError('Community not found', 404);
+  if (!community) throw new AppError("Community not found", 404);
 
-  const isAdmin = community.admins.some(id => id.toString() === adminId);
-  if (!isAdmin) throw new AppError('Only admins can add members', 403);
+  const isAdmin = community.admins.some((id) => id.toString() === adminId);
+  if (!isAdmin) throw new AppError("Only admins can add members", 403);
 
-  const alreadyMember = community.members.some(id => id.toString() === newMemberId);
-  if (alreadyMember) throw new AppError('User is already a member', 400);
+  const alreadyMember = community.members.some(
+    (id) => id.toString() === newMemberId,
+  );
+  if (alreadyMember) throw new AppError("User is already a member", 400);
 
   community.members.push(new mongoose.Types.ObjectId(newMemberId));
   await community.save();
@@ -439,12 +521,14 @@ export const addMemberToCommunity = async (communityId: string, adminId: string,
   // Ø¶ÙŠÙÙ‡ ÙÙŠ Ø§Ù„Ø´Ø§Øª ÙƒÙ…Ø§Ù†
   if (community.chatId) {
     await Chat.findByIdAndUpdate(community.chatId, {
-      $addToSet: { users: newMemberId }
+      $addToSet: { users: newMemberId },
     });
   }
 
-  const updatedCommunity = await Community.findById(communityId)
-    .populate('members', 'fullName avatar');
+  const updatedCommunity = await Community.findById(communityId).populate(
+    "members",
+    "fullName avatar",
+  );
 
   return updatedCommunity;
 };
@@ -452,30 +536,40 @@ export const addMemberToCommunity = async (communityId: string, adminId: string,
 // ==========================================
 // âž– Ø¥Ø²Ø§Ù„Ø© Ø¹Ø¶Ùˆ Ù…Ù† Ø§Ù„Ù…Ø¬ØªÙ…Ø¹ (Admin Only)
 // ==========================================
-export const removeMemberFromCommunity = async (communityId: string, adminId: string, memberId: string) => {
+export const removeMemberFromCommunity = async (
+  communityId: string,
+  adminId: string,
+  memberId: string,
+) => {
   const community = await Community.findById(communityId);
-  if (!community) throw new AppError('Community not found', 404);
+  if (!community) throw new AppError("Community not found", 404);
 
-  const isAdmin = community.admins.some(id => id.toString() === adminId);
-  if (!isAdmin) throw new AppError('Only admins can remove members', 403);
+  const isAdmin = community.admins.some((id) => id.toString() === adminId);
+  if (!isAdmin) throw new AppError("Only admins can remove members", 403);
 
   if (community.owner.toString() === memberId) {
-    throw new AppError('Cannot remove the community owner', 400);
+    throw new AppError("Cannot remove the community owner", 400);
   }
 
-  community.members = community.members.filter(id => id.toString() !== memberId);
-  community.admins = community.admins.filter(id => id.toString() !== memberId);
+  community.members = community.members.filter(
+    (id) => id.toString() !== memberId,
+  );
+  community.admins = community.admins.filter(
+    (id) => id.toString() !== memberId,
+  );
   await community.save();
 
   // Ø´ÙŠÙ„Ù‡ Ù…Ù† Ø§Ù„Ø´Ø§Øª ÙƒÙ…Ø§Ù†
   if (community.chatId) {
     await Chat.findByIdAndUpdate(community.chatId, {
-      $pull: { users: memberId }
+      $pull: { users: memberId },
     });
   }
 
-  const updatedCommunity = await Community.findById(communityId)
-    .populate('members', 'fullName avatar');
+  const updatedCommunity = await Community.findById(communityId).populate(
+    "members",
+    "fullName avatar",
+  );
 
   return updatedCommunity;
 };
@@ -486,28 +580,40 @@ export const removeMemberFromCommunity = async (communityId: string, adminId: st
 export const updateCommunity = async (
   communityId: string,
   adminId: string,
-  updates: { name?: string; description?: string; avatar?: string; tags?: string[]; isPublic?: boolean }
+  updates: {
+    name?: string;
+    description?: string;
+    avatar?: string;
+    tags?: string[];
+    isPublic?: boolean;
+  },
 ) => {
   const community = await Community.findById(communityId);
-  if (!community) throw new AppError('Community not found', 404);
+  if (!community) throw new AppError("Community not found", 404);
 
-  const isAdmin = community.admins.some(id => id.toString() === adminId);
-  if (!isAdmin) throw new AppError('Only admins can update community', 403);
+  const isAdmin = community.admins.some((id) => id.toString() === adminId);
+  if (!isAdmin) throw new AppError("Only admins can update community", 403);
 
   // ØªØ­Ø¯ÙŠØ« Ø§Ù„Ø­Ù‚ÙˆÙ„ Ø§Ù„Ù…Ø³Ù…ÙˆØ­ Ø¨ÙŠÙ‡Ø§ Ø¨Ø³
   const allowedUpdates: any = {};
   if (updates.name !== undefined) allowedUpdates.name = updates.name;
-  if (updates.description !== undefined) allowedUpdates.description = updates.description;
+  if (updates.description !== undefined)
+    allowedUpdates.description = updates.description;
   if (updates.avatar !== undefined) allowedUpdates.avatar = updates.avatar;
   if (updates.tags !== undefined) allowedUpdates.tags = updates.tags;
-  if (updates.isPublic !== undefined) allowedUpdates.isPublic = updates.isPublic;
+  if (updates.isPublic !== undefined)
+    allowedUpdates.isPublic = updates.isPublic;
 
-  const updatedCommunity = await Community.findByIdAndUpdate(communityId, allowedUpdates, {
-    new: true,
-    runValidators: true
-  })
-    .populate('owner', 'fullName avatar')
-    .populate('members', 'fullName avatar');
+  const updatedCommunity = await Community.findByIdAndUpdate(
+    communityId,
+    allowedUpdates,
+    {
+      new: true,
+      runValidators: true,
+    },
+  )
+    .populate("owner", "fullName avatar")
+    .populate("members", "fullName avatar");
 
   return updatedCommunity;
 };
@@ -515,15 +621,18 @@ export const updateCommunity = async (
 // ==========================================
 // ðŸ“‹ Ø¬Ù„Ø¨ ÙƒÙ„ Ø§Ù„Ù…Ø¬ØªÙ…Ø¹Ø§Øª (Ù…Ø¹ pagination)
 // ==========================================
-export const getAllCommunities = async (page: number = 1, limit: number = 10) => {
+export const getAllCommunities = async (
+  page: number = 1,
+  limit: number = 10,
+) => {
   const skip = (page - 1) * limit;
 
   const communities = await Community.find({ isPublic: true })
-    .populate('owner', 'fullName avatar')
-    .select('name description avatar members tags createdAt')
+    .populate("owner", "fullName avatar")
+    .select("name description avatar members tags createdAt")
     .skip(skip)
     .limit(limit)
-    .sort('-createdAt');
+    .sort("-createdAt");
 
   const total = await Community.countDocuments({ isPublic: true });
 
@@ -532,8 +641,8 @@ export const getAllCommunities = async (page: number = 1, limit: number = 10) =>
     pagination: {
       currentPage: page,
       totalPages: Math.ceil(total / limit),
-      totalCommunities: total
-    }
+      totalCommunities: total,
+    },
   };
 };
 
@@ -542,12 +651,12 @@ export const getAllCommunities = async (page: number = 1, limit: number = 10) =>
 // ==========================================
 export const getCommunityById = async (communityId: string) => {
   const community = await Community.findById(communityId)
-    .populate('owner', 'fullName avatar')
-    .populate('admins', 'fullName avatar')
-    .populate('members', 'fullName avatar status')
-    .populate('chatId');
+    .populate("owner", "fullName avatar")
+    .populate("admins", "fullName avatar")
+    .populate("members", "fullName avatar status")
+    .populate("chatId");
 
-  if (!community) throw new AppError('Community not found', 404);
+  if (!community) throw new AppError("Community not found", 404);
 
   return community;
 };
@@ -556,64 +665,73 @@ export const getCommunityById = async (communityId: string) => {
 // ðŸ“‹ Ø¬Ù„Ø¨ Ù…Ø­Ø§Ø¯Ø«Ø§Øª Ø§Ù„ÙŠÙˆØ²Ø± (ÙƒÙ„ Ø§Ù„Ø´Ø§ØªØ§Øª Ø§Ù„Ù„ÙŠ Ù‡Ùˆ Ø¹Ø¶Ùˆ ÙÙŠÙ‡Ø§)
 // ==========================================
 export const getUserChats = async (userId: string) => {
-  const chats = await Chat.find({ 
-    users: userId, 
+  const chats = await Chat.find({
+    users: userId,
     isGroup: false,
-    $or: [
-      { hiddenBy: { $exists: false } },
-      { hiddenBy: { $ne: userId } }
-    ]
+    $or: [{ hiddenBy: { $exists: false } }, { hiddenBy: { $ne: userId } }],
   })
-    .populate('users', 'fullName avatar status showOnlineStatus')
+    .populate("users", "fullName avatar status showOnlineStatus")
     .populate({
-      path: 'latestMessage',
-      populate: { path: 'senderId', select: 'fullName _id' }
+      path: "latestMessage",
+      populate: { path: "senderId", select: "fullName _id" },
     })
-    .populate('admins', 'fullName avatar')
-    .sort('-updatedAt');
+    .populate("admins", "fullName avatar")
+    .sort("-updatedAt");
 
-  const chatsWithUnread = await Promise.all(chats.map(async (chat) => {
-    let latestMsg: any = chat.latestMessage;
+  const chatsWithUnread = await Promise.all(
+    chats.map(async (chat) => {
+      let latestMsg: any = chat.latestMessage;
 
-    // If the globally stored latest message is hidden for this user, find the true latest visible message
-    if (latestMsg && (latestMsg as any).hiddenFor?.some((id: any) => id.toString() === userId.toString())) {
-      const realLatestMessage = await Message.findOne({
+      // If the globally stored latest message is hidden for this user, find the true latest visible message
+      if (
+        latestMsg &&
+        (latestMsg as any).hiddenFor?.some(
+          (id: any) => id.toString() === userId.toString(),
+        )
+      ) {
+        const realLatestMessage = await Message.findOne({
+          chatId: chat._id,
+          $or: [
+            { hiddenFor: { $exists: false } },
+            { hiddenFor: { $size: 0 } },
+            { hiddenFor: { $ne: userId } },
+          ],
+        })
+          .sort({ createdAt: -1 })
+          .populate("senderId", "fullName _id");
+
+        latestMsg = realLatestMessage;
+      }
+
+      const unreadCount = await Message.countDocuments({
         chatId: chat._id,
+        senderId: { $ne: userId },
+        status: { $ne: "read" },
         $or: [
           { hiddenFor: { $exists: false } },
           { hiddenFor: { $size: 0 } },
-          { hiddenFor: { $ne: userId } }
-        ]
-      }).sort({ createdAt: -1 }).populate('senderId', 'fullName _id');
-      
-      latestMsg = realLatestMessage;
-    }
-
-    const unreadCount = await Message.countDocuments({
-      chatId: chat._id,
-      senderId: { $ne: userId },
-      status: { $ne: 'read' },
-      $or: [
-        { hiddenFor: { $exists: false } },
-        { hiddenFor: { $size: 0 } },
-        { hiddenFor: { $ne: userId } }
-      ]
-    });
-    const chatObj = chat.toObject();
-    chatObj.latestMessage = latestMsg;
-    chatObj.users = chatObj.users.map((u: any) => u || { 
-      _id: 'deleted', 
-      fullName: 'Deleted User', 
-      avatar: '/default-avatar.png',
-      status: 'offline' 
-    });
-    return { ...chatObj, unreadCount };
-  }));
+          { hiddenFor: { $ne: userId } },
+        ],
+      });
+      const chatObj = chat.toObject();
+      chatObj.latestMessage = latestMsg;
+      chatObj.users = chatObj.users.map(
+        (u: any) =>
+          u || {
+            _id: "deleted",
+            fullName: "Deleted User",
+            avatar: "/default-avatar.png",
+            status: "offline",
+          },
+      );
+      return { ...chatObj, unreadCount };
+    }),
+  );
 
   return chatsWithUnread;
 };
 
-export type SharedContentCategory = 'all' | 'media' | 'docs' | 'photos';
+export type SharedContentCategory = "all" | "media" | "docs" | "photos";
 
 export type SharedItem = {
   id: string;
@@ -628,25 +746,38 @@ function classifySharedMessage(msg: {
   content?: string;
   audioUrl?: string;
   attachments?: { fileUrl?: string; fileType?: string; fileSize?: number }[];
-}): 'photos' | 'docs' | 'media' | null {
+}): "photos" | "docs" | "media" | null {
   const att0 = msg.attachments?.[0];
-  const mime = (att0?.fileType || '').toLowerCase();
-  const url = (att0?.fileUrl || msg.content || msg.audioUrl || '').toLowerCase();
+  const mime = (att0?.fileType || "").toLowerCase();
+  const url = (
+    att0?.fileUrl ||
+    msg.content ||
+    msg.audioUrl ||
+    ""
+  ).toLowerCase();
 
-  if (msg.messageType === 'image' || mime.startsWith('image/')) return 'photos';
-  if (msg.messageType === 'audio' || mime.startsWith('audio/')) return 'media';
-  if (mime.startsWith('video/') || /\.(mp4|webm|mov|mkv|avi|m4v)(\?|$)/i.test(url)) return 'media';
+  if (msg.messageType === "image" || mime.startsWith("image/")) return "photos";
+  if (msg.messageType === "audio" || mime.startsWith("audio/")) return "media";
+  if (
+    mime.startsWith("video/") ||
+    /\.(mp4|webm|mov|mkv|avi|m4v)(\?|$)/i.test(url)
+  )
+    return "media";
 
-  if (msg.messageType === 'file') {
-    if (mime.startsWith('image/') || /\.(jpe?g|png|gif|webp)(\?|$)/i.test(url)) return 'photos';
-    if (mime.startsWith('video/') || /\.(mp4|webm|mov)(\?|$)/i.test(url)) return 'media';
+  if (msg.messageType === "file") {
+    if (mime.startsWith("image/") || /\.(jpe?g|png|gif|webp)(\?|$)/i.test(url))
+      return "photos";
+    if (mime.startsWith("video/") || /\.(mp4|webm|mov)(\?|$)/i.test(url))
+      return "media";
     if (
-      /pdf|msword|word|spreadsheet|excel|powerpoint|text\/plain|zip|rar|octet-stream/.test(mime) ||
+      /pdf|msword|word|spreadsheet|excel|powerpoint|text\/plain|zip|rar|octet-stream/.test(
+        mime,
+      ) ||
       /\.(pdf|doc|docx|txt|xlsx?|pptx?|zip|rar)(\?|$)/i.test(url)
     ) {
-      return 'docs';
+      return "docs";
     }
-    return 'docs';
+    return "docs";
   }
 
   return null;
@@ -656,14 +787,18 @@ function messageToSharedItem(msg: any): SharedItem | null {
   const url =
     msg.attachments?.[0]?.fileUrl ||
     msg.audioUrl ||
-    (typeof msg.content === 'string' && /^https?:\/\//i.test(msg.content) ? msg.content : undefined);
+    (typeof msg.content === "string" && /^https?:\/\//i.test(msg.content)
+      ? msg.content
+      : undefined);
   if (!url) return null;
   return {
     id: String(msg._id),
     url,
-    fileName: msg.attachments?.[0]?.fileType || (msg.content as string)?.split('/').pop(),
+    fileName:
+      msg.attachments?.[0]?.fileType ||
+      (msg.content as string)?.split("/").pop(),
     messageType: msg.messageType,
-    createdAt: msg.createdAt
+    createdAt: msg.createdAt,
   };
 }
 
@@ -674,20 +809,21 @@ function messageToSharedItem(msg: any): SharedItem | null {
 export const getSharedContent = async (
   chatId: string,
   userId: string,
-  category: SharedContentCategory = 'all'
+  category: SharedContentCategory = "all",
 ): Promise<
   | { media: any[]; files: any[]; links: any[] }
   | { items: SharedItem[]; category: SharedContentCategory }
 > => {
   const chat = await Chat.findById(chatId);
-  if (!chat) throw new AppError('Chat not found', 404);
+  if (!chat) throw new AppError("Chat not found", 404);
 
   const isMember = chat.users.some((u: any) => u.toString() === userId);
-  if (!isMember) throw new AppError('You are not a member of this chat', 403);
+  if (!isMember) throw new AppError("You are not a member of this chat", 403);
 
   const userOid = new mongoose.Types.ObjectId(userId);
   const clearEntry = (chat as any).clearStates?.find(
-    (s: { user?: { toString: () => string }; clearedAt?: Date }) => s.user?.toString() === userId
+    (s: { user?: { toString: () => string }; clearedAt?: Date }) =>
+      s.user?.toString() === userId,
   );
 
   const query: Record<string, unknown> = { chatId };
@@ -701,25 +837,28 @@ export const getSharedContent = async (
     $or: [
       { hiddenFor: { $exists: false } },
       { hiddenFor: { $size: 0 } },
-      { hiddenFor: { $not: { $elemMatch: { $eq: userOid } } } }
-    ]
+      { hiddenFor: { $not: { $elemMatch: { $eq: userOid } } } },
+    ],
   });
 
   andClauses.push({ isDeletedForEveryone: { $ne: true } });
 
   andClauses.push({
     $or: [
-      { messageType: { $in: ['image', 'file', 'audio'] } },
-      { 'attachments.0': { $exists: true } },
-      { audioUrl: { $exists: true, $nin: [null, ''] } }
-    ]
+      { messageType: { $in: ["image", "file", "audio"] } },
+      { "attachments.0": { $exists: true } },
+      { audioUrl: { $exists: true, $nin: [null, ""] } },
+    ],
   });
 
   if (andClauses.length) query.$and = andClauses;
 
-  const messages = await Message.find(query).sort({ createdAt: -1 }).limit(400).lean();
+  const messages = await Message.find(query)
+    .sort({ createdAt: -1 })
+    .limit(400)
+    .lean();
 
-  if (category !== 'all') {
+  if (category !== "all") {
     const items: SharedItem[] = [];
     for (const msg of messages) {
       const bucket = classifySharedMessage(msg as any);
@@ -733,32 +872,39 @@ export const getSharedContent = async (
   const shared = {
     media: [] as any[],
     files: [] as any[],
-    links: [] as any[]
+    links: [] as any[],
   };
 
   messages.forEach((msg: any) => {
-    if (msg.messageType === 'image') {
-      shared.media.push({ url: msg.content || msg.attachments?.[0]?.fileUrl, createdAt: msg.createdAt });
-    } else if (msg.messageType === 'file') {
+    if (msg.messageType === "image") {
+      shared.media.push({
+        url: msg.content || msg.attachments?.[0]?.fileUrl,
+        createdAt: msg.createdAt,
+      });
+    } else if (msg.messageType === "file") {
       shared.files.push({
         url: msg.content || msg.attachments?.[0]?.fileUrl,
         name: msg.attachments?.[0]?.fileType,
-        createdAt: msg.createdAt
+        createdAt: msg.createdAt,
       });
     }
-    if (msg.messageType === 'audio' && (msg.audioUrl || msg.content)) {
-      shared.media.push({ url: msg.audioUrl || msg.content, createdAt: msg.createdAt });
+    if (msg.messageType === "audio" && (msg.audioUrl || msg.content)) {
+      shared.media.push({
+        url: msg.audioUrl || msg.content,
+        createdAt: msg.createdAt,
+      });
     }
 
-    if (msg.content && typeof msg.content === 'string') {
+    if (msg.content && typeof msg.content === "string") {
       const urlRegex = /(https?:\/\/[^\s]+)/g;
       const links = msg.content.match(urlRegex);
       if (links) {
-        links.forEach((link: string) => shared.links.push({ url: link, createdAt: msg.createdAt }));
+        links.forEach((link: string) =>
+          shared.links.push({ url: link, createdAt: msg.createdAt }),
+        );
       }
     }
   });
 
   return shared;
 };
-
