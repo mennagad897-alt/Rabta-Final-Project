@@ -9,7 +9,10 @@ import {
   deleteGroup,
   getAdminLogs,
   promoteAdmin,
-  deleteUser
+  deleteUser,
+  getPendingEmployers,
+  verifyEmployer,
+  rejectEmployer
 } from '../controllers/admin.controller';
 import { protect } from '../middlewares/auth.middleware';
 import { isAdmin } from '../middlewares/admin.middleware';
@@ -28,6 +31,11 @@ router.get('/users', getAllUsers);
 router.put('/users/:id/ban', toggleBanUser);
 router.put('/users/:id/role', promoteAdmin);
 router.delete('/users/:id', deleteUser);
+
+// Employers
+router.get('/pending-employers', getPendingEmployers);
+router.patch('/verify-employer/:id', verifyEmployer);
+router.patch('/reject-employer/:id', rejectEmployer);
 
 // Jobs
 router.get('/jobs', getAllJobs);

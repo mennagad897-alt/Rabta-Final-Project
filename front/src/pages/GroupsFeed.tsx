@@ -4,6 +4,7 @@ import axiosInstance from '../api/axiosInstance';
 import toast from 'react-hot-toast';
 import { AiAssistant } from '../components/shared/AiAssistant';
 import { ChatWindow } from '../components/chat/ChatWindow';
+import { SharedMediaSidePanel } from '../components/chat/SharedMediaSidePanel';
 
 interface Community {
   _id: string;
@@ -12,6 +13,8 @@ interface Community {
   avatar?: string;
   tags: string[];
   members: string[] | any[];
+  admins?: string[];
+  isPublic?: boolean;
   chatId?: any;
   unreadCount?: number;
 }
@@ -25,6 +28,7 @@ export const GroupsFeed = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
   const [isSideBarOpen, setIsSideBarOpen] = useState(true);
+  const [isSharedMediaOpen, setIsSharedMediaOpen] = useState(false);
   const navigate = useNavigate();
 
   // Derived: only allow collapsing when a group is actually selected
@@ -35,6 +39,10 @@ export const GroupsFeed = () => {
   useEffect(() => {
     if (!isChatSelected) setIsSideBarOpen(true);
   }, [isChatSelected]);
+
+  useEffect(() => {
+    setIsSharedMediaOpen(false);
+  }, [activeGroupId]);
   
   const filters = ["All", "Programming", "UI/UX", "Data", "Cyber", "Cloud"];
 
@@ -156,9 +164,31 @@ export const GroupsFeed = () => {
                       {community.name}
                     </h3>
                   </div>
-                  <p className={`text-xs truncate ${community.unreadCount ? 'font-bold text-[#171717] dark:text-[#F5F5F5]' : 'text-gray-500 dark:text-gray-400'}`}>
-                    {community.chatId?.latestMessage ? `${community.chatId.latestMessage.senderId?.fullName?.split(' ')[0]}: ${community.chatId.latestMessage.content}` : community.description}
-                  </p>
+                  <div className={`text-xs truncate ${community.unreadCount ? 'font-bold text-[#171717] dark:text-[#F5F5F5]' : 'text-gray-500 dark:text-gray-400'}`}>
+                    {(() => {
+                      if (!community.chatId?.latestMessage) return community.description;
+                      const msg = community.chatId.latestMessage;
+                      const isMine = (msg.senderId?._id || msg.senderId) === currentUserId;
+                      const senderName = isMine ? 'You' : (msg.senderId?.fullName?.split(' ')[0] || 'Member');
+                      const contentRaw = msg.content;
+                      const contentStr = typeof contentRaw === 'object' && contentRaw !== null ? (contentRaw.text || contentRaw.message || 'Message') : (contentRaw || '');
+                      const content = ['text', 'audio', 'file', 'image', 'video'].includes(msg.messageType) && msg.messageType !== 'text' 
+                        ? `Sent a ${msg.messageType}` 
+                        : contentStr;
+                      
+                      let ticks = '';
+                      if (isMine) {
+                        ticks = (msg.status === 'read' || msg.status === 'delivered') ? '✓✓' : '✓';
+                      }
+                      
+                      return (
+                        <div className="flex items-center gap-1 truncate">
+                          {isMine && <span className={msg.status === 'read' ? 'text-[#7C3AED] tracking-tighter' : 'text-gray-400 tracking-tighter'}>{ticks}</span>}
+                          <span className="truncate">{senderName}: {content}</span>
+                        </div>
+                      );
+                    })()}
+                  </div>
                 </div>
                 {!!community.unreadCount && (
                   <div className="w-5 h-5 bg-[#10B981] text-white text-[10px] font-bold flex items-center justify-center rounded-full shrink-0">
@@ -224,16 +254,24 @@ export const GroupsFeed = () => {
           }
 
           return (
+            <div className="flex flex-1 min-h-0 min-w-0">
             <ChatWindow 
               chatId={activeCommunity?.chatId?._id || activeCommunity?.chatId || activeGroupId}
               chatName={activeCommunity?.name || "Group Chat"} 
               isOnline={true} 
               isGroup={true}
               messages={[]} 
-              groupMembers={activeCommunity?.members?.map((m: any) => m.fullName || '')}
+              groupMembers={activeCommunity?.members}
+              groupAdmins={activeCommunity?.admins}
+              isPrivateGroup={activeCommunity?.isPublic === false}
               isChatListOpen={isSideBarOpen}
               onOpenChatList={() => setIsSideBarOpen(true)}
+              onOpenSharedMedia={() => setIsSharedMediaOpen(true)}
             />
+            {isSharedMediaOpen && (
+              <SharedMediaSidePanel messages={[]} onClose={() => setIsSharedMediaOpen(false)} />
+            )}
+            </div>
           );
         })()
       ) : (

@@ -42,7 +42,6 @@ type SignupFormInputs = z.infer<typeof signupSchema>;
 export const Signup = () => {
   const navigate = useNavigate();
   const dispatch = useDispatch();
-  const [apiError, setApiError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
@@ -59,7 +58,6 @@ export const Signup = () => {
 
   // 3. دالة الإرسال (تم تنظيف التكرار)
   const onSubmit = async (data: SignupFormInputs) => {
-    setApiError(null);
     try {
       const payload: RegisterData = {
         fullName: data.fullname,
@@ -85,7 +83,6 @@ export const Signup = () => {
 
     } catch (error: any) {
       const errorMessage = error.response?.data?.message || "Registration failed. Please try again.";
-      setApiError(errorMessage);
       toast.error(errorMessage);
       console.error("Signup Error:", error);
     }
@@ -114,12 +111,6 @@ export const Signup = () => {
             </div>
 
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-              {apiError && (
-                <div className="p-3 rounded-lg bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-sm font-medium border border-red-200 dark:border-red-800 text-center">
-                  {apiError}
-                </div>
-              )}
-
               <div className="flex flex-col gap-1.5 mb-2">
                 <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">Register as:</label>
                 <select

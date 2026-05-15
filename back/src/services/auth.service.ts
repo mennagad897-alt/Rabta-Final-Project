@@ -32,8 +32,19 @@ export const registerUser = async (userData: any) => {
     userData.role = 'freelancer'; // Default safe fallback
   }
 
-  const existingUser = await User.findOne({ email: userData.email });
-  if (existingUser) throw new AppError('This email is already registered. Please log in.', 400);
+  const query: any[] = [{ email: userData.email }];
+  if (userData.phoneNumber) {
+    query.push({ phoneNumber: userData.phoneNumber });
+  }
+
+  const existingUser = await User.findOne({ $or: query });
+  
+  if (existingUser) {
+    if (existingUser.phoneNumber === userData.phoneNumber) {
+      throw new AppError('This phone number is already registered.', 400);
+    }
+    throw new AppError('This email is already registered.', 400);
+  }
   
   try {
     const newUser = await User.create(userData);
@@ -43,7 +54,10 @@ export const registerUser = async (userData: any) => {
   } catch (err: any) {
     // Mongoose duplicate key error (race condition)
     if (err.code === 11000) {
-      throw new AppError('This email is already registered. Please log in.', 400);
+      if (err.keyPattern?.phoneNumber) {
+        throw new AppError('This phone number is already registered.', 400);
+      }
+      throw new AppError('This email is already registered.', 400);
     }
     throw err;
   }

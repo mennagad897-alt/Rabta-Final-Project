@@ -50,8 +50,15 @@ const EmployerSetup: React.FC = () => {
       setLoading(true);
       const loadingToast = toast.loading("Saving company profile...");
       
+      // Map linkedin to socialLinks.linkedin so the backend saves it correctly
+      const payload = {
+        ...formData,
+        socialLinks: { linkedin: formData.linkedin },
+        profileCompleted: true
+      };
+      
       const response = await axiosInstance.patch('/profile/me', 
-        { ...formData, profileCompleted: true },
+        payload,
         {
           headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
         }

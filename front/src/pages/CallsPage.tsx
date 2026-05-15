@@ -39,7 +39,7 @@ export const CallsPage: React.FC = () => {
   const [calls, setCalls] = useState<CallRecord[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [activeFilter, setActiveFilter] = useState<'All' | 'Missed' | 'Meetings'>('All');
+  const [activeFilter, setActiveFilter] = useState<'All' | 'Missed' | 'Group'>('All');
   const [selectedCallId, setSelectedCallId] = useState<string | null>(null);
   const [showAiPopup, setShowAiPopup] = useState<boolean>(false);
   const user = useSelector((state: RootState) => state.auth.user);
@@ -113,7 +113,7 @@ export const CallsPage: React.FC = () => {
     const matchesFilter = 
       activeFilter === 'All' || 
       (activeFilter === 'Missed' && call.status === 'missed') || 
-      (activeFilter === 'Meetings' && !!call.chatId?.isGroup);
+      (activeFilter === 'Group' && !!call.chatId?.isGroup);
 
     const matchesSearch = (otherUser?.fullName || '').toLowerCase().includes(searchQuery.toLowerCase());
 
@@ -169,7 +169,7 @@ export const CallsPage: React.FC = () => {
         </div>
 
         <div className="px-4 pb-3 mb-2 border-b border-gray-100 dark:border-gray-800 flex items-center gap-2">
-          {(['All', 'Missed', 'Meetings'] as const).map((filter) => (
+          {(['All', 'Missed', 'Group'] as const).map((filter) => (
             <button
               key={filter}
               onClick={() => setActiveFilter(filter)}

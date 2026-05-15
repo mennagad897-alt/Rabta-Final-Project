@@ -44,14 +44,20 @@ export const listCommunities = catchAsync(async (req: Request, res: Response) =>
 });
 
 export const createCommunity = catchAsync(async (req: Request, res: Response) => {
-  const { name, description, category, tags, isPublic } = req.body;
+  const { name, description, category, tags, isPublic, invitedUsers } = req.body;
   const owner = (req.user as any)._id;
+
+  const usersList = [owner];
+  if (Array.isArray(invitedUsers)) {
+    usersList.push(...invitedUsers);
+  }
 
   const communityChat = await Chat.create({
     isGroup: true,
     groupName: name,
-    users: [owner],
-    admins: [owner]
+    users: usersList,
+    admins: [owner],
+    isPrivate: !isPublic
   });
 
   // 2. Create the community linked to the chat
@@ -63,7 +69,7 @@ export const createCommunity = catchAsync(async (req: Request, res: Response) =>
     isPublic,
     owner,
     admins: [owner],
-    members: [owner],
+    members: usersList,
     chatId: communityChat._id
   });
 

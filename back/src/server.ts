@@ -87,7 +87,33 @@ export const io = new Server(server, {
 // إتاحة الـ io كمتغير في الـ app عشان نقدر نستخدمه في أي Controller بدون Circular Dependency
 app.set('io', io);
 
-export const userSocketMap = new Map<string, string>();
+const activeUsers = new Map<string, Set<string>>();
+
+const addUserSocket = (userId: string, socketId: string) => {
+  const existingSockets = activeUsers.get(userId) ?? new Set<string>();
+  existingSockets.add(socketId);
+  activeUsers.set(userId, existingSockets);
+};
+
+const removeUserSocket = (socketId: string): string | null => {
+  for (const [userId, socketIds] of activeUsers.entries()) {
+    if (!socketIds.has(socketId)) continue;
+    socketIds.delete(socketId);
+    if (socketIds.size === 0) {
+      activeUsers.delete(userId);
+    } else {
+      activeUsers.set(userId, socketIds);
+    }
+    return userId;
+  }
+  return null;
+};
+
+export const getUserSocketIds = (userId: string): string[] => {
+  return Array.from(activeUsers.get(userId) ?? []);
+};
+
+export const isUserOnline = (userId: string): boolean => getUserSocketIds(userId).length > 0;
 
 // ==========================================
 // 🔐 مصادقة اتصال الـ Socket (Socket Authentication Middleware)
@@ -132,20 +158,47 @@ io.on('connection', (socket) => {
   const authenticatedUserId = (socket as any).userId;
   console.log(`🟢 A new device connected to the switchboard, line number: ${socket.id}`);
 
+  const broadcastActiveUsers = async () => {
+    try {
+      const { User } = require('./models/user');
+      const activeIds = Array.from(activeUsers.keys());
+      const users = await User.find({ _id: { $in: activeIds }, showOnlineStatus: { $ne: false } }).select('_id');
+      const visibleOnlineUsers = users.map((u: any) => u._id.toString());
+      io.emit('online-users', visibleOnlineUsers);
+    } catch (err) {
+      console.error('Error broadcasting active users:', err);
+    }
+  };
+
   // ==========================================
   // 📝 تسجيل اليوزر تلقائياً بعد المصادقة
   // ==========================================
   // بما إن اليوزر اتأكدنا من هويته في الـ middleware
   // بنسجله تلقائياً في الـ userSocketMap
   if (authenticatedUserId) {
-    userSocketMap.set(authenticatedUserId, socket.id);
+    addUserSocket(authenticatedUserId, socket.id);
     console.log(`✅ [Auto] The user [${authenticatedUserId}] registered via auth middleware on line [${socket.id}]`);
+    broadcastActiveUsers();
   }
 
   // التسجيل اليدوي (للتوافق مع الكود القديم)
   socket.on('register-user', (userId: string) => {
-    userSocketMap.set(userId, socket.id);
+    addUserSocket(userId, socket.id);
+    socket.join(userId); // Early room join as requested
     console.log(`✅ The user [${userId}] Connected to the socket line [${socket.id}]`);
+    broadcastActiveUsers();
+  });
+
+  socket.on('registerUser', (userId: string) => {
+    addUserSocket(userId, socket.id);
+    socket.join(userId); // Early room join as requested
+    console.log(`✅ The user [${userId}] Connected to the socket line [${socket.id}]`);
+    broadcastActiveUsers();
+  });
+
+  socket.on('join', (userId: string) => {
+    socket.join(userId);
+    console.log(`✅ The user [${userId}] explicitly joined their personal room`);
   });
 
   // ==========================================
@@ -175,22 +228,23 @@ io.on('connection', (socket) => {
   // ==========================================
   // 💬 إرسال واستقبال الرسائل (Chat Events)
   // ==========================================
-  socket.on('send-message', async (data: { chatId: string, content: string, messageType?: string, tempId?: string }) => {
+  socket.on('send-message', async (data: { chatId: string, content: string, messageType?: string, tempId?: string, replyTo?: string }) => {
     try {
-      // 🚫 Block Check: prevent messages between blocked users
-      const Chat = require('./models/chat').default;
-      const { User } = require('./models/user');
-      const chat = await Chat.findById(data.chatId);
+      const blockStatus = await chatService.checkDirectChatBlockStatus(authenticatedUserId, data.chatId);
+      if (blockStatus.senderBlockedOther || blockStatus.receiverBlockedSender) {
+        socket.emit('blocked', { message: 'You cannot send messages to this user.' });
+        return;
+      }
+
+      const ChatModel = require('./models/chat').default;
+      const chat = await ChatModel.findById(data.chatId).select('users isGroup');
+
+      // Set delivered instantly when the other participant is online
+      let initialStatus: 'sent' | 'delivered' = 'sent';
       if (chat && !chat.isGroup) {
-        const otherUserId = chat.members.find((id: any) => id.toString() !== authenticatedUserId)?.toString();
-        if (otherUserId) {
-          const sender = await User.findById(authenticatedUserId).select('blockedUsers');
-          const receiver = await User.findById(otherUserId).select('blockedUsers');
-          const senderBlockedReceiver = sender?.blockedUsers?.some((id: any) => id.toString() === otherUserId);
-          const receiverBlockedSender = receiver?.blockedUsers?.some((id: any) => id.toString() === authenticatedUserId);
-          if (senderBlockedReceiver || receiverBlockedSender) {
-            return socket.emit('message-error', { message: 'You cannot send messages to this user.' });
-          }
+        const otherUserId = (chat.users || []).find((id: any) => id.toString() !== authenticatedUserId)?.toString();
+        if (otherUserId && isUserOnline(otherUserId)) {
+          initialStatus = 'delivered';
         }
       }
 
@@ -199,7 +253,9 @@ io.on('connection', (socket) => {
         chatId: data.chatId,
         senderId: authenticatedUserId,
         content: data.content,
-        messageType: data.messageType
+        messageType: data.messageType,
+        replyTo: data.replyTo,
+        status: initialStatus
       });
 
       if (!savedMessage) return;
@@ -209,12 +265,22 @@ io.on('connection', (socket) => {
         : savedMessage;
 
       // بنبعت الرسالة لكل اللي في الـ room (الشات) - سواء فردي أو جماعي
-      // io.to(roomId) بتبعت لكل اللي في الغرفة (بما فيهم المرسل)
+      io.to(data.chatId).emit('receiveMessage', messageToEmit);
       io.to(data.chatId).emit('receive-message', messageToEmit);
+      
+      if (initialStatus === 'delivered') {
+        io.to(authenticatedUserId).emit('messageDelivered', {
+          chatId: data.chatId,
+          messageId: (savedMessage as any)._id?.toString?.() || (savedMessage as any)._id,
+          status: 'delivered'
+        });
+      }
 
       console.log(`💬 Message from [${authenticatedUserId}] in chat [${data.chatId}]`);
     } catch (error: any) {
-      // لو حصل أي مشكلة (زي إن اليوزر مش عضو في الشات)، نبلغ المرسل بس
+      if (error?.statusCode === 403) {
+        socket.emit('blocked', { message: error.message || 'You cannot send messages to this user.' });
+      }
       socket.emit('message-error', { message: error.message || 'Failed to send message' });
       console.log("Error sending message:", error);
     }
@@ -254,6 +320,37 @@ io.on('connection', (socket) => {
     }
   });
 
+  socket.on('markAsRead', async (data: { chatId: string, userId: string }) => {
+    try {
+      const Message = require('./models/Message').default;
+      const Chat = require('./models/chat').default;
+      const chat = await Chat.findById(data.chatId);
+      if (!chat) return;
+
+      await Message.updateMany(
+        {
+          chatId: data.chatId,
+          senderId: { $ne: new (require('mongoose').Types.ObjectId)(data.userId) },
+          status: { $ne: 'read' }
+        },
+        { $set: { status: 'read' } }
+      );
+
+      const otherUserId = (chat.users || []).find((id: any) => id.toString() !== data.userId)?.toString();
+      if (otherUserId) {
+        const otherUserSocketIds = getUserSocketIds(otherUserId);
+        otherUserSocketIds.forEach((socketId) => {
+          io.to(socketId).emit('messagesRead', { chatId: data.chatId });
+          io.to(socketId).emit('messages-read', { chatId: data.chatId });
+        });
+      }
+
+      io.to(data.chatId).emit('message-status-update', { chatId: data.chatId, status: 'read', readBy: data.userId });
+    } catch (err) {
+      console.error('Error in markAsRead:', err);
+    }
+  });
+
   // ==========================================
   // ✍️ حالة الكتابة (Typing Indicator)
   // ==========================================
@@ -266,10 +363,45 @@ io.on('connection', (socket) => {
   });
 
   // ==========================================
-  // 📞 أحداث المكالمات (Call Events)
+  // 📞 Fast Ringing Optimization (Zero-Latency UI)
   // ==========================================
-  socket.on('call-user', async (data: { userToCall: string, signalData: any, from: string, callerName: string, callerAvatar?: string, callType?: 'voice' | 'video', chatId?: string }) => {
+  socket.on('start-ringing', async (data: any) => {
     try {
+      const toId = String(data.to || data.userToCall);
+      const blockStatus = await chatService.checkUsersBlockStatusPair(data.from, toId);
+      if (blockStatus.senderBlockedOther || blockStatus.receiverBlockedSender) {
+        return; // Silently ignore ringing
+      }
+
+      const receiverSocketIds = getUserSocketIds(toId);
+      if (receiverSocketIds.length > 0) {
+        receiverSocketIds.forEach((receiverSocketId) => {
+          io.to(receiverSocketId).emit('incoming-ring', {
+            from: data.from,
+            callerName: data.callerName,
+            callerAvatar: data.callerAvatar,
+            callType: data.callType,
+            chatId: data.chatId
+          });
+        });
+        console.log(`⚡ [start-ringing] Fast ring signal sent to [${toId}]`);
+      }
+    } catch (err) {
+      console.error('Error in start-ringing:', err);
+    }
+  });
+
+  // ==========================================
+  // 📞 WebRTC Signaling (Heavy SDP Payloads)
+  // ==========================================
+  const handleCallUser = async (data: { userToCall: string, signalData: any, from: string, callerName: string, callerAvatar?: string, callType?: 'voice' | 'video', chatId?: string }) => {
+    try {
+      const blockStatus = await chatService.checkUsersBlockStatusPair(data.from, data.userToCall);
+      if (blockStatus.senderBlockedOther) {
+        socket.emit('blocked', { message: 'You cannot call this user.' });
+        return;
+      }
+
       // ✅ Use forwarded chatId directly; only do the lookup as a fallback
       let resolvedChatId = data.chatId;
       if (!resolvedChatId) {
@@ -292,42 +424,86 @@ io.on('connection', (socket) => {
       // ✅ ALWAYS send callId back to caller so they can cancel/end it properly, even if receiver is offline
       socket.emit('call-delivered', { callId: newCall._id.toString() });
 
-      const receiverSocketId = userSocketMap.get(data.userToCall);
+      if (blockStatus.receiverBlockedSender) {
+        // If receiver blocked caller, save as missed but DO NOT ring the receiver
+        console.log(`⚠️ [call-user] Receiver [${data.userToCall}] blocked caller. Call saved as missed.`);
+        return;
+      }
 
-      if (receiverSocketId) {
-        io.to(receiverSocketId).emit('incoming-call', {
-          signal: data.signalData,
-          from: data.from,
-          callerName: data.callerName,
-          callerAvatar: data.callerAvatar || '',
-          callType: data.callType || 'video',
-          callId: newCall._id.toString(),
-          chatId: resolvedChatId || ''
+      const receiverSocketIds = getUserSocketIds(String(data.userToCall));
+
+      if (receiverSocketIds.length > 0) {
+        receiverSocketIds.forEach((receiverSocketId) => {
+          io.to(receiverSocketId).emit('incomingCall', {
+            signal: data.signalData,
+            from: data.from,
+            name: data.callerName,
+            type: data.callType || 'video',
+            callerAvatar: data.callerAvatar || '',
+            callId: newCall._id.toString(),
+            chatId: resolvedChatId || ''
+          });
+          io.to(receiverSocketId).emit('incoming-call', {
+            signal: data.signalData,
+            from: data.from,
+            callerName: data.callerName,
+            callerAvatar: data.callerAvatar || '',
+            callType: data.callType || 'video',
+            callId: newCall._id.toString(),
+            chatId: resolvedChatId || ''
+          });
         });
         console.log(`📞 [${data.callType || 'video'}] call from [${data.from}] to [${data.userToCall}] — delivered to socket`);
       } else {
+        socket.emit('userOffline', { message: 'The user is currently offline' });
         socket.emit('user-offline', { message: 'The user is currently offline' });
         console.log(`⚠️ [call-user] Receiver [${data.userToCall}] is offline. Call saved as missed.`);
       }
     } catch (error: any) {
+      if (error?.statusCode === 403) {
+        socket.emit('blocked', { message: error.message || 'You cannot call this user.' });
+        return;
+      }
       console.error("CRITICAL DB ERROR CREATING 1-TO-1 CALL:", error.message, error.errors);
     }
+  };
+
+  socket.on('call-user', handleCallUser);
+
+  socket.on('callUser', async (data: { userToCall: string, signal: any, from: string, name: string, type?: 'voice' | 'video', callerAvatar?: string, chatId?: string }) => {
+    await handleCallUser({
+      userToCall: data.userToCall,
+      signalData: data.signal,
+      from: data.from,
+      callerName: data.name,
+      callerAvatar: data.callerAvatar,
+      callType: data.type,
+      chatId: data.chatId
+    });
   });
 
-  socket.on('answer-call', async (data: { to: string, signal: any, callId: string }) => {
+  const handleAnswerCall = async (data: { to: string, signal: any, callId?: string }) => {
     try {
       if (data.callId) {
         await Call.findByIdAndUpdate(data.callId, { status: 'accepted' });
       }
-      const callerSocketId = userSocketMap.get(data.to);
-      if (callerSocketId) {
+      const callerSocketIds = getUserSocketIds(String(data.to));
+      callerSocketIds.forEach((callerSocketId) => {
+        console.log('🟡 BACKEND: answerCall triggered. Emitting to caller socket:', callerSocketId);
+        console.log('🟡 Backend routed answerCall to Caller:', callerSocketId);
+        io.to(callerSocketId).emit('callAccepted', { signal: data.signal });
         io.to(callerSocketId).emit('call-accepted', data.signal);
+      });
+      if (callerSocketIds.length > 0) {
         console.log(`✅ Call [${data.callId}] accepted — status updated`);
       }
     } catch (error) {
       console.log("Error updating call:", error);
     }
-  });
+  };
+
+  socket.on('answer-call', handleAnswerCall);
+  socket.on('answerCall', handleAnswerCall);
 
   // 🔴 Receiver explicitly rejects the call
   socket.on('reject-call', async (data: any) => {
@@ -356,9 +532,9 @@ io.on('connection', (socket) => {
         io.to(effectiveChatId).emit('receive-message', savedMessage);
       }
       
-      const toId = data.to || data.caller; // Fallback for 'to' using unified payload
-      const callerSocketId = userSocketMap.get(toId);
-      if (callerSocketId) io.to(callerSocketId).emit('call-rejected');
+      const toId = String(data.to || data.caller); // Fallback for 'to' using unified payload
+      const callerSocketIds = getUserSocketIds(toId);
+      callerSocketIds.forEach((callerSocketId) => io.to(callerSocketId).emit('call-rejected'));
       console.log(`🚫 Call [${data.callId || 'fallback'}] rejected`);
     } catch (error: any) {
       console.error("CRITICAL DB ERROR REJECTING CALL:", error.message, error.errors);
@@ -392,9 +568,9 @@ io.on('connection', (socket) => {
         io.to(effectiveChatId).emit('receive-message', savedMessage);
       }
       
-      const toId = data.to || data.receiver;
-      const receiverSocketId = userSocketMap.get(toId);
-      if (receiverSocketId) io.to(receiverSocketId).emit('call-cancelled');
+      const toId = String(data.to || data.receiver);
+      const receiverSocketIds = getUserSocketIds(toId);
+      receiverSocketIds.forEach((receiverSocketId) => io.to(receiverSocketId).emit('call-cancelled'));
       console.log(`❌ Call [${data.callId || 'fallback'}] cancelled/missed`);
     } catch (error: any) {
       console.error("CRITICAL DB ERROR CANCELLING CALL:", error.message, error.errors);
@@ -439,11 +615,11 @@ io.on('connection', (socket) => {
         console.log(`⚠️ [end-call] No chatId — call_summary skipped for call ${data.callId}`);
       }
       
-      const toId = data.to || data.receiver;
-      const receiverSocketId = userSocketMap.get(toId);
-      if (receiverSocketId) {
+      const toId = String(data.to || data.receiver);
+      const receiverSocketIds = getUserSocketIds(toId);
+      receiverSocketIds.forEach((receiverSocketId) => {
         io.to(receiverSocketId).emit('call-ended');
-      }
+      });
       console.log(`📴 Call [${data.callId || 'fallback'}] ended — duration: ${data.duration}s`);
     } catch (error: any) {
       console.error("CRITICAL DB ERROR ENDING CALL:", error.message, error.errors);
@@ -480,15 +656,15 @@ io.on('connection', (socket) => {
       chat.users.forEach((userId: any) => {
         const idStr = userId.toString();
         if (idStr !== data.callerId) {
-          const sId = userSocketMap.get(idStr);
-          if (sId) {
+          const socketIds = getUserSocketIds(idStr);
+          socketIds.forEach((sId) => {
             io.to(sId).emit('incoming-group-call', {
               groupId: data.groupId,
               callerName: data.callerName,
               callType: data.callType,
               callId: callId,
             });
-          }
+          });
         }
       });
       console.log(`🎥 Group call started in ${data.groupId} by ${data.callerName}`);
@@ -527,11 +703,9 @@ io.on('connection', (socket) => {
 
   socket.on('disconnect', () => {
     console.log(`🔴 Line disconnected: ${socket.id}`);
-    for (let [userId, socketId] of userSocketMap.entries()) {
-      if (socketId === socket.id) {
-        userSocketMap.delete(userId);
-        break;
-      }
+    const disconnectedUserId = removeUserSocket(socket.id);
+    if (disconnectedUserId) {
+      broadcastActiveUsers();
     }
   });
 });
@@ -560,7 +734,7 @@ app.use(passport.initialize());
 // ==========================================
 // 🗄️ الاتصال بقاعدة البيانات
 // ==========================================
-mongoose.connect(process.env.MONGO_URI as string)
+mongoose.connect(process.env.MONGO_URI as string, { dbName: 'RabtaDB' })
   .then(() => { 
     console.log('✅ MongoDB Connected');
     console.log('📂 Writing to Database:', mongoose.connection.name);

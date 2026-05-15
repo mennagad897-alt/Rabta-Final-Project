@@ -15,7 +15,7 @@ const router = Router();
 router.use(protect);
 
 router.get('/', listCommunities);
-router.post('/', restrictTo('employer'), createCommunity);
+router.post('/', createCommunity);
 router.post('/:id/join', joinCommunity);
 router.get('/:id/feed', getCommunityFeed);
 router.get('/:id/chat', getCommunityChat);

@@ -112,7 +112,10 @@ export const registerWithToken = catchAsync(async (req: Request, res: Response, 
     password,
     role: 'employer',
     companyName: request.companyName,
-    profileCompleted: false
+    profileCompleted: false,
+    socialLinks: {
+      linkedin: request.linkedinUrl || ''
+    }
   });
 
   // مسح التوكن عشان ميتسخدمش تاني

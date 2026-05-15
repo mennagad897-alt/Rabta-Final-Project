@@ -14,7 +14,7 @@ import { catchAsync } from '../utils/catchAsync';
 import { AppError } from '../utils/AppError';
 
 import { getMyProfile, updateMyProfile, getUserProfile, deleteMyAccount, searchUsers, getMyContacts, findByPhone, addConnection } from '../controllers/profile.controller';
-import { toggleBlockUser, sendFriendRequest } from '../controllers/chat.controller';
+import { toggleBlockUser, getBlockRelation, sendFriendRequest, deleteMessage, editMessage, togglePinMessage, reactToMessage } from '../controllers/chat.controller';
 
 import { uploadAvatar } from '../middlewares/upload.middleware';
 import { uploadProfileAvatar } from '../controllers/profile.controller';
@@ -111,6 +111,9 @@ router.post('/users/toggle-save-freelancer/:freelancerId', protect, toggleSaveFr
 // Block / Unblock a user
 router.put('/users/block/:id', protect, toggleBlockUser);
 
+// Must be before GET /users/:id (wildcard)
+router.get('/users/block-relation/:userId', protect, getBlockRelation);
+
 // Send friend request via phone number
 router.post('/users/friend-request', protect, sendFriendRequest);
 
@@ -122,8 +125,18 @@ router.get('/profile/me', protect, getMyProfile);
 router.patch('/profile/me', protect, updateMyProfile); // بنستخدم Patch لأننا بنحدث أجزاء معينة مش اليوزر كله
 router.delete('/profile/me', protect, deleteMyAccount);
 
+// مسار طلب التوثيق لأصحاب العمل
+router.post('/profile/request-verification', protect, requestVerification);
+
 // مسار رفع الصورة (الحارس -> مستلم الصور -> الكنترولر)
 router.patch('/profile/me/avatar', protect, uploadAvatar.single('avatar'), uploadProfileAvatar);
+
+// Delete / Edit / Pin / React Messages
+router.delete('/messages/:id', protect, deleteMessage);
+router.put('/messages/:id/edit', protect, editMessage);
+router.put('/messages/:id/pin', protect, togglePinMessage);
+router.post('/messages/:id/react', protect, reactToMessage);
+
 export default router;
 
 

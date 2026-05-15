@@ -56,12 +56,14 @@ const CreateGroup: React.FC = () => {
   const [invitedUsers, setInvitedUsers] = useState<string[]>([]);
 
   const [connections, setConnections] = useState<any[]>([]);
+  const [phoneSearchUser, setPhoneSearchUser] = useState<any | null>(null);
+  const [isSearchingPhone, setIsSearchingPhone] = useState(false);
 
   useEffect(() => {
     const fetchUsers = async () => {
       try {
-        const response = await axiosInstance.get('/users/search/all?limit=50');
-        const usersList = response.data.data.users.map((u: any) => ({
+        const response = await axiosInstance.get('/users/my-contacts');
+        const usersList = response.data.data.contacts.map((u: any) => ({
           id: u._id,
           name: u.fullName,
           role: u.jobTitle || u.role,
@@ -71,15 +73,54 @@ const CreateGroup: React.FC = () => {
         }));
         setConnections(usersList);
       } catch (err) {
-        console.error("Failed to load connections", err);
+        console.error("Failed to load contacts", err);
       }
     };
     fetchUsers();
   }, []);
 
+  useEffect(() => {
+    setPhoneSearchUser(null);
+    if (formData.privacy !== 'private' || !searchQuery.trim()) return;
+    
+    // Check if searchQuery contains only digits and has reasonable length for phone number
+    const isPhoneNumber = /^[0-9+]+$/.test(searchQuery) && searchQuery.length >= 8;
+    if (isPhoneNumber) {
+      const searchPhone = async () => {
+        setIsSearchingPhone(true);
+        try {
+          const response = await axiosInstance.get(`/users/find-by-phone?phone=${searchQuery}`);
+          if (response.data.data.user) {
+            const u = response.data.data.user;
+            setPhoneSearchUser({
+              id: u._id,
+              name: u.fullName,
+              role: u.jobTitle || u.role,
+              avatar: u.avatar,
+              initial: u.fullName ? u.fullName.charAt(0).toUpperCase() : '?',
+              color: 'bg-green-100 text-green-600'
+            });
+          }
+        } catch (error) {
+          console.error("Phone search failed");
+        } finally {
+          setIsSearchingPhone(false);
+        }
+      };
+      
+      const timer = setTimeout(searchPhone, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [searchQuery, formData.privacy]);
+
   const filteredConnections = connections.filter(user => 
     user.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const displayList = [...filteredConnections];
+  if (phoneSearchUser && !displayList.some(u => u.id === phoneSearchUser.id)) {
+    displayList.unshift(phoneSearchUser);
+  }
 
   const handleToggleUser = (userId: string) => {
     setInvitedUsers(prev => 
@@ -97,7 +138,8 @@ const CreateGroup: React.FC = () => {
         description: formData.description,
         category: formData.track,
         tags: skills,
-        isPublic: formData.privacy === 'public'
+        isPublic: formData.privacy === 'public',
+        invitedUsers: invitedUsers
       };
 
       await axiosInstance.post('/groups', payload);
@@ -319,7 +361,13 @@ const CreateGroup: React.FC = () => {
                   />
                 </div>
                 <div className="max-h-40 overflow-y-auto p-2 space-y-1">
-                  {filteredConnections.map(user => (
+                  {isSearchingPhone && (
+                    <div className="text-center text-xs text-gray-500 py-2">Searching by phone...</div>
+                  )}
+                  {displayList.length === 0 && !isSearchingPhone && (
+                    <div className="text-center text-sm text-gray-500 py-4 font-medium">No available connections to invite.</div>
+                  )}
+                  {displayList.map(user => (
                     <label key={user.id} className="flex items-center justify-between p-2 hover:bg-gray-100 dark:hover:bg-white/5 rounded-lg cursor-pointer transition-colors">
                       <div className="flex items-center gap-3">
                         {user.avatar ? (

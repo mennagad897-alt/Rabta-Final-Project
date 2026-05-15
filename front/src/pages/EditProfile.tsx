@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useAppSelector, useAppDispatch } from '../store/hooks';
 import { updateProfile } from '../store/slices/authSlice';
 import { useNavigate } from 'react-router-dom';
-import { uploadProfilePicture } from '../api/auth';
+import { uploadProfilePicture, updateMyProfileData } from '../api/auth';
 import toast from 'react-hot-toast';
 import { Popup } from '../components/ui/Popup'; 
 
@@ -16,7 +16,7 @@ interface Project {
   id: number;
   title: string;
   description: string;
-  viewLink: string;
+  projectLink: string;
   githubLink: string;
 }
 
@@ -39,17 +39,18 @@ const EditProfile: React.FC = () => {
   const [isAiOpen, setIsAiOpen] = useState(false);
   const [showSuccessPopup, setShowSuccessPopup] = useState(false); // حالة البوب أب
   const [isUploading, setIsUploading] = useState(false);
+  const [urlErrors, setUrlErrors] = useState<Record<string, boolean>>({});
 
   const [formData, setFormData] = useState<FormDataType>({
     fullName: user?.fullName || '',
     jobTitle: user?.jobTitle || '',
     location: user?.location || '',
     bioHeadline: user?.bioHeadline || '',
-    detailedAbout: user?.bio || '',
+    detailedAbout: user?.aboutMe || '',
     contactEmail: user?.contactEmail || '',
     skills: Array.isArray(user?.skills) ? user.skills : [],
     links: user?.links || [{ id: 1, platform: '', url: '' }],
-    projects: user?.projects || [{ id: 2, title: '', description: '', viewLink: '', githubLink: '' }]
+    projects: user?.projects || [{ id: 1, title: '', description: '', projectLink: '', githubLink: '' }]
   });
 
   const addLink = () => {
@@ -66,7 +67,7 @@ const EditProfile: React.FC = () => {
   const addProject = () => {
     setFormData({
       ...formData,
-      projects: [...formData.projects, { id: Date.now() + 1, title: '', description: '', viewLink: '', githubLink: '' }]
+      projects: [...formData.projects, { id: Date.now(), title: '', description: '', projectLink: '', githubLink: '' }]
     });
   };
 
@@ -130,10 +131,47 @@ const EditProfile: React.FC = () => {
     return parts[0].slice(0, 2).toUpperCase();
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    dispatch(updateProfile(formData));
-    setShowSuccessPopup(true); // إظهار النجاح بدل الانتقال الفوري
+    
+    // Strict URL validation
+    let hasError = false;
+    const newErrors: Record<string, boolean> = {};
+    const urlPattern = /^(https?:\/\/)?([\da-z\.-]+)\.([a-z\.]{2,6})([\/\w \.-]*)*\/?$/i;
+
+    formData.projects.forEach((p: Project) => {
+      if (!p.projectLink || !urlPattern.test(p.projectLink)) {
+        newErrors[`${p.id}-project`] = true;
+        hasError = true;
+      }
+      if (p.githubLink && !urlPattern.test(p.githubLink)) {
+        newErrors[`${p.id}-github`] = true;
+        hasError = true;
+      }
+    });
+
+    setUrlErrors(newErrors);
+
+    if (hasError) {
+      toast.error('Please enter valid URLs for your projects.');
+      return;
+    }
+
+    try {
+      const payload = {
+        ...formData,
+        aboutMe: formData.detailedAbout, // Explicit mapping for 'aboutMe'
+      };
+      
+      const updatedUser = await updateMyProfileData(payload);
+      
+      // Update Redux state with whatever the backend returns
+      dispatch(updateProfile(updatedUser));
+      setShowSuccessPopup(true);
+    } catch (error) {
+      console.error('Failed to save profile:', error);
+      toast.error('Failed to update profile data.');
+    }
   };
 
   return (
@@ -201,22 +239,22 @@ const EditProfile: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                   <div>
                     <label className="block text-sm font-bold mb-2">Full Name</label>
-                    <input type="text" value={formData.fullName} onChange={(e) => handleInputChange('fullName', e.target.value)} className="input-field" />
+                    <input type="text" value={formData.fullName} onChange={(e) => handleInputChange('fullName', e.target.value)} className="w-full bg-[#2A2A2E] border border-zinc-700 rounded-md px-3 py-2 text-white focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500" />
                   </div>
                   <div>
                     <label className="block text-sm font-bold mb-2">Job Title</label>
-                    <input type="text" value={formData.jobTitle} onChange={(e) => handleInputChange('jobTitle', e.target.value)} className="input-field" />
+                    <input type="text" value={formData.jobTitle} onChange={(e) => handleInputChange('jobTitle', e.target.value)} className="w-full bg-[#2A2A2E] border border-zinc-700 rounded-md px-3 py-2 text-white focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500" />
                   </div>
                 </div>
 
                 <div className="mb-6">
                   <label className="block text-sm font-bold mb-2">Location</label>
-                  <input type="text" value={formData.location} onChange={(e) => handleInputChange('location', e.target.value)} className="input-field" />
+                  <input type="text" value={formData.location} onChange={(e) => handleInputChange('location', e.target.value)} className="w-full bg-[#2A2A2E] border border-zinc-700 rounded-md px-3 py-2 text-white focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500" />
                 </div>
 
                 <div>
                   <label className="block text-sm font-bold mb-2">Short Bio (Headline)</label>
-                  <textarea rows={2} value={formData.bioHeadline} onChange={(e) => handleInputChange('bioHeadline', e.target.value)} className="input-field resize-none" />
+                  <textarea rows={2} value={formData.bioHeadline} onChange={(e) => handleInputChange('bioHeadline', e.target.value)} className="w-full bg-[#2A2A2E] border border-zinc-700 rounded-md px-3 py-2 text-white focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 resize-none" />
                 </div>
               </div>
 
@@ -229,15 +267,15 @@ const EditProfile: React.FC = () => {
                 
                 <div className="mb-6">
                   <label className="block text-sm font-bold mb-2">Contact Email</label>
-                  <input type="email" value={formData.contactEmail} onChange={(e) => handleInputChange('contactEmail', e.target.value)} className="input-field" placeholder="your.email@example.com" />
+                  <input type="email" value={formData.contactEmail} onChange={(e) => handleInputChange('contactEmail', e.target.value)} className="w-full bg-[#2A2A2E] border border-zinc-700 rounded-md px-3 py-2 text-white focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500" placeholder="your.email@example.com" />
                 </div>
 
                 <div className="flex flex-col gap-4">
                   {formData.links.map((link: Link) => (
                     <div key={link.id} className="flex flex-col sm:flex-row items-end gap-4 animate-in fade-in duration-300">
-                      <div className="w-full sm:w-1/3">
+                      <div className="w-full sm:w-48 shrink-0">
                         <label className="block text-xs font-bold uppercase mb-1 opacity-50">Platform</label>
-                        <select value={link.platform} onChange={(e) => handleLinkChange(link.id, 'platform', e.target.value)} className="input-field appearance-none bg-white dark:bg-[#171717]">
+                        <select value={link.platform} onChange={(e) => handleLinkChange(link.id, 'platform', e.target.value)} className="w-full bg-[#2A2A2E] border border-zinc-700 rounded-md px-3 py-2 text-white focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 appearance-none">
                           <option value="">Select Platform</option>
                           <option value="GitHub">GitHub</option>
                           <option value="LinkedIn">LinkedIn</option>
@@ -246,9 +284,9 @@ const EditProfile: React.FC = () => {
                           <option value="Behance">Behance</option>
                         </select>
                       </div>
-                      <div className="grow w-full">
+                      <div className="flex-1 w-full">
                         <label className="block text-xs font-bold uppercase mb-1 opacity-50">URL</label>
-                        <input type="url" value={link.url} onChange={(e) => handleLinkChange(link.id, 'url', e.target.value)} className="input-field" placeholder="https://..." />
+                        <input type="text" value={link.url} onChange={(e) => handleLinkChange(link.id, 'url', e.target.value)} className="w-full bg-[#2A2A2E] border border-zinc-700 rounded-md px-3 py-2 text-white focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500" placeholder="https://..." />
                       </div>
                       <button type="button" onClick={() => removeLink(link.id)} className="p-3 text-red-500 hover:bg-red-50 rounded-xl transition-colors">
                         <span className="material-icons-round">delete_outline</span>
@@ -263,11 +301,11 @@ const EditProfile: React.FC = () => {
                 <h3 className="text-xl font-bold mb-4 border-b border-[#171717]/10 dark:border-[#F5F5F5]/10 pb-2">3. Professional Details</h3>
                 <div className="mb-6">
                   <label className="block text-sm font-bold mb-2">About Me (Detailed)</label>
-                  <textarea rows={5} value={formData.detailedAbout} onChange={(e) => handleInputChange('detailedAbout', e.target.value)} className="input-field resize-none" />
+                  <textarea rows={5} value={formData.detailedAbout} onChange={(e) => handleInputChange('detailedAbout', e.target.value)} className="w-full bg-[#2A2A2E] border border-zinc-700 rounded-md px-3 py-2 text-white focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 resize-none" />
                 </div>
                 <div>
                   <label className="block text-sm font-bold mb-2">Skills (Press Enter to add)</label>
-                  <div className="input-field flex flex-wrap gap-2 focus-within:ring-2 focus-within:ring-[#7C3AED]/20">
+                  <div className="w-full bg-[#2A2A2E] border border-zinc-700 rounded-md px-3 py-2 text-white focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 flex flex-wrap gap-2 focus-within:ring-2 focus-within:ring-[#7C3AED]/20">
                     {formData.skills.map((skill: string, idx: number) => (
                       <span key={idx} className="bg-[#7C3AED] text-white px-3 py-1 rounded-lg text-sm flex items-center gap-2">
                         {skill}
@@ -299,19 +337,33 @@ const EditProfile: React.FC = () => {
                     </button>
                       <div className="grid grid-cols-1 gap-4">
                         <label className="block text-sm font-bold opacity-70">Project Title</label>
-                        <input type="text" value={project.title} onChange={(e) => handleProjectChange(project.id, 'title', e.target.value)} className="input-field bg-white dark:bg-[#262626]" placeholder="e.g. My Awesome App" />
+                        <input type="text" value={project.title} onChange={(e) => handleProjectChange(project.id, 'title', e.target.value)} className="w-full bg-[#2A2A2E] border border-zinc-700 rounded-md px-3 py-2 text-white focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500" placeholder="e.g. My Awesome App" />
                         
                         <label className="block text-sm font-bold opacity-70">Project Description</label>
-                        <textarea rows={3} value={project.description} onChange={(e) => handleProjectChange(project.id, 'description', e.target.value)} className="input-field bg-white dark:bg-[#262626] resize-none" placeholder="Briefly describe what this project is..." />
+                        <textarea rows={3} value={project.description} onChange={(e) => handleProjectChange(project.id, 'description', e.target.value)} className="w-full bg-[#2A2A2E] border border-zinc-700 rounded-md px-3 py-2 text-white focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 resize-none" placeholder="Briefly describe what this project is..." />
                         
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div>
-                            <label className="block text-sm font-bold opacity-70 mb-1">View Project Link (Optional)</label>
-                            <input type="url" value={project.viewLink} onChange={(e) => handleProjectChange(project.id, 'viewLink', e.target.value)} className="input-field bg-white dark:bg-[#262626]" placeholder="https://..." />
+                        <div className="flex flex-col gap-4">
+                          <div className="w-full">
+                            <label className="block text-sm font-bold opacity-70 mb-1">View Project Link</label>
+                            <input type="text" value={project.projectLink} onChange={(e) => {
+                                handleProjectChange(project.id, 'projectLink', e.target.value);
+                                setUrlErrors(prev => ({...prev, [`${project.id}-project`]: false}));
+                              }} 
+                              className={`w-full bg-[#2A2A2E] border rounded-md px-3 py-2 text-white focus:outline-none focus:ring-1 ${urlErrors[`${project.id}-project`] ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : 'border-zinc-700 focus:border-purple-500 focus:ring-purple-500'}`} 
+                              placeholder="https://..." 
+                            />
+                            {urlErrors[`${project.id}-project`] && <p className="text-red-500 text-xs mt-1">Please enter a valid required URL (e.g., https://example.com)</p>}
                           </div>
-                          <div>
+                          <div className="w-full">
                             <label className="block text-sm font-bold opacity-70 mb-1">GitHub Repo Link (Optional)</label>
-                            <input type="url" value={project.githubLink} onChange={(e) => handleProjectChange(project.id, 'githubLink', e.target.value)} className="input-field bg-white dark:bg-[#262626]" placeholder="https://github.com/..." />
+                            <input type="text" value={project.githubLink} onChange={(e) => {
+                                handleProjectChange(project.id, 'githubLink', e.target.value);
+                                setUrlErrors(prev => ({...prev, [`${project.id}-github`]: false}));
+                              }} 
+                              className={`w-full bg-[#2A2A2E] border rounded-md px-3 py-2 text-white focus:outline-none focus:ring-1 ${urlErrors[`${project.id}-github`] ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : 'border-zinc-700 focus:border-purple-500 focus:ring-purple-500'}`} 
+                              placeholder="https://github.com/..." 
+                            />
+                            {urlErrors[`${project.id}-github`] && <p className="text-red-500 text-xs mt-1">Please enter a valid URL (e.g., https://example.com)</p>}
                           </div>
                         </div>
                       </div>
@@ -359,7 +411,7 @@ const EditProfile: React.FC = () => {
 
       <style>{`
         .nav-icon-btn { @apply w-12 h-12 flex items-center justify-center text-gray-400 hover:text-[#7C3AED] dark:hover:text-[#8B5CF6] hover:bg-[#7C3AED]/10 dark:hover:bg-[#8B5CF6]/10 rounded-2xl transition-all duration-300; }
-        .input-field { @apply w-full bg-gray-50/50 dark:bg-[#171717] border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-3 outline-none focus:border-[#7C3AED] focus:ring-1 focus:ring-[#7C3AED] transition-all placeholder-gray-400 text-sm; }
+        
       `}</style>
     </div>
   );

@@ -26,13 +26,12 @@ export const Login = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const dispatch = useDispatch();
-  const [apiError, setApiError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     if (params.get("error") === "not_registered") {
-      setApiError("This account is not registered. Please create an account first.");
+      toast.error("This account is not registered. Please create an account first.");
     }
   }, [location]);
 
@@ -51,7 +50,6 @@ export const Login = () => {
   });
 
   const onSubmit = async (data: LoginFormInputs) => {
-    setApiError(null);
     try {
       const responseData = await loginUser({
         email: data.email,
@@ -73,7 +71,6 @@ export const Login = () => {
     } catch (error: any) {
       const errorMessage = error.response?.data?.message || "Login failed. Please check your credentials.";
       console.error('[LOGIN ERROR]', error.response?.data || error.message);
-      setApiError(errorMessage);
       toast.error(errorMessage, { duration: 4000 });
     }
   };
@@ -101,12 +98,6 @@ export const Login = () => {
             </div>
 
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
-              {apiError && (
-                <div className="p-3 rounded-lg bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-sm font-medium border border-red-200 dark:border-red-800 text-center">
-                  {apiError}
-                </div>
-              )}
-
               <Input
                 label="Email"
                 id="email"

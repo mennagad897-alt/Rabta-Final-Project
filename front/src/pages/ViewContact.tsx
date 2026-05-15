@@ -1,8 +1,9 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 
 export const ViewContact: React.FC = () => {
   const navigate = useNavigate();
+  const { userId } = useParams<{ userId: string }>();
 
   return (
     <main className="flex-1 h-full overflow-y-auto relative custom-scrollbar bg-[#F8F7FC] dark:bg-[#121212] transition-colors duration-500">
@@ -30,13 +31,18 @@ export const ViewContact: React.FC = () => {
                 {/* Avatar - positioned to overlap the cover */}
                 <div className="relative -mt-14 mb-4">
                   <div className="p-1.5 bg-white dark:bg-[#1E1E1E] rounded-full shadow-sm inline-block">
-                    <img src="https://ui-avatars.com/api/?name=Mai+Ahmed&background=8B5CF6&color=fff&size=256" alt="Contact Avatar" className="w-24 h-24 sm:w-28 sm:h-28 rounded-full object-cover" />
+                    <img
+                      src={`https://ui-avatars.com/api/?name=${encodeURIComponent(userId || 'Contact')}&background=8B5CF6&color=fff&size=256`}
+                      alt="Contact Avatar"
+                      className="w-24 h-24 sm:w-28 sm:h-28 rounded-full object-cover"
+                    />
                   </div>
                 </div>
 
                 {/* User Info - clear space below avatar */}
                 <div className="mb-8">
                   <h1 className="text-2xl sm:text-3xl font-bold tracking-tight mb-1 dark:text-[#F5F5F5]">Mai Ahmed</h1>
+                  <p className="sr-only">Contact user id: {userId}</p>
                   <p className="text-[#8B5CF6] font-bold text-lg mb-3">UI/UX Designer</p>
                   <p className="text-sm opacity-70 font-light leading-relaxed max-w-lg dark:text-[#F5F5F5]">
                     Creative designer focusing on user-centered digital experiences. Currently working on freelance projects and exploring modern UI trends.
@@ -112,11 +118,6 @@ export const ViewContact: React.FC = () => {
                 <p className="text-sm font-medium text-gray-400 dark:text-gray-500">No shared content yet</p>
                 <p className="text-xs text-gray-300 dark:text-gray-600 mt-1">Media and files will appear here</p>
               </div>
-
-              {/* 💡 التوجيه لصفحة الـ View All Content */}
-              <button onClick={() => navigate('/shared-content')} className="w-full mt-4 text-sm font-bold text-[#8B5CF6] hover:underline transition-all">
-                View All Content
-              </button>
             </div>
           </aside>
         </div>

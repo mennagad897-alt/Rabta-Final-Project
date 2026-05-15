@@ -44,7 +44,7 @@ export const toggleBanUser = catchAsync(async (req: Request, res: Response, next
   if (!user) {
     return next(new AppError('User not found', 404));
   }
-  
+
   if (user.role === 'admin') {
     return next(new AppError('You cannot ban an admin', 400));
   }
@@ -67,12 +67,94 @@ export const toggleBanUser = catchAsync(async (req: Request, res: Response, next
   });
 });
 
+export const getPendingEmployers = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+  const employers = await User.find({
+    role: 'employer',
+    verificationStatus: { $nin: ['approved', 'rejected'] }
+  }).select('-password');
+  res.status(200).json({
+    status: 'success',
+    results: employers.length,
+    data: { employers }
+  });
+});
+
+export const verifyEmployer = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+  const user = await User.findById(req.params.id);
+  if (!user || user.role !== 'employer') {
+    return next(new AppError('Employer not found', 404));
+  }
+
+  user.verificationStatus = 'approved';
+  user.rejectionReason = '';
+  await user.save({ validateBeforeSave: false });
+
+  await AdminLog.create({
+    adminId: (req as any).user._id,
+    adminName: (req as any).user.fullName || 'Admin',
+    actionType: 'VERIFY_EMPLOYER',
+    targetName: user.email || user.fullName,
+  });
+
+  const io = req.app.get('io');
+  if (io) {
+    io.to(user._id.toString()).emit('employerStatusUpdated', {
+      status: 'approved',
+      user: user
+    });
+  }
+
+  res.status(200).json({
+    status: 'success',
+    message: 'Employer has been verified successfully',
+    data: { user }
+  });
+});
+
+export const rejectEmployer = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+  const user = await User.findById(req.params.id);
+  if (!user || user.role !== 'employer') {
+    return next(new AppError('Employer not found', 404));
+  }
+
+  const { reason } = req.body;
+  if (!reason) {
+    return next(new AppError('Rejection reason is required', 400));
+  }
+
+  user.verificationStatus = 'rejected';
+  user.rejectionReason = reason;
+  await user.save({ validateBeforeSave: false });
+
+  await AdminLog.create({
+    adminId: (req as any).user._id,
+    adminName: (req as any).user.fullName || 'Admin',
+    actionType: 'REJECT_EMPLOYER',
+    targetName: user.email || user.fullName,
+  });
+
+  const io = req.app.get('io');
+  if (io) {
+    io.to(user._id.toString()).emit('employerStatusUpdated', {
+      status: 'rejected',
+      reason: reason,
+      user: user
+    });
+  }
+
+  res.status(200).json({
+    status: 'success',
+    message: 'Employer has been rejected successfully',
+    data: { user }
+  });
+});
+
 export const deleteUser = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
   const user = await User.findById(req.params.id);
   if (!user) {
     return next(new AppError('User not found', 404));
   }
-  
+
   if (user.role === 'admin') {
     return next(new AppError('You cannot delete an admin', 400));
   }
@@ -98,7 +180,7 @@ export const promoteAdmin = catchAsync(async (req: Request, res: Response, next:
   if (!user) {
     return next(new AppError('User not found', 404));
   }
-  
+
   if (user.role === 'admin') {
     return next(new AppError('User is already an admin', 400));
   }
@@ -138,7 +220,7 @@ export const deleteJob = catchAsync(async (req: Request, res: Response, next: Ne
   if (!job) {
     return next(new AppError('Job not found', 404));
   }
-  
+
   // Create admin log
   await AdminLog.create({
     adminId: (req as any).user._id,
@@ -158,7 +240,7 @@ export const deleteJob = catchAsync(async (req: Request, res: Response, next: Ne
 // =======================
 export const getAllGroups = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
   const groups = await Community.find().populate('owner', 'fullName email');
-  
+
   // Transform to match the required fields: Name, Creator, Member Count
   const formattedGroups = groups.map((g: any) => ({
     _id: g._id,
@@ -180,7 +262,7 @@ export const deleteGroup = catchAsync(async (req: Request, res: Response, next: 
   if (!group) {
     return next(new AppError('Group not found', 404));
   }
-  
+
   // Optionally, you could also delete all messages related to this group
   // await Message.deleteMany({ chatId: group._id });
 

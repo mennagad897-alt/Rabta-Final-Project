@@ -1,18 +1,37 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import { useDispatch, useSelector } from 'react-redux';
+import { updateProfile } from '../store/slices/authSlice';
+import type { RootState } from '../store/store';
+import axiosInstance from '../api/axiosInstance';
 
 export const Privacy: React.FC = () => {
   const navigate = useNavigate();
+  const dispatch = useDispatch();
+  const user = useSelector((state: RootState) => state.auth.user);
   
   const [privacySettings, setPrivacySettings] = useState({
-    showOnlineStatus: true,
+    showOnlineStatus: user?.showOnlineStatus !== false,
     allowDirectMessages: false
   });
 
-  const toggleSetting = (key: keyof typeof privacySettings) => {
-    setPrivacySettings(prev => ({ ...prev, [key]: !prev[key] }));
-    toast.success("Privacy setting updated");
+  const toggleSetting = async (key: keyof typeof privacySettings) => {
+    const newValue = !privacySettings[key];
+    setPrivacySettings(prev => ({ ...prev, [key]: newValue }));
+    
+    if (key === 'showOnlineStatus') {
+      try {
+        await axiosInstance.patch('/profile/me', { showOnlineStatus: newValue });
+        dispatch(updateProfile({ showOnlineStatus: newValue }));
+        toast.success("Privacy setting updated");
+      } catch (error) {
+        toast.error("Failed to update privacy setting");
+        setPrivacySettings(prev => ({ ...prev, [key]: !newValue }));
+      }
+    } else {
+      toast.success("Privacy setting updated");
+    }
   };
 
   return (

@@ -1,78 +1,127 @@
-import mongoose from 'mongoose';
+﻿import mongoose from 'mongoose';
 import Chat from '../models/chat';
 import Message from '../models/Message';
 import Community from '../models/Community';
+import { User } from '../models/user';
 import { AppError } from '../utils/AppError';
 import * as aiService from './ai.service';
 
-// ==========================================
-// 💬 سيرفس الشات والرسائل
-// ==========================================
-// ليه عندنا Chat و Message كموديلين منفصلين؟
-// 1. الـ Chat هو "الغرفة" أو "المحادثة" - بيحتوي على قائمة المشاركين ونوع المحادثة (فردي/جماعي)
-// 2. الـ Message هو "الرسالة" نفسها - بتنتمي لشات معين وبتحتوي على المحتوى والمرسل
-// 3. الفصل ده بيخلينا نقدر نجيب الرسائل بالـ pagination من غير ما نحمّل كل حاجة مرة واحدة
-// 4. لو حطينا الرسائل جوا الشات، الـ document هيكبر جداً ويبقى بطيء (MongoDB document size limit = 16MB)
+/** Check block status between users in a direct chat. */
+export const checkDirectChatBlockStatus = async (senderId: string, chatId: string) => {
+  const chat = await Chat.findById(chatId).select('users isGroup');
+  if (!chat || chat.isGroup) return { senderBlockedOther: false, receiverBlockedSender: false };
+
+  const otherUserId = chat.users.map((u) => u.toString()).find((id) => id !== senderId);
+  if (!otherUserId) return { senderBlockedOther: false, receiverBlockedSender: false };
+
+  const [sender, receiver] = await Promise.all([
+    User.findById(senderId).select('blockedUsers'),
+    User.findById(otherUserId).select('blockedUsers')
+  ]);
+
+  const senderBlockedOther = !!sender?.blockedUsers?.some((id: mongoose.Types.ObjectId) => id.toString() === otherUserId);
+  const receiverBlockedSender = !!receiver?.blockedUsers?.some((id: mongoose.Types.ObjectId) => id.toString() === senderId);
+
+  return { senderBlockedOther, receiverBlockedSender };
+};
+
+/** Block check for calls when chat id may be unresolved â€” uses user pair only. */
+export const checkUsersBlockStatusPair = async (userA: string, userB: string) => {
+  const [a, b] = await Promise.all([
+    User.findById(userA).select('blockedUsers'),
+    User.findById(userB).select('blockedUsers')
+  ]);
+  const aBlockedB = !!a?.blockedUsers?.some((id: mongoose.Types.ObjectId) => id.toString() === userB);
+  const bBlockedA = !!b?.blockedUsers?.some((id: mongoose.Types.ObjectId) => id.toString() === userA);
+  
+  return { senderBlockedOther: aBlockedB, receiverBlockedSender: bBlockedA };
+};
 
 // ==========================================
-// 📨 إرسال رسالة جديدة وحفظها في الداتا بيز
+// ðŸ’¬ Ø³ÙŠØ±ÙØ³ Ø§Ù„Ø´Ø§Øª ÙˆØ§Ù„Ø±Ø³Ø§Ø¦Ù„
+// ==========================================
+// Ù„ÙŠÙ‡ Ø¹Ù†Ø¯Ù†Ø§ Chat Ùˆ Message ÙƒÙ…ÙˆØ¯ÙŠÙ„ÙŠÙ† Ù…Ù†ÙØµÙ„ÙŠÙ†ØŸ
+// 1. Ø§Ù„Ù€ Chat Ù‡Ùˆ "Ø§Ù„ØºØ±ÙØ©" Ø£Ùˆ "Ø§Ù„Ù…Ø­Ø§Ø¯Ø«Ø©" - Ø¨ÙŠØ­ØªÙˆÙŠ Ø¹Ù„Ù‰ Ù‚Ø§Ø¦Ù…Ø© Ø§Ù„Ù…Ø´Ø§Ø±ÙƒÙŠÙ† ÙˆÙ†ÙˆØ¹ Ø§Ù„Ù…Ø­Ø§Ø¯Ø«Ø© (ÙØ±Ø¯ÙŠ/Ø¬Ù…Ø§Ø¹ÙŠ)
+// 2. Ø§Ù„Ù€ Message Ù‡Ùˆ "Ø§Ù„Ø±Ø³Ø§Ù„Ø©" Ù†ÙØ³Ù‡Ø§ - Ø¨ØªÙ†ØªÙ…ÙŠ Ù„Ø´Ø§Øª Ù…Ø¹ÙŠÙ† ÙˆØ¨ØªØ­ØªÙˆÙŠ Ø¹Ù„Ù‰ Ø§Ù„Ù…Ø­ØªÙˆÙ‰ ÙˆØ§Ù„Ù…Ø±Ø³Ù„
+// 3. Ø§Ù„ÙØµÙ„ Ø¯Ù‡ Ø¨ÙŠØ®Ù„ÙŠÙ†Ø§ Ù†Ù‚Ø¯Ø± Ù†Ø¬ÙŠØ¨ Ø§Ù„Ø±Ø³Ø§Ø¦Ù„ Ø¨Ø§Ù„Ù€ pagination Ù…Ù† ØºÙŠØ± Ù…Ø§ Ù†Ø­Ù…Ù‘Ù„ ÙƒÙ„ Ø­Ø§Ø¬Ø© Ù…Ø±Ø© ÙˆØ§Ø­Ø¯Ø©
+// 4. Ù„Ùˆ Ø­Ø·ÙŠÙ†Ø§ Ø§Ù„Ø±Ø³Ø§Ø¦Ù„ Ø¬ÙˆØ§ Ø§Ù„Ø´Ø§ØªØŒ Ø§Ù„Ù€ document Ù‡ÙŠÙƒØ¨Ø± Ø¬Ø¯Ø§Ù‹ ÙˆÙŠØ¨Ù‚Ù‰ Ø¨Ø·ÙŠØ¡ (MongoDB document size limit = 16MB)
+
+// ==========================================
+// ðŸ“¨ Ø¥Ø±Ø³Ø§Ù„ Ø±Ø³Ø§Ù„Ø© Ø¬Ø¯ÙŠØ¯Ø© ÙˆØ­ÙØ¸Ù‡Ø§ ÙÙŠ Ø§Ù„Ø¯Ø§ØªØ§ Ø¨ÙŠØ²
 // ==========================================
 export const createMessage = async (data: {
   chatId: string;
   senderId: string;
-  content: string;
+  content?: string;
   messageType?: string;
+  status?: 'sent' | 'delivered' | 'read' | 'sending';
+  audioUrl?: string;
+  duration?: number;
+  replyTo?: string;
+  isForwarded?: boolean;
   attachments?: { fileUrl: string; fileType: string; fileSize?: number }[];
 }) => {
-  // التأكد إن الشات موجود فعلاً
+  // Ø§Ù„ØªØ£ÙƒØ¯ Ø¥Ù† Ø§Ù„Ø´Ø§Øª Ù…ÙˆØ¬ÙˆØ¯ ÙØ¹Ù„Ø§Ù‹
   const chat = await Chat.findById(data.chatId);
   if (!chat) throw new AppError('Chat not found', 404);
 
-  // التأكد إن المرسل عضو في الشات ده (حماية مهمة)
+  // Ø§Ù„ØªØ£ÙƒØ¯ Ø¥Ù† Ø§Ù„Ù…Ø±Ø³Ù„ Ø¹Ø¶Ùˆ ÙÙŠ Ø§Ù„Ø´Ø§Øª Ø¯Ù‡ (Ø­Ù…Ø§ÙŠØ© Ù…Ù‡Ù…Ø©)
   const isMember = chat.users.some(
     (userId) => userId.toString() === data.senderId
   );
   if (!isMember) throw new AppError('You are not a member of this chat', 403);
 
-  // إنشاء الرسالة في الداتا بيز
-  const signal = aiService.analyzeSignal(data.content);
+  const blockStatus = await checkDirectChatBlockStatus(data.senderId, data.chatId);
+  if (blockStatus.senderBlockedOther || blockStatus.receiverBlockedSender) {
+    throw new AppError('You cannot interact with this user.', 403);
+  }
+
+  // Ø¥Ù†Ø´Ø§Ø¡ Ø§Ù„Ø±Ø³Ø§Ù„Ø© ÙÙŠ Ø§Ù„Ø¯Ø§ØªØ§ Ø¨ÙŠØ²
+  const signal = aiService.analyzeSignal(data.content || '');
   
-  const newMessage = await Message.create({
+  const newMessage = new Message({
     chatId: data.chatId,
     senderId: data.senderId,
     content: data.content,
+    audioUrl: data.audioUrl,
+    duration: data.duration,
     messageType: data.messageType || 'text',
-    attachments: data.attachments,
+    status: data.status || 'sent',
+    attachments: data.attachments || [],
+    replyTo: data.replyTo,
+    isForwarded: data.isForwarded || false,
     signal
   });
+  await newMessage.save();
 
   // Extract tasks in background
   aiService.extractTasks(newMessage).catch(err => console.error('AI Extraction Error:', err));
 
-  // تحديث آخر رسالة في الشات عشان الفرونت إند يعرضها في قائمة المحادثات
+  // ØªØ­Ø¯ÙŠØ« Ø¢Ø®Ø± Ø±Ø³Ø§Ù„Ø© ÙÙŠ Ø§Ù„Ø´Ø§Øª Ø¹Ø´Ø§Ù† Ø§Ù„ÙØ±ÙˆÙ†Øª Ø¥Ù†Ø¯ ÙŠØ¹Ø±Ø¶Ù‡Ø§ ÙÙŠ Ù‚Ø§Ø¦Ù…Ø© Ø§Ù„Ù…Ø­Ø§Ø¯Ø«Ø§Øª
   await Chat.findByIdAndUpdate(data.chatId, { latestMessage: newMessage._id });
 
-  // بنرجع الرسالة مع بيانات المرسل (الاسم والصورة)
+  // Ø¨Ù†Ø±Ø¬Ø¹ Ø§Ù„Ø±Ø³Ø§Ù„Ø© Ù…Ø¹ Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„Ù…Ø±Ø³Ù„ (Ø§Ù„Ø§Ø³Ù… ÙˆØ§Ù„ØµÙˆØ±Ø©)
   const populatedMessage = await Message.findById(newMessage._id)
-    .populate('senderId', 'fullName avatar');
+    .populate('senderId', 'fullName avatar')
+    .populate({ path: 'replyTo', select: 'content senderId messageType attachments', populate: { path: 'senderId', select: 'fullName' } });
 
   return populatedMessage;
 };
 
 // ==========================================
-// 📜 جلب تاريخ الرسائل (History) لشات معين
+// ðŸ“œ Ø¬Ù„Ø¨ ØªØ§Ø±ÙŠØ® Ø§Ù„Ø±Ø³Ø§Ø¦Ù„ (History) Ù„Ø´Ø§Øª Ù…Ø¹ÙŠÙ†
 // ==========================================
-// ليه بنجيب history بالـ limit؟
-// 1. المحادثة ممكن يكون فيها آلاف الرسائل، مينفعش نجيبهم كلهم مرة واحدة (هيبطئ السيرفر والفرونت إند)
-// 2. بنستخدم cursor-based pagination (قبل رسالة معينة) عشان الأداء يكون أحسن من skip/limit
-// 3. الفرونت إند بيجيب أول 30 رسالة، ولما اليوزر يعمل scroll لفوق بيجيب الـ 30 اللي قبلهم
+// Ù„ÙŠÙ‡ Ø¨Ù†Ø¬ÙŠØ¨ history Ø¨Ø§Ù„Ù€ limitØŸ
+// 1. Ø§Ù„Ù…Ø­Ø§Ø¯Ø«Ø© Ù…Ù…ÙƒÙ† ÙŠÙƒÙˆÙ† ÙÙŠÙ‡Ø§ Ø¢Ù„Ø§Ù Ø§Ù„Ø±Ø³Ø§Ø¦Ù„ØŒ Ù…ÙŠÙ†ÙØ¹Ø´ Ù†Ø¬ÙŠØ¨Ù‡Ù… ÙƒÙ„Ù‡Ù… Ù…Ø±Ø© ÙˆØ§Ø­Ø¯Ø© (Ù‡ÙŠØ¨Ø·Ø¦ Ø§Ù„Ø³ÙŠØ±ÙØ± ÙˆØ§Ù„ÙØ±ÙˆÙ†Øª Ø¥Ù†Ø¯)
+// 2. Ø¨Ù†Ø³ØªØ®Ø¯Ù… cursor-based pagination (Ù‚Ø¨Ù„ Ø±Ø³Ø§Ù„Ø© Ù…Ø¹ÙŠÙ†Ø©) Ø¹Ø´Ø§Ù† Ø§Ù„Ø£Ø¯Ø§Ø¡ ÙŠÙƒÙˆÙ† Ø£Ø­Ø³Ù† Ù…Ù† skip/limit
+// 3. Ø§Ù„ÙØ±ÙˆÙ†Øª Ø¥Ù†Ø¯ Ø¨ÙŠØ¬ÙŠØ¨ Ø£ÙˆÙ„ 30 Ø±Ø³Ø§Ù„Ø©ØŒ ÙˆÙ„Ù…Ø§ Ø§Ù„ÙŠÙˆØ²Ø± ÙŠØ¹Ù…Ù„ scroll Ù„ÙÙˆÙ‚ Ø¨ÙŠØ¬ÙŠØ¨ Ø§Ù„Ù€ 30 Ø§Ù„Ù„ÙŠ Ù‚Ø¨Ù„Ù‡Ù…
 export const getChatMessages = async (
   chatId: string,
   userId: string,
   limit: number = 30,
-  before?: string // cursor: الرسائل اللي قبل الـ ID ده
+  before?: string // cursor: Ø§Ù„Ø±Ø³Ø§Ø¦Ù„ Ø§Ù„Ù„ÙŠ Ù‚Ø¨Ù„ Ø§Ù„Ù€ ID Ø¯Ù‡
 ) => {
-  // التأكد إن الشات موجود واليوزر عضو فيه
+  // Ø§Ù„ØªØ£ÙƒØ¯ Ø¥Ù† Ø§Ù„Ø´Ø§Øª Ù…ÙˆØ¬ÙˆØ¯ ÙˆØ§Ù„ÙŠÙˆØ²Ø± Ø¹Ø¶Ùˆ ÙÙŠÙ‡
   const chat = await Chat.findById(chatId);
   if (!chat) throw new AppError('Chat not found', 404);
 
@@ -81,51 +130,80 @@ export const getChatMessages = async (
   );
   if (!isMember) throw new AppError('You are not a member of this chat', 403);
 
-  // بناء الـ query
-  const query: any = { chatId };
+  const userOid = new mongoose.Types.ObjectId(userId);
+  const clearEntry = (chat as any).clearStates?.find(
+    (s: { user?: { toString: () => string }; clearedAt?: Date }) => s.user?.toString() === userId
+  );
 
-  // Cursor-based pagination: load messages AFTER the given ID (ascending order)
+  const query: Record<string, unknown> = { chatId };
+  const andClauses: Record<string, unknown>[] = [];
+
+  if (clearEntry?.clearedAt) {
+    andClauses.push({ createdAt: { $gt: new Date(clearEntry.clearedAt) } });
+  }
+
+  andClauses.push({
+    $or: [
+      { hiddenFor: { $exists: false } },
+      { hiddenFor: { $size: 0 } },
+      { hiddenFor: { $not: { $elemMatch: { $eq: userOid } } } }
+    ]
+  });
+
   if (before) {
-    query._id = { $lt: new mongoose.Types.ObjectId(before) };
+    andClauses.push({ _id: { $lt: new mongoose.Types.ObjectId(before) } });
+  }
+
+  if (andClauses.length) {
+    query.$and = andClauses;
   }
 
   const safeLimit = Math.min(Math.max(limit, 20), 50);
 
-  const messages = await Message.find(query)
+  const latestBatch = await Message.find(query)
     .populate('senderId', 'fullName avatar')
-    .sort({ createdAt: 1 }) // ✅ Ascending: oldest first, newest last — correct chronological order
+    .populate({ path: 'replyTo', select: 'content senderId messageType attachments', populate: { path: 'senderId', select: 'fullName' } })
+    // Fetch newest first so limit returns the latest persisted messages
+    .sort({ createdAt: -1 })
     .limit(safeLimit);
 
-  return messages; // ✅ No .reverse() needed — sort is already chronological
+  // Return ascending for UI rendering (newest appears at bottom)
+  return latestBatch.reverse();
 };
 
 // ==========================================
-// 🤝 إنشاء أو جلب محادثة فردية (One-to-One)
+// ðŸ¤ Ø¥Ù†Ø´Ø§Ø¡ Ø£Ùˆ Ø¬Ù„Ø¨ Ù…Ø­Ø§Ø¯Ø«Ø© ÙØ±Ø¯ÙŠØ© (One-to-One)
 // ==========================================
 export const accessOrCreateChat = async (currentUserId: string, otherUserId: string) => {
-  // بنبحث هل فيه شات فردي (مش جروب) بين اليوزرين دول
+  // Ø¨Ù†Ø¨Ø­Ø« Ù‡Ù„ ÙÙŠÙ‡ Ø´Ø§Øª ÙØ±Ø¯ÙŠ (Ù…Ø´ Ø¬Ø±ÙˆØ¨) Ø¨ÙŠÙ† Ø§Ù„ÙŠÙˆØ²Ø±ÙŠÙ† Ø¯ÙˆÙ„
   let chat = await Chat.findOne({
     isGroup: false,
     users: { $all: [currentUserId, otherUserId], $size: 2 }
   })
-    .populate('users', 'fullName avatar status')
+    .populate('users', 'fullName avatar status showOnlineStatus')
     .populate('latestMessage');
 
-  // لو مش موجود بننشئ واحد جديد
+  // Ù„Ùˆ Ù…Ø´ Ù…ÙˆØ¬ÙˆØ¯ Ø¨Ù†Ù†Ø´Ø¦ ÙˆØ§Ø­Ø¯ Ø¬Ø¯ÙŠØ¯
   if (!chat) {
     chat = await Chat.create({
       isGroup: false,
       users: [currentUserId, otherUserId]
     });
     chat = await Chat.findById(chat._id)
-      .populate('users', 'fullName avatar status');
+      .populate('users', 'fullName avatar status showOnlineStatus');
+  } else {
+    // If the chat exists but was hidden by the user, unhide it
+    if (chat.hiddenBy && chat.hiddenBy.some(id => id.toString() === currentUserId)) {
+      await Chat.findByIdAndUpdate(chat._id, { $pull: { hiddenBy: currentUserId } });
+      chat.hiddenBy = chat.hiddenBy.filter(id => id.toString() !== currentUserId);
+    }
   }
 
   return chat;
 };
 
 // ==========================================
-// 👥 إنشاء محادثة جماعية (Group Chat)
+// ðŸ‘¥ Ø¥Ù†Ø´Ø§Ø¡ Ù…Ø­Ø§Ø¯Ø«Ø© Ø¬Ù…Ø§Ø¹ÙŠØ© (Group Chat)
 // ==========================================
 export const createGroupChat = async (
   adminId: string,
@@ -133,12 +211,12 @@ export const createGroupChat = async (
   memberIds: string[],
   isPrivate: boolean = false
 ) => {
-  // لازم يكون فيه على الأقل عضوين غير الأدمن
+  // Ù„Ø§Ø²Ù… ÙŠÙƒÙˆÙ† ÙÙŠÙ‡ Ø¹Ù„Ù‰ Ø§Ù„Ø£Ù‚Ù„ Ø¹Ø¶ÙˆÙŠÙ† ØºÙŠØ± Ø§Ù„Ø£Ø¯Ù…Ù†
   if (!memberIds || memberIds.length < 2) {
     throw new AppError('Group chat must have at least 2 members besides admin', 400);
   }
 
-  // الأدمن بيكون عضو تلقائياً
+  // Ø§Ù„Ø£Ø¯Ù…Ù† Ø¨ÙŠÙƒÙˆÙ† Ø¹Ø¶Ùˆ ØªÙ„Ù‚Ø§Ø¦ÙŠØ§Ù‹
   const allUsers = [adminId, ...memberIds.filter(id => id !== adminId)];
 
   const groupChat = await Chat.create({
@@ -150,25 +228,30 @@ export const createGroupChat = async (
   });
 
   const populatedChat = await Chat.findById(groupChat._id)
-    .populate('users', 'fullName avatar status')
+    .populate('users', 'fullName avatar status showOnlineStatus')
     .populate('admins', 'fullName avatar');
 
   return populatedChat;
 };
 
 // ==========================================
-// ➕ إضافة عضو للجروب (Admin Only)
+// âž• Ø¥Ø¶Ø§ÙØ© Ø¹Ø¶Ùˆ Ù„Ù„Ø¬Ø±ÙˆØ¨ (Admin Only)
 // ==========================================
 export const addMemberToGroup = async (chatId: string, adminId: string, newMemberId: string) => {
   const chat = await Chat.findById(chatId);
   if (!chat) throw new AppError('Chat not found', 404);
   if (!chat.isGroup) throw new AppError('This is not a group chat', 400);
 
-  // التأكد إن اللي بيضيف هو أدمن
+  // Check permissions based on group privacy
   const isAdmin = chat.admins?.some(id => id.toString() === adminId);
-  if (!isAdmin) throw new AppError('Only admins can add members', 403);
+  if (chat.isPrivate) {
+    if (!isAdmin) throw new AppError('Only the admin can add members to this private group', 403);
+  } else {
+    const isMember = chat.users.some(id => id.toString() === adminId);
+    if (!isMember && !isAdmin) throw new AppError('Only existing members can add users to this group', 403);
+  }
 
-  // التأكد إن العضو مش موجود أصلاً
+  // Ø§Ù„ØªØ£ÙƒØ¯ Ø¥Ù† Ø§Ù„Ø¹Ø¶Ùˆ Ù…Ø´ Ù…ÙˆØ¬ÙˆØ¯ Ø£ØµÙ„Ø§Ù‹
   const alreadyMember = chat.users.some(id => id.toString() === newMemberId);
   if (alreadyMember) throw new AppError('User is already a member', 400);
 
@@ -176,14 +259,14 @@ export const addMemberToGroup = async (chatId: string, adminId: string, newMembe
   await chat.save();
 
   const updatedChat = await Chat.findById(chatId)
-    .populate('users', 'fullName avatar status')
+    .populate('users', 'fullName avatar status showOnlineStatus')
     .populate('admins', 'fullName avatar');
 
   return updatedChat;
 };
 
 // ==========================================
-// ➖ إزالة عضو من الجروب (Admin Only)
+// âž– Ø¥Ø²Ø§Ù„Ø© Ø¹Ø¶Ùˆ Ù…Ù† Ø§Ù„Ø¬Ø±ÙˆØ¨ (Admin Only)
 // ==========================================
 export const removeMemberFromGroup = async (chatId: string, adminId: string, memberId: string) => {
   const chat = await Chat.findById(chatId);
@@ -193,25 +276,25 @@ export const removeMemberFromGroup = async (chatId: string, adminId: string, mem
   const isAdmin = chat.admins?.some(id => id.toString() === adminId);
   if (!isAdmin) throw new AppError('Only admins can remove members', 403);
 
-  // مينفعش الأدمن يشيل نفسه (لازم يسيب الجروب بدل كده)
+  // Ù…ÙŠÙ†ÙØ¹Ø´ Ø§Ù„Ø£Ø¯Ù…Ù† ÙŠØ´ÙŠÙ„ Ù†ÙØ³Ù‡ (Ù„Ø§Ø²Ù… ÙŠØ³ÙŠØ¨ Ø§Ù„Ø¬Ø±ÙˆØ¨ Ø¨Ø¯Ù„ ÙƒØ¯Ù‡)
   if (memberId === adminId) throw new AppError('Admin cannot remove themselves, use leave instead', 400);
 
   chat.users = chat.users.filter(id => id.toString() !== memberId);
-  // لو العضو كان أدمن كمان، نشيله من الأدمنز
+  // Ù„Ùˆ Ø§Ù„Ø¹Ø¶Ùˆ ÙƒØ§Ù† Ø£Ø¯Ù…Ù† ÙƒÙ…Ø§Ù†ØŒ Ù†Ø´ÙŠÙ„Ù‡ Ù…Ù† Ø§Ù„Ø£Ø¯Ù…Ù†Ø²
   if (chat.admins) {
     chat.admins = chat.admins.filter(id => id.toString() !== memberId);
   }
   await chat.save();
 
   const updatedChat = await Chat.findById(chatId)
-    .populate('users', 'fullName avatar status')
+    .populate('users', 'fullName avatar status showOnlineStatus')
     .populate('admins', 'fullName avatar');
 
   return updatedChat;
 };
 
 // ==========================================
-// 🚪 مغادرة الجروب (أي عضو)
+// ðŸšª Ù…ØºØ§Ø¯Ø±Ø© Ø§Ù„Ø¬Ø±ÙˆØ¨ (Ø£ÙŠ Ø¹Ø¶Ùˆ)
 // ==========================================
 export const leaveGroup = async (chatId: string, userId: string) => {
   const chat = await Chat.findById(chatId);
@@ -221,23 +304,33 @@ export const leaveGroup = async (chatId: string, userId: string) => {
   const isMember = chat.users.some(id => id.toString() === userId);
   if (!isMember) throw new AppError('You are not a member of this group', 400);
 
-  // شيل اليوزر من الأعضاء والأدمنز
+  // Ø´ÙŠÙ„ Ø§Ù„ÙŠÙˆØ²Ø± Ù…Ù† Ø§Ù„Ø£Ø¹Ø¶Ø§Ø¡ ÙˆØ§Ù„Ø£Ø¯Ù…Ù†Ø²
   chat.users = chat.users.filter(id => id.toString() !== userId);
   if (chat.admins) {
     chat.admins = chat.admins.filter(id => id.toString() !== userId);
   }
 
-  // لو مفيش أدمنز تاني، أول عضو يبقى أدمن تلقائياً
+  // Ù„Ùˆ Ù…ÙÙŠØ´ Ø£Ø¯Ù…Ù†Ø² ØªØ§Ù†ÙŠØŒ Ø£ÙˆÙ„ Ø¹Ø¶Ùˆ ÙŠØ¨Ù‚Ù‰ Ø£Ø¯Ù…Ù† ØªÙ„Ù‚Ø§Ø¦ÙŠØ§Ù‹
   if (chat.admins && chat.admins.length === 0 && chat.users.length > 0) {
     chat.admins.push(chat.users[0]);
   }
 
   await chat.save();
+
+  // Remove the user from the related Community if it exists
+  const community = await Community.findOne({ chatId: chat._id });
+  if (community) {
+    community.members = community.members.filter((id: any) => id.toString() !== userId);
+    // If we updated admins in chat, also sync community admins
+    community.admins = chat.admins || [];
+    await community.save();
+  }
+
   return { message: 'You have left the group successfully' };
 };
 
 // ==========================================
-// 🏘️ إنشاء مجتمع متخصص (Community)
+// ðŸ˜ï¸ Ø¥Ù†Ø´Ø§Ø¡ Ù…Ø¬ØªÙ…Ø¹ Ù…ØªØ®ØµØµ (Community)
 // ==========================================
 export const createCommunity = async (
   ownerId: string,
@@ -245,7 +338,7 @@ export const createCommunity = async (
   description: string,
   tags?: string[]
 ) => {
-  // بننشئ شات جماعي مرتبط بالمجتمع تلقائياً
+  // Ø¨Ù†Ù†Ø´Ø¦ Ø´Ø§Øª Ø¬Ù…Ø§Ø¹ÙŠ Ù…Ø±ØªØ¨Ø· Ø¨Ø§Ù„Ù…Ø¬ØªÙ…Ø¹ ØªÙ„Ù‚Ø§Ø¦ÙŠØ§Ù‹
   const communityChat = await Chat.create({
     isGroup: true,
     groupName: name,
@@ -272,26 +365,26 @@ export const createCommunity = async (
 };
 
 // ==========================================
-// 🚪 الانضمام لمجتمع (Join Community)
+// ðŸšª Ø§Ù„Ø§Ù†Ø¶Ù…Ø§Ù… Ù„Ù…Ø¬ØªÙ…Ø¹ (Join Community)
 // ==========================================
 export const joinCommunity = async (communityId: string, userId: string) => {
   const community = await Community.findById(communityId);
   if (!community) throw new AppError('Community not found', 404);
 
-  // التأكد إن اليوزر مش عضو أصلاً
+  // Ø§Ù„ØªØ£ÙƒØ¯ Ø¥Ù† Ø§Ù„ÙŠÙˆØ²Ø± Ù…Ø´ Ø¹Ø¶Ùˆ Ø£ØµÙ„Ø§Ù‹
   const alreadyMember = community.members.some(id => id.toString() === userId);
   if (alreadyMember) throw new AppError('You are already a member', 400);
 
-  // لو المجتمع خاص، مينفعش ينضم من غير دعوة
+  // Ù„Ùˆ Ø§Ù„Ù…Ø¬ØªÙ…Ø¹ Ø®Ø§ØµØŒ Ù…ÙŠÙ†ÙØ¹Ø´ ÙŠÙ†Ø¶Ù… Ù…Ù† ØºÙŠØ± Ø¯Ø¹ÙˆØ©
   if (!community.isPublic) {
     throw new AppError('This is a private community, you need an invitation', 403);
   }
 
-  // ضيف اليوزر كعضو في المجتمع وفي الشات المرتبط
+  // Ø¶ÙŠÙ Ø§Ù„ÙŠÙˆØ²Ø± ÙƒØ¹Ø¶Ùˆ ÙÙŠ Ø§Ù„Ù…Ø¬ØªÙ…Ø¹ ÙˆÙÙŠ Ø§Ù„Ø´Ø§Øª Ø§Ù„Ù…Ø±ØªØ¨Ø·
   community.members.push(new mongoose.Types.ObjectId(userId));
   await community.save();
 
-  // ضيفه في الشات الجماعي كمان
+  // Ø¶ÙŠÙÙ‡ ÙÙŠ Ø§Ù„Ø´Ø§Øª Ø§Ù„Ø¬Ù…Ø§Ø¹ÙŠ ÙƒÙ…Ø§Ù†
   if (community.chatId) {
     await Chat.findByIdAndUpdate(community.chatId, {
       $addToSet: { users: userId }
@@ -302,13 +395,13 @@ export const joinCommunity = async (communityId: string, userId: string) => {
 };
 
 // ==========================================
-// 🚪 مغادرة مجتمع (Leave Community)
+// ðŸšª Ù…ØºØ§Ø¯Ø±Ø© Ù…Ø¬ØªÙ…Ø¹ (Leave Community)
 // ==========================================
 export const leaveCommunity = async (communityId: string, userId: string) => {
   const community = await Community.findById(communityId);
   if (!community) throw new AppError('Community not found', 404);
 
-  // صاحب المجتمع مينفعش يغادر (لازم يمسح المجتمع أو ينقل الملكية)
+  // ØµØ§Ø­Ø¨ Ø§Ù„Ù…Ø¬ØªÙ…Ø¹ Ù…ÙŠÙ†ÙØ¹Ø´ ÙŠØºØ§Ø¯Ø± (Ù„Ø§Ø²Ù… ÙŠÙ…Ø³Ø­ Ø§Ù„Ù…Ø¬ØªÙ…Ø¹ Ø£Ùˆ ÙŠÙ†Ù‚Ù„ Ø§Ù„Ù…Ù„ÙƒÙŠØ©)
   if (community.owner.toString() === userId) {
     throw new AppError('Owner cannot leave the community, transfer ownership first', 400);
   }
@@ -317,7 +410,7 @@ export const leaveCommunity = async (communityId: string, userId: string) => {
   community.admins = community.admins.filter(id => id.toString() !== userId);
   await community.save();
 
-  // شيله من الشات كمان
+  // Ø´ÙŠÙ„Ù‡ Ù…Ù† Ø§Ù„Ø´Ø§Øª ÙƒÙ…Ø§Ù†
   if (community.chatId) {
     await Chat.findByIdAndUpdate(community.chatId, {
       $pull: { users: userId }
@@ -328,7 +421,7 @@ export const leaveCommunity = async (communityId: string, userId: string) => {
 };
 
 // ==========================================
-// ➕ إضافة عضو للمجتمع (Admin Only)
+// âž• Ø¥Ø¶Ø§ÙØ© Ø¹Ø¶Ùˆ Ù„Ù„Ù…Ø¬ØªÙ…Ø¹ (Admin Only)
 // ==========================================
 export const addMemberToCommunity = async (communityId: string, adminId: string, newMemberId: string) => {
   const community = await Community.findById(communityId);
@@ -343,7 +436,7 @@ export const addMemberToCommunity = async (communityId: string, adminId: string,
   community.members.push(new mongoose.Types.ObjectId(newMemberId));
   await community.save();
 
-  // ضيفه في الشات كمان
+  // Ø¶ÙŠÙÙ‡ ÙÙŠ Ø§Ù„Ø´Ø§Øª ÙƒÙ…Ø§Ù†
   if (community.chatId) {
     await Chat.findByIdAndUpdate(community.chatId, {
       $addToSet: { users: newMemberId }
@@ -357,7 +450,7 @@ export const addMemberToCommunity = async (communityId: string, adminId: string,
 };
 
 // ==========================================
-// ➖ إزالة عضو من المجتمع (Admin Only)
+// âž– Ø¥Ø²Ø§Ù„Ø© Ø¹Ø¶Ùˆ Ù…Ù† Ø§Ù„Ù…Ø¬ØªÙ…Ø¹ (Admin Only)
 // ==========================================
 export const removeMemberFromCommunity = async (communityId: string, adminId: string, memberId: string) => {
   const community = await Community.findById(communityId);
@@ -374,7 +467,7 @@ export const removeMemberFromCommunity = async (communityId: string, adminId: st
   community.admins = community.admins.filter(id => id.toString() !== memberId);
   await community.save();
 
-  // شيله من الشات كمان
+  // Ø´ÙŠÙ„Ù‡ Ù…Ù† Ø§Ù„Ø´Ø§Øª ÙƒÙ…Ø§Ù†
   if (community.chatId) {
     await Chat.findByIdAndUpdate(community.chatId, {
       $pull: { users: memberId }
@@ -388,7 +481,7 @@ export const removeMemberFromCommunity = async (communityId: string, adminId: st
 };
 
 // ==========================================
-// 🔄 تحديث بيانات المجتمع (Admin Only)
+// ðŸ”„ ØªØ­Ø¯ÙŠØ« Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„Ù…Ø¬ØªÙ…Ø¹ (Admin Only)
 // ==========================================
 export const updateCommunity = async (
   communityId: string,
@@ -401,7 +494,7 @@ export const updateCommunity = async (
   const isAdmin = community.admins.some(id => id.toString() === adminId);
   if (!isAdmin) throw new AppError('Only admins can update community', 403);
 
-  // تحديث الحقول المسموح بيها بس
+  // ØªØ­Ø¯ÙŠØ« Ø§Ù„Ø­Ù‚ÙˆÙ„ Ø§Ù„Ù…Ø³Ù…ÙˆØ­ Ø¨ÙŠÙ‡Ø§ Ø¨Ø³
   const allowedUpdates: any = {};
   if (updates.name !== undefined) allowedUpdates.name = updates.name;
   if (updates.description !== undefined) allowedUpdates.description = updates.description;
@@ -420,7 +513,7 @@ export const updateCommunity = async (
 };
 
 // ==========================================
-// 📋 جلب كل المجتمعات (مع pagination)
+// ðŸ“‹ Ø¬Ù„Ø¨ ÙƒÙ„ Ø§Ù„Ù…Ø¬ØªÙ…Ø¹Ø§Øª (Ù…Ø¹ pagination)
 // ==========================================
 export const getAllCommunities = async (page: number = 1, limit: number = 10) => {
   const skip = (page - 1) * limit;
@@ -445,7 +538,7 @@ export const getAllCommunities = async (page: number = 1, limit: number = 10) =>
 };
 
 // ==========================================
-// 🔍 جلب مجتمع بالتفصيل
+// ðŸ” Ø¬Ù„Ø¨ Ù…Ø¬ØªÙ…Ø¹ Ø¨Ø§Ù„ØªÙØµÙŠÙ„
 // ==========================================
 export const getCommunityById = async (communityId: string) => {
   const community = await Community.findById(communityId)
@@ -460,11 +553,18 @@ export const getCommunityById = async (communityId: string) => {
 };
 
 // ==========================================
-// 📋 جلب محادثات اليوزر (كل الشاتات اللي هو عضو فيها)
+// ðŸ“‹ Ø¬Ù„Ø¨ Ù…Ø­Ø§Ø¯Ø«Ø§Øª Ø§Ù„ÙŠÙˆØ²Ø± (ÙƒÙ„ Ø§Ù„Ø´Ø§ØªØ§Øª Ø§Ù„Ù„ÙŠ Ù‡Ùˆ Ø¹Ø¶Ùˆ ÙÙŠÙ‡Ø§)
 // ==========================================
 export const getUserChats = async (userId: string) => {
-  const chats = await Chat.find({ users: userId, isGroup: false })
-    .populate('users', 'fullName avatar status')
+  const chats = await Chat.find({ 
+    users: userId, 
+    isGroup: false,
+    $or: [
+      { hiddenBy: { $exists: false } },
+      { hiddenBy: { $ne: userId } }
+    ]
+  })
+    .populate('users', 'fullName avatar status showOnlineStatus')
     .populate({
       path: 'latestMessage',
       populate: { path: 'senderId', select: 'fullName _id' }
@@ -473,41 +573,192 @@ export const getUserChats = async (userId: string) => {
     .sort('-updatedAt');
 
   const chatsWithUnread = await Promise.all(chats.map(async (chat) => {
+    let latestMsg: any = chat.latestMessage;
+
+    // If the globally stored latest message is hidden for this user, find the true latest visible message
+    if (latestMsg && (latestMsg as any).hiddenFor?.some((id: any) => id.toString() === userId.toString())) {
+      const realLatestMessage = await Message.findOne({
+        chatId: chat._id,
+        $or: [
+          { hiddenFor: { $exists: false } },
+          { hiddenFor: { $size: 0 } },
+          { hiddenFor: { $ne: userId } }
+        ]
+      }).sort({ createdAt: -1 }).populate('senderId', 'fullName _id');
+      
+      latestMsg = realLatestMessage;
+    }
+
     const unreadCount = await Message.countDocuments({
       chatId: chat._id,
       senderId: { $ne: userId },
-      status: { $ne: 'read' }
+      status: { $ne: 'read' },
+      $or: [
+        { hiddenFor: { $exists: false } },
+        { hiddenFor: { $size: 0 } },
+        { hiddenFor: { $ne: userId } }
+      ]
     });
-    return { ...chat.toObject(), unreadCount };
+    const chatObj = chat.toObject();
+    chatObj.latestMessage = latestMsg;
+    chatObj.users = chatObj.users.map((u: any) => u || { 
+      _id: 'deleted', 
+      fullName: 'Deleted User', 
+      avatar: '/default-avatar.png',
+      status: 'offline' 
+    });
+    return { ...chatObj, unreadCount };
   }));
 
   return chatsWithUnread;
 };
 
-export const getSharedContent = async (chatId: string) => {
-  const messages = await Message.find({ chatId });
+export type SharedContentCategory = 'all' | 'media' | 'docs' | 'photos';
+
+export type SharedItem = {
+  id: string;
+  url: string;
+  fileName?: string;
+  messageType: string;
+  createdAt: Date;
+};
+
+function classifySharedMessage(msg: {
+  messageType: string;
+  content?: string;
+  audioUrl?: string;
+  attachments?: { fileUrl?: string; fileType?: string; fileSize?: number }[];
+}): 'photos' | 'docs' | 'media' | null {
+  const att0 = msg.attachments?.[0];
+  const mime = (att0?.fileType || '').toLowerCase();
+  const url = (att0?.fileUrl || msg.content || msg.audioUrl || '').toLowerCase();
+
+  if (msg.messageType === 'image' || mime.startsWith('image/')) return 'photos';
+  if (msg.messageType === 'audio' || mime.startsWith('audio/')) return 'media';
+  if (mime.startsWith('video/') || /\.(mp4|webm|mov|mkv|avi|m4v)(\?|$)/i.test(url)) return 'media';
+
+  if (msg.messageType === 'file') {
+    if (mime.startsWith('image/') || /\.(jpe?g|png|gif|webp)(\?|$)/i.test(url)) return 'photos';
+    if (mime.startsWith('video/') || /\.(mp4|webm|mov)(\?|$)/i.test(url)) return 'media';
+    if (
+      /pdf|msword|word|spreadsheet|excel|powerpoint|text\/plain|zip|rar|octet-stream/.test(mime) ||
+      /\.(pdf|doc|docx|txt|xlsx?|pptx?|zip|rar)(\?|$)/i.test(url)
+    ) {
+      return 'docs';
+    }
+    return 'docs';
+  }
+
+  return null;
+}
+
+function messageToSharedItem(msg: any): SharedItem | null {
+  const url =
+    msg.attachments?.[0]?.fileUrl ||
+    msg.audioUrl ||
+    (typeof msg.content === 'string' && /^https?:\/\//i.test(msg.content) ? msg.content : undefined);
+  if (!url) return null;
+  return {
+    id: String(msg._id),
+    url,
+    fileName: msg.attachments?.[0]?.fileType || (msg.content as string)?.split('/').pop(),
+    messageType: msg.messageType,
+    createdAt: msg.createdAt
+  };
+}
+
+/**
+ * Shared files in a chat for the current user (respects clearStates + hiddenFor).
+ * category=all â†’ legacy buckets { media, files, links }; otherwise { items, category }.
+ */
+export const getSharedContent = async (
+  chatId: string,
+  userId: string,
+  category: SharedContentCategory = 'all'
+): Promise<
+  | { media: any[]; files: any[]; links: any[] }
+  | { items: SharedItem[]; category: SharedContentCategory }
+> => {
+  const chat = await Chat.findById(chatId);
+  if (!chat) throw new AppError('Chat not found', 404);
+
+  const isMember = chat.users.some((u: any) => u.toString() === userId);
+  if (!isMember) throw new AppError('You are not a member of this chat', 403);
+
+  const userOid = new mongoose.Types.ObjectId(userId);
+  const clearEntry = (chat as any).clearStates?.find(
+    (s: { user?: { toString: () => string }; clearedAt?: Date }) => s.user?.toString() === userId
+  );
+
+  const query: Record<string, unknown> = { chatId };
+  const andClauses: Record<string, unknown>[] = [];
+
+  if (clearEntry?.clearedAt) {
+    andClauses.push({ createdAt: { $gt: new Date(clearEntry.clearedAt) } });
+  }
+
+  andClauses.push({
+    $or: [
+      { hiddenFor: { $exists: false } },
+      { hiddenFor: { $size: 0 } },
+      { hiddenFor: { $not: { $elemMatch: { $eq: userOid } } } }
+    ]
+  });
+
+  andClauses.push({ isDeletedForEveryone: { $ne: true } });
+
+  andClauses.push({
+    $or: [
+      { messageType: { $in: ['image', 'file', 'audio'] } },
+      { 'attachments.0': { $exists: true } },
+      { audioUrl: { $exists: true, $nin: [null, ''] } }
+    ]
+  });
+
+  if (andClauses.length) query.$and = andClauses;
+
+  const messages = await Message.find(query).sort({ createdAt: -1 }).limit(400).lean();
+
+  if (category !== 'all') {
+    const items: SharedItem[] = [];
+    for (const msg of messages) {
+      const bucket = classifySharedMessage(msg as any);
+      if (bucket !== category) continue;
+      const item = messageToSharedItem(msg);
+      if (item) items.push(item);
+    }
+    return { items, category };
+  }
+
   const shared = {
     media: [] as any[],
     files: [] as any[],
     links: [] as any[]
   };
 
-  messages.forEach(msg => {
+  messages.forEach((msg: any) => {
     if (msg.messageType === 'image') {
       shared.media.push({ url: msg.content || msg.attachments?.[0]?.fileUrl, createdAt: msg.createdAt });
     } else if (msg.messageType === 'file') {
-      shared.files.push({ url: msg.content || msg.attachments?.[0]?.fileUrl, name: msg.attachments?.[0]?.fileType, createdAt: msg.createdAt });
+      shared.files.push({
+        url: msg.content || msg.attachments?.[0]?.fileUrl,
+        name: msg.attachments?.[0]?.fileType,
+        createdAt: msg.createdAt
+      });
     }
-    
-    // Extract links from text content
-    if (msg.content) {
+    if (msg.messageType === 'audio' && (msg.audioUrl || msg.content)) {
+      shared.media.push({ url: msg.audioUrl || msg.content, createdAt: msg.createdAt });
+    }
+
+    if (msg.content && typeof msg.content === 'string') {
       const urlRegex = /(https?:\/\/[^\s]+)/g;
       const links = msg.content.match(urlRegex);
       if (links) {
-        links.forEach(link => shared.links.push({ url: link, createdAt: msg.createdAt }));
+        links.forEach((link: string) => shared.links.push({ url: link, createdAt: msg.createdAt }));
       }
     }
   });
 
   return shared;
 };
+

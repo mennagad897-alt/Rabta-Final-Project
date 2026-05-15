@@ -115,3 +115,51 @@ export const uploadDocument = multer({
   fileFilter: documentFilter,
   limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit for documents
 });
+
+// ==========================================
+// 📎 إعداد رفع المرفقات العامة (General Attachments)
+// ==========================================
+const attachmentUploadDir = path.join(process.cwd(), 'uploads', 'attachments');
+if (!fs.existsSync(attachmentUploadDir)) {
+  fs.mkdirSync(attachmentUploadDir, { recursive: true });
+}
+
+const attachmentStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, attachmentUploadDir);
+  },
+  filename: (req, file, cb) => {
+    const userId = (req as any).user?._id || 'unknown';
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    const ext = path.extname(file.originalname);
+    cb(null, `attachment-${userId}-${uniqueSuffix}${ext}`);
+  }
+});
+
+const attachmentFilter = (req: any, file: any, cb: any) => {
+  const allowedMimeTypes = [
+    'application/pdf',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'text/plain',
+    'image/jpeg',
+    'image/png',
+    'image/gif',
+    'image/webp',
+    'video/mp4',
+    'video/webm',
+    'video/quicktime'
+  ];
+  
+  if (allowedMimeTypes.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new AppError('Unsupported file type for attachment.', 400), false);
+  }
+};
+
+export const uploadAttachment = multer({
+  storage: attachmentStorage,
+  fileFilter: attachmentFilter,
+  limits: { fileSize: 50 * 1024 * 1024 } // 50MB limit for general attachments including videos
+});

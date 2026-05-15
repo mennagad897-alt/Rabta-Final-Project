@@ -8,6 +8,11 @@ export interface IChat extends Document {
   groupAvatar?: string;
   admins?: mongoose.Types.ObjectId[];
   isPrivate: boolean;
+  mutedBy?: mongoose.Types.ObjectId[];
+  /** Per-user soft clear: messages at/before this time are hidden for that user only */
+  clearStates?: { user: mongoose.Types.ObjectId; clearedAt: Date }[];
+  /** Users who have hidden this chat from their list */
+  hiddenBy?: mongoose.Types.ObjectId[];
   latestMessage?: mongoose.Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
@@ -21,6 +26,12 @@ const ChatSchema: Schema = new Schema({
   groupAvatar: { type: String },
   admins: [{ type: Schema.Types.ObjectId, ref: 'User' }],
   isPrivate: { type: Boolean, default: false },
+  mutedBy: [{ type: Schema.Types.ObjectId, ref: 'User' }],
+  clearStates: [{
+    user: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    clearedAt: { type: Date, required: true }
+  }],
+  hiddenBy: [{ type: Schema.Types.ObjectId, ref: 'User' }],
   latestMessage: { type: Schema.Types.ObjectId, ref: 'Message' }
 }, { timestamps: true });
 

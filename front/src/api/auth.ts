@@ -77,6 +77,22 @@ export const uploadProfilePicture = async (file: File): Promise<{ status: string
 };
 
 /**
+ * دالة تحديث بيانات البروفايل بالكامل
+ */
+export const updateMyProfileData = async (data: any): Promise<any> => {
+  const response = await axiosInstance.patch('/profile/me', data);
+  return response.data.data.user;
+};
+
+/**
+ * دالة جلب بيانات البروفايل الشخصي الكاملة
+ */
+export const fetchMyProfile = async (): Promise<any> => {
+  const response = await axiosInstance.get('/profile/me');
+  return response.data.data.user;
+};
+
+/**
  * دالة تسجيل الخروج
  */
 export const logoutUser = (): void => {

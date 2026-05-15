@@ -34,7 +34,9 @@ export const listJobs = catchAsync(async (req: Request, res: Response) => {
     .skip(skip)
     .limit(limit);
   
-  const jobsForFrontend = jobs.map(job => {
+  const jobsForFrontend = jobs
+    .filter(job => job.publisherId != null)
+    .map(job => {
     const jobObj = job.toObject();
     const publisher = (jobObj.publisherId as any) || {};
     const matchPercentage = Math.floor(Math.random() * 40) + 60;
@@ -154,7 +156,13 @@ export const applyToJob = catchAsync(async (req: Request, res: Response, next: N
   });
 });
 
-export const createJob = catchAsync(async (req: Request, res: Response) => {
+export const createJob = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+  const user = (req as any).user;
+  // Also checking user.isVerifiedEmployer for legacy users without verificationStatus field
+  if (user && user.role === 'employer' && user.verificationStatus !== 'approved' && !user.isVerifiedEmployer) {
+    return next(new AppError('Your account is pending admin approval. You cannot post jobs yet.', 403));
+  }
+
   const publisherId = (req.user as any)._id;
   const job = await Job.create({ ...req.body, publisherId });
 

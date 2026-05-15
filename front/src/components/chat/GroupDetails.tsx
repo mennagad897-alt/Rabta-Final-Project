@@ -1,0 +1,205 @@
+import React, { useState } from 'react';
+import toast from 'react-hot-toast';
+
+interface GroupDetailsProps {
+  chatId: string;
+  chatName: string;
+  isPrivateGroup: boolean;
+  groupMembers: any[];
+  groupAdmins: string[];
+  canAddMembers: boolean;
+  onClose: () => void;
+  onAddMember: () => void;
+  onLeaveGroup: () => void;
+  onSearchClick: () => void;
+  onEditGroup: () => void;
+  isMuted: boolean;
+  onToggleMute: () => void;
+}
+
+export const GroupDetails: React.FC<GroupDetailsProps> = ({
+  chatId,
+  chatName,
+  isPrivateGroup,
+  groupMembers,
+  groupAdmins,
+  canAddMembers,
+  onClose,
+  onAddMember,
+  onLeaveGroup,
+  onSearchClick,
+  onEditGroup,
+  isMuted,
+  onToggleMute
+}) => {
+  const [activeTab, setActiveTab] = useState<'Members' | 'Media' | 'Posts'>('Members');
+
+  return (
+    <div className="flex flex-col h-full">
+      <div className="p-6 pb-4 flex flex-col items-center border-b border-gray-100 dark:border-gray-800 relative shrink-0">
+        <button type="button" onClick={onClose} className="absolute top-4 left-4 text-gray-400 hover:text-red-500 transition-colors">
+          <span className="material-icons">close</span>
+        </button>
+        <h3 className="font-bold text-[#171717] dark:text-[#F5F5F5]">Group Info</h3>
+        <button 
+          onClick={onEditGroup} 
+          className="text-[#7C3AED] hover:text-[#6D28D9] transition-colors mt-2"
+        >
+          <span className="material-icons-round text-xl">edit</span>
+        </button>
+      </div>
+
+      <div className="flex-1 overflow-y-auto hide-scrollbar p-6">
+        <div className="flex flex-col">
+          <div className="flex flex-col items-center mb-6">
+            <div className="relative mb-4">
+              <div className="w-28 h-28 rounded-full bg-linear-to-tr from-[#7C3AED] to-[#ec4899] text-white flex items-center justify-center text-4xl font-bold shadow-lg">
+                G
+              </div>
+              <div className="absolute bottom-1 right-1 w-5 h-5 bg-[#10B981] border-4 border-white dark:border-[#262626] rounded-full"></div>
+            </div>
+            <h3 className="font-bold text-xl text-[#171717] dark:text-[#F5F5F5] text-center mb-1">{chatName}</h3>
+            <p className="text-sm text-gray-500 text-center">
+              {groupMembers?.length || 0} members
+            </p>
+          </div>
+
+          <div className="flex justify-between items-center w-full px-2 mb-8">
+            {canAddMembers && (
+              <div 
+                className="flex flex-col items-center gap-1.5 cursor-pointer hover:opacity-80 transition-opacity"
+                onClick={onAddMember}
+              >
+                <div className="w-12 h-12 rounded-full bg-[#FAFAFA] dark:bg-[#171717] border border-gray-100 dark:border-gray-800 flex items-center justify-center text-[#7C3AED]">
+                  <span className="material-icons-round">person_add</span>
+                </div>
+                <span className="text-xs text-gray-500 font-medium">Add</span>
+              </div>
+            )}
+            
+            <div 
+              className="flex flex-col items-center gap-1.5 cursor-pointer hover:opacity-80 transition-opacity"
+              onClick={() => {
+                onToggleMute();
+                toast.success(isMuted ? "Notifications unmuted" : "Notifications muted");
+              }}
+            >
+              <div className={`w-12 h-12 rounded-full bg-[#FAFAFA] dark:bg-[#171717] border border-gray-100 dark:border-gray-800 flex items-center justify-center ${isMuted ? 'text-[#7C3AED]' : 'text-gray-500 dark:text-gray-400'}`}>
+                <span className="material-icons-round">{isMuted ? 'notifications_off' : 'notifications'}</span>
+              </div>
+              <span className="text-xs text-gray-500 font-medium">{isMuted ? 'Unmute' : 'Mute'}</span>
+            </div>
+            
+            <div 
+              className="flex flex-col items-center gap-1.5 cursor-pointer hover:opacity-80 transition-opacity" 
+              onClick={onSearchClick}
+            >
+              <div className="w-12 h-12 rounded-full bg-[#FAFAFA] dark:bg-[#171717] border border-gray-100 dark:border-gray-800 flex items-center justify-center text-gray-500 dark:text-gray-400">
+                <span className="material-icons-round">search</span>
+              </div>
+              <span className="text-xs text-gray-500 font-medium">Search</span>
+            </div>
+          </div>
+
+          <div className="w-full bg-[#FAFAFA] dark:bg-[#171717] rounded-2xl p-4 mb-4 border border-gray-100 dark:border-gray-800">
+            <h4 className="text-xs font-bold text-[#7C3AED] uppercase tracking-wider mb-2">About</h4>
+            <p className="text-sm text-[#171717] dark:text-[#F5F5F5] leading-relaxed">
+              Welcome to the group!
+            </p>
+          </div>
+
+          {canAddMembers && (
+            <div className="w-full bg-[#FAFAFA] dark:bg-[#171717] rounded-2xl p-4 mb-6 border border-gray-100 dark:border-gray-800">
+              <h4 className="text-xs font-bold text-[#7C3AED] uppercase tracking-wider mb-2">Invite Link</h4>
+              <div className="flex items-center justify-between gap-3 bg-white dark:bg-[#262626] border border-gray-200 dark:border-gray-700 rounded-lg p-2.5">
+                <span className="text-sm text-gray-500 truncate select-all">{`https://rabta.app/g/${chatId}`}</span>
+                <button 
+                  onClick={() => {
+                    navigator.clipboard.writeText(`https://rabta.app/g/${chatId}`);
+                    toast.success("Link copied!");
+                  }}
+                  className="text-[#7C3AED] hover:text-[#6D28D9] shrink-0 transition-colors"
+                >
+                  <span className="material-icons-round text-lg">content_copy</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div className="flex items-center gap-1 bg-[#FAFAFA] dark:bg-[#171717] p-1 rounded-xl mb-4 border border-gray-100 dark:border-gray-800">
+            <button 
+              onClick={() => setActiveTab('Members')}
+              className={`flex-1 py-1.5 text-sm font-medium rounded-lg transition-all ${activeTab === 'Members' ? 'bg-white dark:bg-[#262626] text-[#7C3AED] shadow-sm' : 'text-gray-500 hover:text-[#171717] dark:hover:text-[#F5F5F5]'}`}
+            >
+              Members
+            </button>
+            <button 
+              onClick={() => setActiveTab('Media')}
+              className={`flex-1 py-1.5 text-sm font-medium rounded-lg transition-all ${activeTab === 'Media' ? 'bg-white dark:bg-[#262626] text-[#7C3AED] shadow-sm' : 'text-gray-500 hover:text-[#171717] dark:hover:text-[#F5F5F5]'}`}
+            >
+              Media
+            </button>
+            <button 
+              onClick={() => setActiveTab('Posts')}
+              className={`flex-1 py-1.5 text-sm font-medium rounded-lg transition-all ${activeTab === 'Posts' ? 'bg-white dark:bg-[#262626] text-[#7C3AED] shadow-sm' : 'text-gray-500 hover:text-[#171717] dark:hover:text-[#F5F5F5]'}`}
+            >
+              Posts
+            </button>
+          </div>
+
+          <div className="w-full">
+            {activeTab === 'Members' && (
+              <div className="flex flex-col gap-3">
+                {groupMembers?.length ? groupMembers.map((member, i) => {
+                  const isMemberAdmin = member._id ? (groupAdmins || []).includes(member._id) : false;
+                  const displayName = member.fullName || (typeof member === 'string' ? member : 'Unknown');
+                  return (
+                  <div key={i} className="flex items-center gap-3 p-2 hover:bg-[#FAFAFA] dark:hover:bg-[#171717] rounded-xl cursor-pointer transition-colors">
+                    <div className="w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center font-bold text-gray-500 shrink-0 overflow-hidden">
+                      {member.avatar ? <img src={member.avatar} alt={displayName} className="w-full h-full object-cover" /> : displayName.charAt(0)}
+                    </div>
+                    <div className="flex flex-col flex-1 min-w-0">
+                      <span className="text-sm font-bold text-[#171717] dark:text-[#F5F5F5] truncate">{displayName}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-gray-500">Member</span>
+                        {isMemberAdmin && (
+                          <span className="text-[10px] bg-purple-600/20 text-purple-400 px-2 py-0.5 rounded-full border border-purple-500/30">Admin</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}) : (
+                  <div className="text-center text-sm text-gray-500 py-4">No members to display.</div>
+                )}
+              </div>
+            )}
+
+            {activeTab === 'Media' && (
+              <div className="grid grid-cols-3 gap-2">
+                <div className="aspect-square bg-gray-200 dark:bg-gray-800 rounded-lg"></div>
+                <div className="aspect-square bg-gray-200 dark:bg-gray-800 rounded-lg"></div>
+                <div className="aspect-square bg-gray-200 dark:bg-gray-800 rounded-lg"></div>
+                <div className="aspect-square bg-gray-200 dark:bg-gray-800 rounded-lg"></div>
+              </div>
+            )}
+
+            {activeTab === 'Posts' && (
+              <div className="flex flex-col items-center justify-center py-8 text-gray-400">
+                <span className="material-icons-round text-4xl opacity-20 mb-2">article</span>
+                <p className="text-sm">No posts yet.</p>
+              </div>
+            )}
+          </div>
+          
+          <button
+            onClick={onLeaveGroup}
+            className="mt-8 flex items-center justify-center gap-2 w-full py-3 bg-red-50 dark:bg-red-500/10 text-red-500 rounded-xl hover:bg-red-100 dark:hover:bg-red-500/20 transition-colors font-bold"
+          >
+            <span className="material-icons-round">exit_to_app</span>
+            Leave Group
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};

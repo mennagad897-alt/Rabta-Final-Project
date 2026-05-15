@@ -12,9 +12,11 @@ import {
   sendAudioMessage,
   markMessagesAsRead,
   getSharedContent,
-  clearChatHistory
+  clearChatHistory,
+  toggleMuteChat,
+  sendFileMessage
 } from '../controllers/chat.controller';
-import { uploadAudio } from '../middlewares/upload.middleware';
+import { uploadAudio, uploadAttachment } from '../middlewares/upload.middleware';
 
 const router = Router();
 
@@ -38,6 +40,9 @@ router.post('/:id/send', sendMessage);
 // إرسال رسالة صوتية لشات معين
 router.post('/:id/audio', uploadAudio.single('audio'), sendAudioMessage);
 
+// رفع المرفقات (ملفات/صور) لشات معين
+router.post('/:id/upload', uploadAttachment.single('document'), sendFileMessage);
+
 // تحديد الرسائل كمقروءة
 router.put('/:id/read', markMessagesAsRead);
 
@@ -46,6 +51,9 @@ router.get('/:id/shared', getSharedContent);
 
 // حذف الشات
 router.delete('/:id/clear', clearChatHistory);
+
+// كتم الشات
+router.put('/:id/mute', toggleMuteChat);
 
 // ==========================================
 // 📜 مسار تاريخ الرسائل (History)

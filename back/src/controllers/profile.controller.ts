@@ -22,50 +22,27 @@ export const updateMyProfile = catchAsync(async (req: Request, res: Response, ne
     return next(new AppError('The password, email, or phone number cannot be updated from this path.', 400));
   }
 
-  // 2. نفلتر الداتا عشان الهاكرز ميرفعوش الـ role بتاعهم لـ Admin مثلاً!
-  let normalizedSkills;
+  // 2. نمنع اليوزر يغير الـ role أو بيانات الأمان
+  const updateData = { ...req.body };
+  delete updateData.role;
+  delete updateData.googleId;
+  delete updateData.isVerified;
+  delete updateData.isBanned;
 
   if (req.body.skills && Array.isArray(req.body.skills)) {
-    // ليه بنعمل normalization:
-    // عشان نوحد شكل البيانات في الداتا بيز (كله حروف صغيرة ومن غير مسافات زيادة)
-    // ده بيحسن جداً من كفاءة البحث وبيمنع تكرار نفس المهارة بأشكال مختلفة (مثلاً React و react و  React)
-    const uniqueSkills = [...new Set(
-      req.body.skills.map((skill: string) => skill.toLowerCase().trim())
-    )];
-
-    // ليه حاطين limit:
-    // عشان نحمي الداتا بيز من أحجام البيانات الضخمة (الـ Payload) ونمنع اليوزر إنه يضيف مهارات عشوائية بلا نهاية فده بيحسن الأداء
+    const uniqueSkills = [...new Set(req.body.skills.map((skill: string) => skill.toLowerCase().trim()))];
     if (uniqueSkills.length > 15) {
       return next(new AppError('You cannot add more than 15 skills.', 400));
     }
-    normalizedSkills = uniqueSkills;
+    updateData.skills = uniqueSkills;
   }
 
-  const allowedUpdates: any = {
-    fullName: req.body.fullName,
-    bioHeadline: req.body.bioHeadline,
-    jobTitle: req.body.jobTitle,
-    about: req.body.about,
-    location: req.body.location,
-    skills: normalizedSkills !== undefined ? normalizedSkills : req.body.skills,
-    portfolio: req.body.portfolio,
-    companyName: req.body.companyName,
-    industry: req.body.industry,
-    website: req.body.website,
-    socialLinks: req.body.socialLinks,
-    status: req.body.status,
-    profileComplete: req.body.profileComplete,
-    settings: req.body.settings
-  };
-
-  // تنظيف الأوبجكت من أي قيم undefined عشان منمسحش داتا قديمة
-  Object.keys(allowedUpdates).forEach(key => allowedUpdates[key] === undefined && delete allowedUpdates[key]);
-
   // 3. التحديث في قاعدة البيانات
-  const updatedUser = await User.findByIdAndUpdate((req.user as any)._id, allowedUpdates, {
-    new: true, // يرجع الداتا الجديدة بعد التحديث
-    runValidators: true // يتأكد إن الداتا مطابقة لشروط الـ Schema
-  });
+  const updatedUser = await User.findByIdAndUpdate(
+    (req.user as any)._id,
+    { $set: updateData },
+    { new: true, runValidators: true }
+  );
 
   res.status(200).json({
     status: 'success',
@@ -76,7 +53,9 @@ export const updateMyProfile = catchAsync(async (req: Request, res: Response, ne
 
 // 3. جلب بروفايل مستخدم آخر (عشان لو حد عايز يفتح بروفايل زميله)
 export const getUserProfile = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
-  const user = await User.findById(req.params.id);
+  const user = await User.findById(req.params.id).select(
+    'fullName avatar status aboutMe bioHeadline jobTitle location role companyName industry skills socialLinks featuredProjects links projects isVerified showOnlineStatus phoneNumber email createdAt'
+  );
 
   if (!user) {
     return next(new AppError('This user was not found.', 404));
@@ -169,7 +148,7 @@ export const searchUsers = catchAsync(async (req: Request, res: Response, next: 
   // 3. تنفيذ البحث في قاعدة البيانات
   const users = await User.find(queryObj)
     // حماية: بنحدد الداتا اللي هترجع (ضفنا الإيميل والموبايل عشان الشات يحتاجهم)
-    .select('fullName avatar jobTitle email phoneNumber skills bio companyName status role') 
+    .select('fullName avatar jobTitle email phoneNumber skills bio companyName status role')
     .skip(skip)
     .limit(limit)
     .sort('-createdAt'); // ترتيب من الأحدث للأقدم
@@ -199,7 +178,7 @@ export const requestVerification = catchAsync(async (req: Request, res: Response
 
   const updatedUser = await User.findByIdAndUpdate(
     (req.user as any)._id,
-    { verificationLink, isVerified: false }, // Set to false explicitly in case they submit a new link
+    { $set: { verificationLink, verificationStatus: 'pending', isVerified: false, rejectionReason: '' } },
     { new: true, runValidators: true }
   );
 
@@ -292,9 +271,9 @@ export const toggleSaveFreelancer = catchAsync(async (req: Request, res: Respons
 export const clearSavedItems = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
   const user = req.user as any;
   const updateData = user.role === 'freelancer' ? { savedProjects: [] } : { savedFreelancers: [] };
-  
+
   const updatedUser = await User.findByIdAndUpdate(user._id, { $set: updateData }, { new: true });
-  
+
   res.status(200).json({
     status: 'success',
     message: 'All saved items cleared successfully.',
@@ -347,11 +326,14 @@ export const getMyContacts = catchAsync(async (req: Request, res: Response) => {
   } else {
     // 1. Users in the freelancer's manually added connections
     if (user.connections) {
-      contactIds.push(...user.connections);
+      contactIds.push(...user.connections as mongoose.Types.ObjectId[]);
     }
 
-    // 2. Users they have an existing chat history with
-    const chats = await Chat.find({ users: user._id });
+    // 2. Fallback to chat history: Users they have an existing chat history with
+    const chats = await Chat.find({ 
+      users: user._id,
+      hiddenBy: { $ne: user._id }
+    });
     const chatUsers = chats.flatMap(chat => chat.users)
       .filter(id => id.toString() !== user._id.toString());
     contactIds.push(...chatUsers as mongoose.Types.ObjectId[]);
@@ -361,9 +343,16 @@ export const getMyContacts = catchAsync(async (req: Request, res: Response) => {
   const uniqueIds = Array.from(new Set(contactIds.map(id => id.toString())))
     .filter(id => id !== user._id.toString());
 
-  // Fetch full details for these contacts
-  const contacts = await User.find({ _id: { $in: uniqueIds } })
-    .select('fullName avatar phoneNumber jobTitle status role');
+  const myBlockedUsers = user.blockedUsers || [];
+
+  // Fetch full details for these contacts with Strict Privacy Filters
+  const contacts = await User.find({ 
+    _id: { 
+      $in: uniqueIds,
+      $nin: myBlockedUsers // Do not fetch users I have blocked
+    },
+    blockedUsers: { $ne: user._id } // Do not fetch users who have blocked me (Mutual block check)
+  }).select('fullName avatar phoneNumber jobTitle status role');
 
   res.status(200).json({
     status: 'success',

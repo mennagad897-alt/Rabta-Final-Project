@@ -20,6 +20,7 @@ export const VideoCallRoom = () => {
   const {
     callAccepted, callEnded,
     myVideo, userVideo,
+    remoteAudio,
     leaveCall, stream,
     callType, callerName, calleeName,
     callDuration,
@@ -27,7 +28,7 @@ export const VideoCallRoom = () => {
     isGroupCall, groupPeers
   } = useCall();
 
-  const [isMuted, setIsMuted]         = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
   const [isCameraOff, setIsCameraOff] = useState(false);
 
   if (!callAccepted || callEnded) return null;
@@ -37,9 +38,12 @@ export const VideoCallRoom = () => {
 
   const toggleMute = (e?: React.MouseEvent) => {
     e?.stopPropagation();
+    const newMutedState = !isMuted;
+    setIsMuted(newMutedState);
     if (stream) {
-      const audio = stream.getAudioTracks()[0];
-      if (audio) { audio.enabled = !audio.enabled; setIsMuted(!audio.enabled); }
+      stream.getAudioTracks().forEach(track => {
+        track.enabled = !newMutedState;
+      });
     }
   };
 
@@ -59,12 +63,16 @@ export const VideoCallRoom = () => {
   // ── Minimized (PiP) View ──
   if (isMinimized) {
     return (
-      <div 
+      <div
         onClick={toggleMinimize}
         className="fixed bottom-6 right-6 w-72 h-48 bg-gray-900 rounded-2xl shadow-2xl z-[1000] overflow-hidden border border-white/10 cursor-pointer group hover:ring-2 hover:ring-[#7C3AED] transition-all animate-in slide-in-from-bottom-5"
       >
         {isVoice ? (
           <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-[#171717] to-[#262626]">
+            {/* Remote audio playback (must be autoPlay and NOT muted) */}
+            <audio playsInline autoPlay ref={remoteAudio} className="hidden" />
+            {/* Keep remote stream attached for any video-track cases */}
+            <video playsInline autoPlay ref={userVideo} className="hidden" />
             <div className="w-16 h-16 rounded-full bg-[#7C3AED] flex items-center justify-center text-white text-2xl font-bold shadow-lg animate-pulse">
               {remoteName.charAt(0).toUpperCase()}
             </div>
@@ -97,15 +105,15 @@ export const VideoCallRoom = () => {
   // ── Maximized (Full Screen) View ──
   return (
     <div className="fixed inset-0 z-[1000] bg-black/80 backdrop-blur-md flex flex-col animate-in fade-in zoom-in-95 duration-300">
-      
+
       {/* ── Top bar: timer + remote name + Minimize ── */}
       <div className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between px-6 py-4 bg-gradient-to-b from-black/80 to-transparent">
         <div className="flex flex-col">
           <span className="text-white font-semibold text-lg">{remoteName}</span>
           <span className="text-green-400 font-mono text-sm font-bold tracking-widest">{formatDuration(callDuration)}</span>
         </div>
-        <button 
-          onClick={toggleMinimize} 
+        <button
+          onClick={toggleMinimize}
           className="p-2 rounded-full bg-white/10 text-white hover:bg-white/20 backdrop-blur-md transition-colors flex items-center justify-center"
           title="Minimize Call"
         >
@@ -134,6 +142,10 @@ export const VideoCallRoom = () => {
         ) : isVoice ? (
           // Voice-only UI: large avatar + animated rings
           <div className="flex flex-col items-center gap-6">
+            {/* Remote audio playback (must be autoPlay and NOT muted) */}
+            <audio playsInline autoPlay ref={remoteAudio} className="hidden" />
+            {/* Keep remote stream attached for any video-track cases */}
+            <video playsInline autoPlay ref={userVideo} className="hidden" />
             <div className="relative">
               <div className="absolute -inset-12 rounded-full bg-[#7C3AED]/20 animate-ping" />
               <div className="absolute -inset-6 rounded-full bg-[#7C3AED]/30 animate-pulse" />
@@ -164,9 +176,8 @@ export const VideoCallRoom = () => {
       <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center justify-center gap-6 px-8 py-4 bg-gray-900/80 backdrop-blur-xl border border-white/10 rounded-full shadow-2xl">
         <button
           onClick={toggleMute}
-          className={`w-14 h-14 rounded-full flex items-center justify-center transition-all hover:scale-110 ${
-            isMuted ? 'bg-red-500/20 text-red-400 ring-1 ring-red-500/40' : 'bg-white/10 text-white hover:bg-white/20'
-          }`}
+          className={`w-14 h-14 rounded-full flex items-center justify-center transition-all hover:scale-110 ${isMuted ? 'bg-red-500/20 text-red-400 ring-1 ring-red-500/40' : 'bg-white/10 text-white hover:bg-white/20'
+            }`}
           title={isMuted ? 'Unmute' : 'Mute'}
         >
           <span className="material-icons-round text-2xl">{isMuted ? 'mic_off' : 'mic'}</span>
@@ -183,9 +194,8 @@ export const VideoCallRoom = () => {
         {!isVoice && (
           <button
             onClick={toggleCamera}
-            className={`w-14 h-14 rounded-full flex items-center justify-center transition-all hover:scale-110 ${
-              isCameraOff ? 'bg-red-500/20 text-red-400 ring-1 ring-red-500/40' : 'bg-white/10 text-white hover:bg-white/20'
-            }`}
+            className={`w-14 h-14 rounded-full flex items-center justify-center transition-all hover:scale-110 ${isCameraOff ? 'bg-red-500/20 text-red-400 ring-1 ring-red-500/40' : 'bg-white/10 text-white hover:bg-white/20'
+              }`}
             title={isCameraOff ? 'Turn Camera On' : 'Turn Camera Off'}
           >
             <span className="material-icons-round text-2xl">{isCameraOff ? 'videocam_off' : 'videocam'}</span>

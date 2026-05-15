@@ -23,8 +23,9 @@ import { Privacy } from './pages/Privacy';
 import { JobsBoard } from './pages/JobsBoard';
 import { JobDetails } from './pages/JobDetails';
 import { CallsPage } from './pages/CallsPage';
-import { SharedContent } from './pages/SharedContent';
+import { SharedChatRedirect } from './pages/SharedChatRedirect';
 import { NewContact } from './pages/NewContact';
+import { ViewContact } from './pages/ViewContact';
 
 import CreateGroup from './components/Groups/CreateGroup'; 
 import JoinGroup from './components/Groups/JoinGroup';
@@ -54,6 +55,7 @@ import { AdminJobs } from "./pages/admin/AdminJobs";
 import { AdminGroups } from "./pages/admin/AdminGroups";
 import { AdminLogs } from "./pages/admin/AdminLogs";
 import { AddAdmin } from "./pages/admin/AddAdmin";
+import { AdminVerifications } from "./pages/admin/AdminVerifications";
 
 function App() {
   const user = useSelector((state: RootState) => state.auth.user);
@@ -90,12 +92,13 @@ function App() {
         <Route element={<MainLayout />}>
           <Route path="/chats" element={<HomeFeed />} />
           <Route path="/chats/new-contact" element={<NewContact />} />
+          <Route path="/contact/:userId" element={<ViewContact />} />
           <Route path="/groups" element={<GroupsFeed />} />
           <Route path="/groups/:id" element={<GroupDetails />} />
           <Route path="/jobs" element={<JobsBoard />} />
           <Route path="/jobs/:jobId" element={<JobDetails />} />
           <Route path="/calls" element={<CallsPage />} />
-          <Route path="/shared/:id" element={<SharedContent />} />
+          <Route path="/shared/:id" element={<SharedChatRedirect />} />
           
           {/* 👇 المسارات الجديدة للجروبات عشان الزرار يشتغل وميرجعكيش للرئيسية */}
           <Route path="/create-group" element={<CreateGroup />} />
@@ -134,6 +137,7 @@ function App() {
           <Route path="groups" element={<AdminGroups />} />
           <Route path="logs" element={<AdminLogs />} />
           <Route path="add-admin" element={<AddAdmin />} />
+          <Route path="verifications" element={<AdminVerifications />} />
         </Route>
       </Route>
 

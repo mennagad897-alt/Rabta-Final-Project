@@ -11,12 +11,15 @@ export interface IUser extends Document {
   role: 'freelancer' | 'employer' | 'admin';
   profileComplete: boolean;
   isVerified: boolean;
+  verificationStatus?: 'pending' | 'approved' | 'rejected';
+  rejectionReason?: string;
   isBanned?: boolean;
+  blockedUsers?: mongoose.Types.ObjectId[];
   // Common fields
   jobTitle?: string;
   bioHeadline?: string;
   location?: string;
-  about?: string;
+  aboutMe?: string;
   skills?: string[];
   portfolio?: string;
   // Employer specific
@@ -38,6 +41,18 @@ export interface IUser extends Document {
     description: string;
     link: string;
   }>;
+  links?: Array<{
+    id: number;
+    platform: string;
+    url: string;
+  }>;
+  projects?: Array<{
+    id: number;
+    title: string;
+    description: string;
+    viewLink: string;
+    githubLink: string;
+  }>;
   // Privacy & Notifications Settings
   settings: {
     privacy: {
@@ -52,6 +67,7 @@ export interface IUser extends Document {
       inAppSounds: boolean;
     };
   };
+  showOnlineStatus: boolean;
   savedProjects?: mongoose.Types.ObjectId[];
   status: 'online' | 'offline' | 'busy';
   resetPasswordToken?: string;
@@ -117,6 +133,15 @@ const UserSchema: Schema = new Schema({
     type: Boolean,
     default: false
   },
+  verificationStatus: {
+    type: String,
+    enum: ['pending', 'approved', 'rejected'],
+    default: 'pending'
+  },
+  rejectionReason: {
+    type: String,
+    default: ''
+  },
   jobTitle: {
     type: String,
     trim: true
@@ -129,7 +154,7 @@ const UserSchema: Schema = new Schema({
     type: String,
     trim: true
   },
-  about: {
+  aboutMe: {
     type: String,
     trim: true,
     default: ""
@@ -171,6 +196,18 @@ const UserSchema: Schema = new Schema({
     description: { type: String, trim: true },
     link: { type: String, trim: true }
   }],
+  links: [{
+    id: { type: Number },
+    platform: { type: String, trim: true },
+    url: { type: String, trim: true }
+  }],
+  projects: [{
+    id: { type: Number },
+    title: { type: String, trim: true },
+    description: { type: String, trim: true },
+    projectLink: { type: String, trim: true },
+    githubLink: { type: String, trim: true }
+  }],
   settings: {
     privacy: {
       showOnline: { type: Boolean, default: true },
@@ -184,6 +221,7 @@ const UserSchema: Schema = new Schema({
       inAppSounds: { type: Boolean, default: true }
     }
   },
+  showOnlineStatus: { type: Boolean, default: true },
   savedProjects: [{ type: Schema.Types.ObjectId, ref: 'Job' }],
   savedFreelancers: [{ type: Schema.Types.ObjectId, ref: 'User' }],
   connections: [{ type: Schema.Types.ObjectId, ref: 'User' }],

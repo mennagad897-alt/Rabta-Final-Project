@@ -14,6 +14,7 @@ export const getUserCalls = catchAsync(async (req: Request, res: Response, next:
   .populate('caller', 'fullName avatar jobTitle')
   .populate('receiver', 'fullName avatar jobTitle')
   .populate('communityId', 'name profileImage members')
+  .populate('chatId', 'isGroup name')
   .sort({ createdAt: -1 });
 
     res.status(200).json({

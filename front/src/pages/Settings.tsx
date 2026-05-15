@@ -73,51 +73,51 @@ export const Settings = () => {
 
   return (
     <div className="flex-1 flex flex-col relative bg-[#FAFAFA] dark:bg-[#171717] overflow-y-auto transition-colors duration-300">
-      <div className="max-w-2xl mx-auto w-full p-4 md:p-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      
+      <div className="max-w-2xl mx-auto w-full p-4 md:p-8 animate-in fade-in slide-in-from-bottom-4 duration-500 flex-1 flex flex-col">
         
-        <h1 className="text-2xl font-bold mb-8 px-2 text-[#171717] dark:text-[#F5F5F5]">Settings</h1>
+        <h1 className="text-2xl font-bold mb-6 px-2 text-[#171717] dark:text-[#F5F5F5]">Settings</h1>
 
-        {/* Profile Card */}
-        <div onClick={() => navigate('/profile')} className="flex items-center gap-4 p-4 mb-6 bg-white dark:bg-[#262626] rounded-2xl border border-gray-100 dark:border-white/5 cursor-pointer hover:bg-gray-50 dark:hover:bg-white/[0.02] transition-all group">
-        <div className="flex items-center gap-4 p-4 mb-6 bg-white dark:bg-[#262626] rounded-2xl border border-gray-100 dark:border-white/5 cursor-pointer hover:bg-gray-50 dark:hover:bg-white/2 transition-all group">
-          <div className="relative">
-            {user?.avatar ? (
-              <img 
-                src={user.avatar} 
-                className="w-16 h-16 rounded-full border-2 border-[#7C3AED] dark:border-[#8B5CF6] p-0.5 object-cover" 
-                alt="Profile"
-              />
-            ) : (
-              <div className="w-16 h-16 rounded-full border-2 border-[#7C3AED] dark:border-[#8B5CF6] p-0.5 flex items-center justify-center bg-[#FAFAFA] dark:bg-[#171717] text-[#7C3AED] dark:text-[#8B5CF6] font-bold text-xl tracking-wider">
-                {getInitials(user?.fullName)}
-              </div>
-            )}
-            <div className="absolute bottom-0 right-0 w-4 h-4 bg-green-500 border-2 border-white dark:border-[#262626] rounded-full"></div>
+        <div className="flex flex-col gap-6 w-full">
+          
+          {/* Profile Section */}
+          <div 
+            onClick={() => navigate('/profile')} 
+            className="flex items-center gap-4 p-4 bg-white dark:bg-[#262626] rounded-2xl border border-gray-100 dark:border-white/5 cursor-pointer hover:bg-gray-50 dark:hover:bg-white/[0.02] transition-colors shadow-sm w-full"
+          >
+            <div className="relative shrink-0">
+              {user?.avatar ? (
+                <img 
+                  src={user.avatar} 
+                  className="w-16 h-16 rounded-full border-2 border-[#7C3AED] dark:border-[#8B5CF6] p-0.5 object-cover" 
+                  alt="Profile"
+                />
+              ) : (
+                <div className="w-16 h-16 rounded-full border-2 border-[#7C3AED] dark:border-[#8B5CF6] p-0.5 flex items-center justify-center bg-[#FAFAFA] dark:bg-[#171717] text-[#7C3AED] dark:text-[#8B5CF6] font-bold text-xl tracking-wider">
+                  {getInitials(user?.fullName)}
+                </div>
+              )}
+              <div className="absolute bottom-0 right-0 w-4 h-4 bg-green-500 border-2 border-white dark:border-[#262626] rounded-full"></div>
+            </div>
+            <div className="flex-1 min-w-0">
+              <h2 className="text-lg font-bold text-[#171717] dark:text-[#F5F5F5] truncate">{user?.fullName || "Guest User"}</h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400 capitalize truncate">
+                {user?.jobTitle && user?.location 
+                  ? `${user.jobTitle} • ${user.location}`
+                  : user?.jobTitle || user?.location || ""}
+              </p>
+            </div>
+            <span className="text-gray-400">
+              <span className="material-icons-round">chevron_right</span>
+            </span>
           </div>
-          <div className="flex-1">
-            <h2 className="text-lg font-bold text-[#171717] dark:text-[#F5F5F5]">{user?.fullName || "Guest User"}</h2>
-            <p className="text-sm text-gray-500 dark:text-white/40 capitalize">
-              {user?.jobTitle && user?.location 
-                ? `${user.jobTitle} • ${user.location}`
-                : user?.jobTitle 
-                  ? user.jobTitle
-                  : user?.location 
-                    ? user.location
-                    : ""}
-            </p>
-          </div>
-        </div>
-
-        <div className="space-y-4">
           
           {/* Account Section */}
-          <div className="bg-white dark:bg-[#262626] rounded-2xl overflow-hidden border border-gray-100 dark:border-white/5">
-            <div className="p-2 border-b border-gray-50 dark:border-white/5 opacity-40 px-4 py-2 uppercase text-[10px] font-bold tracking-widest text-[#171717] dark:text-[#F5F5F5]">
+          <div className="bg-white dark:bg-[#262626] rounded-2xl overflow-hidden border border-gray-100 dark:border-white/5 shadow-sm">
+            <div className="bg-gray-50 dark:bg-white/[0.02] border-b border-gray-100 dark:border-white/5 px-4 py-3 uppercase text-[10px] font-bold tracking-widest text-gray-500 dark:text-gray-400">
               Account
             </div>
             
-           
-
             <div 
               className="flex items-center gap-4 p-4 hover:bg-gray-50 dark:hover:bg-white/2 cursor-pointer transition-colors"
               onClick={() => navigate('/privacy')}
@@ -127,7 +127,7 @@ export const Settings = () => {
               </div>
               <div className="flex-1">
                 <h4 className="text-sm font-semibold text-[#171717] dark:text-[#F5F5F5]">Privacy</h4>
-                <p className="text-xs text-gray-400">Last seen</p>
+                <p className="text-xs text-gray-400">Last seen, Profile visibility</p>
               </div>
               <span className="text-gray-400">
                 <span className="material-icons-round">chevron_right</span>
@@ -136,8 +136,8 @@ export const Settings = () => {
           </div>
 
           {/* Preferences Section */}
-          <div className="bg-white dark:bg-[#262626] rounded-2xl overflow-hidden border border-gray-100 dark:border-white/5">
-            <div className="p-2 border-b border-gray-50 dark:border-white/5 opacity-40 px-4 py-2 uppercase text-[10px] font-bold tracking-widest text-[#171717] dark:text-[#F5F5F5]">
+          <div className="bg-white dark:bg-[#262626] rounded-2xl overflow-hidden border border-gray-100 dark:border-white/5 shadow-sm">
+            <div className="bg-gray-50 dark:bg-white/[0.02] border-b border-gray-100 dark:border-white/5 px-4 py-3 uppercase text-[10px] font-bold tracking-widest text-gray-500 dark:text-gray-400">
               Preferences
             </div>
 
@@ -193,7 +193,7 @@ export const Settings = () => {
 
           {/* Logout Button */}
           <div 
-            className="flex items-center gap-4 p-4 mt-6 mb-8 bg-red-50 dark:bg-red-900/10 rounded-2xl border border-red-100 dark:border-red-900/30 cursor-pointer hover:bg-red-100 dark:hover:bg-red-900/20 transition-colors"
+            className="flex items-center gap-4 p-4 mt-2 bg-red-50 dark:bg-red-900/10 rounded-2xl border border-red-100 dark:border-red-900/30 cursor-pointer hover:bg-red-100 dark:hover:bg-red-900/20 transition-colors shadow-sm w-full"
             onClick={handleLogout}
           >
             <div className="w-10 h-10 rounded-xl bg-red-100 dark:bg-red-900/30 flex items-center justify-center text-red-600 dark:text-red-400">
@@ -205,14 +205,13 @@ export const Settings = () => {
             </div>
           </div>
 
-          {/* App version — subtle footer beneath logout */}
-          <p className="text-xs text-gray-500 text-center mt-6 w-full mb-8">
+          {/* App version */}
+          <p className="text-xs text-gray-500 text-center w-full pb-8 pt-4">
             Rabta for ITI Community • Version 1.0.0
           </p>
 
         </div>
       </div>
-    </div>
     </div>
   );
 };

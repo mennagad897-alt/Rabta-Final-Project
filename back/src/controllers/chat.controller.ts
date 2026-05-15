@@ -2,6 +2,11 @@ import { Request, Response, NextFunction } from 'express';
 import { catchAsync } from '../utils/catchAsync';
 import { AppError } from '../utils/AppError';
 import * as chatService from '../services/chat.service';
+import Message from '../models/Message';
+import Chat from '../models/chat';
+import fs from 'fs';
+import path from 'path';
+import { isUserOnline } from '../server';
 
 // ==========================================
 // 💬 كنترولر الشات والرسائل والجروبات والمجتمعات
@@ -49,6 +54,12 @@ export const accessChat = catchAsync(async (req: Request, res: Response, next: N
 
   const chat = await chatService.accessOrCreateChat(currentUserId, userId);
 
+  const io = req.app.get('io');
+  if (io) {
+    // Explicitly emit ONLY to the specific users involved (Targeted Emits)
+    io.to(currentUserId).to(userId).emit('newChatCreated', chat);
+  }
+
   res.status(200).json({
     status: 'success',
     data: { chat }
@@ -81,6 +92,14 @@ export const createGroup = catchAsync(async (req: Request, res: Response, next: 
   }
 
   const groupChat = await chatService.createGroupChat(adminId, groupName, members, isPrivate);
+
+  const io = req.app.get('io');
+  if (io && groupChat && groupChat.users) {
+    // Explicitly emit ONLY to the specific members of the new group
+    groupChat.users.forEach((user: any) => {
+      io.to(user._id.toString()).emit('newChatCreated', groupChat);
+    });
+  }
 
   res.status(201).json({
     status: 'success',
@@ -263,25 +282,50 @@ export const getCommunity = catchAsync(async (req: Request, res: Response, next:
 });
 
 export const sendMessage = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
-  const { content, type } = req.body;
+  const { content, type, replyTo, isForwarded, audioUrl, duration, attachments } = req.body;
   const id = req.params.id as string;
   const senderId = (req.user as any)._id.toString();
+  const chat = await Chat.findById(id).select('users');
+  const recipientId = chat?.users?.find((u: any) => u.toString() !== senderId)?.toString();
+  const initialStatus: 'sent' | 'delivered' = recipientId && isUserOnline(recipientId) ? 'delivered' : 'sent';
 
-  const message = await chatService.createMessage({
-    chatId: id,
-    senderId,
-    content,
-    messageType: type || 'text'
-  });
+  let savedMsg;
+  try {
+    // createMessage persists to DB (await save) before returning
+    savedMsg = await chatService.createMessage({
+      chatId: id,
+      senderId,
+      content,
+      messageType: type || 'text',
+      replyTo,
+      isForwarded,
+      audioUrl,
+      duration,
+      attachments,
+      status: initialStatus
+    });
+  } catch (error) {
+    console.error('Validation Error in sendMessage:', error);
+    throw error;
+  }
 
   // Retrieve io from Express app to avoid circular dependencies
   const io = req.app.get('io');
   // Emit the message in real-time to everyone in the chat room
-  io.to(id).emit('receive-message', message);
+  io.to(id).emit('receiveMessage', savedMsg);
+  io.to(id).emit('receive-message', savedMsg);
+  
+  if (initialStatus === 'delivered') {
+    io.to(senderId).emit('messageDelivered', {
+      chatId: id,
+      messageId: (savedMsg as any)._id?.toString?.() || (savedMsg as any)._id,
+      status: 'delivered'
+    });
+  }
 
   res.status(201).json({
     status: 'success',
-    data: { message }
+    data: { message: savedMsg }
   });
 });
 
@@ -296,16 +340,73 @@ export const sendAudioMessage = catchAsync(async (req: Request, res: Response, n
   // Construct URL for the uploaded file
   const audioUrl = `/uploads/audio/${req.file.filename}`;
 
-  const message = await chatService.createMessage({
-    chatId: id,
-    senderId,
-    content: audioUrl,
-    messageType: 'audio'
-  });
+  let message;
+  try {
+    message = await chatService.createMessage({
+      chatId: id,
+      senderId,
+      content: audioUrl, // Keep for backward compatibility
+      audioUrl: audioUrl,
+      messageType: 'audio',
+      replyTo: req.body.replyTo
+    });
+  } catch (error) {
+    console.error('Validation Error in sendAudioMessage:', error);
+    throw error;
+  }
 
   // Retrieve io from Express app
   const io = req.app.get('io');
   // Emit the message in real-time
+  io.to(id).emit('receiveMessage', message);
+  io.to(id).emit('receive-message', message);
+
+  res.status(201).json({
+    status: 'success',
+    data: { message }
+  });
+});
+
+export const sendFileMessage = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+  const id = req.params.id as string;
+  const senderId = (req.user as any)._id.toString();
+
+  if (!req.file) {
+    return next(new AppError('File attachment is required', 400));
+  }
+
+  // Construct URL for the uploaded file
+  const fileUrl = `/uploads/attachments/${req.file.filename}`;
+  
+  // Determine if it's an image, video, or generic document based on mimetype
+  let messageType = 'file';
+  if (req.file.mimetype.startsWith('image/')) {
+    messageType = 'image';
+  } else if (req.file.mimetype.startsWith('video/')) {
+    messageType = 'video';
+  }
+
+  let message;
+  try {
+    message = await chatService.createMessage({
+      chatId: id,
+      senderId,
+      content: '', // DO NOT save the file path in plain text content
+      messageType,
+      replyTo: req.body.replyTo,
+      attachments: [{
+        fileUrl: fileUrl,
+        fileType: req.file.mimetype,
+        fileSize: req.file.size
+      }]
+    });
+  } catch (error) {
+    console.error('Validation Error in sendFileMessage:', error);
+    throw error;
+  }
+
+  const io = req.app.get('io');
+  io.to(id).emit('receiveMessage', message);
   io.to(id).emit('receive-message', message);
 
   res.status(201).json({
@@ -316,25 +417,25 @@ export const sendAudioMessage = catchAsync(async (req: Request, res: Response, n
 
 export const markMessagesAsRead = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
   const { id } = req.params; // chatId
-  const userId = (req.user as any)._id.toString();
+  const currentUserId = (req.user as any)._id; // Maintain as ObjectId
 
   // Find all unread messages in this chat sent by the OTHER person
   await require('../models/Message').default.updateMany(
     { 
       chatId: id, 
-      senderId: { $ne: userId },
+      senderId: { $ne: currentUserId },
       status: { $ne: 'read' }
     },
     { 
       $set: { status: 'read' },
-      $addToSet: { readBy: userId }
+      $addToSet: { readBy: currentUserId }
     }
   );
 
   // Retrieve io from Express app
   const io = req.app.get('io');
   // Emit the event to the chat room to update UI instantly
-  io.to(id).emit('messages-read', { chatId: id, readBy: userId });
+  io.to(id).emit('messages-read', { chatId: id, readBy: currentUserId.toString() });
 
   res.status(200).json({
     status: 'success',
@@ -344,27 +445,123 @@ export const markMessagesAsRead = catchAsync(async (req: Request, res: Response,
 
 export const getSharedContent = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
   const id = req.params.id as string;
-  const shared = await chatService.getSharedContent(id);
+  const userId = (req.user as any)._id.toString();
+  const raw = (req.query.category as string) || 'all';
+  const category = (['all', 'media', 'docs', 'photos'].includes(raw) ? raw : 'all') as 'all' | 'media' | 'docs' | 'photos';
+
+  const result = await chatService.getSharedContent(id, userId, category);
+
+  if ('items' in result) {
+    res.status(200).json({
+      status: 'success',
+      data: { items: result.items, category: result.category }
+    });
+    return;
+  }
 
   res.status(200).json({
     status: 'success',
-    data: { shared }
+    data: { shared: result }
   });
 });
 
 export const clearChatHistory = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
   const { id } = req.params;
-  const userId = (req.user as any)._id.toString();
+  const userId = (req.user as any)._id;
 
-  // Optionally verify user is in the chat
-  
-  // Here we just delete all messages with that chatId
-  // In a real production app, we might soft-delete or clear only for this user
-  await require('../models/Message').default.deleteMany({ chatId: id });
+  const chat = await Chat.findById(id);
+  if (!chat) {
+    return next(new AppError('Chat not found', 404));
+  }
+
+  const isMember = chat.users.some((u: any) => u.toString() === userId.toString());
+  if (!isMember) {
+    return next(new AppError('You are not a member of this chat', 403));
+  }
+
+  // Hide the chat from the sidebar instead of deleting messages
+  await Chat.findByIdAndUpdate(
+    id,
+    { $addToSet: { hiddenBy: userId } },
+    { new: true }
+  );
+
+  // Emit a real-time event to the specific user's socket room to update their UI
+  const io = req.app.get('io');
+  if (io) {
+    io.to(userId.toString()).emit('chatCleared', { chatId: id });
+  }
 
   res.status(200).json({
     status: 'success',
-    message: 'Chat cleared successfully'
+    message: 'Chat history deleted successfully'
+  });
+});
+
+// ==========================================
+// 🔇 Toggle Mute Chat
+// PUT /api/v1/chats/:id/mute
+// ==========================================
+export const toggleMuteChat = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+  const { id } = req.params;
+  const userId = (req.user as any)._id;
+
+  const chat = await Chat.findById(id);
+  if (!chat) {
+    return next(new AppError('Chat not found', 404));
+  }
+
+  // Initialize array if it doesn't exist
+  if (!chat.mutedBy) {
+    chat.mutedBy = [];
+  }
+
+  const isMuted = chat.mutedBy.includes(userId);
+
+  if (isMuted) {
+    // Unmute
+    chat.mutedBy = chat.mutedBy.filter((uId: any) => uId.toString() !== userId.toString());
+  } else {
+    // Mute
+    chat.mutedBy.push(userId);
+  }
+
+  await chat.save();
+
+  res.status(200).json({
+    status: 'success',
+    isMuted: !isMuted,
+    message: isMuted ? 'Chat unmuted' : 'Chat muted'
+  });
+});
+
+// ==========================================
+// 🔍 Block relation (for chat UI)
+// GET /api/v1/users/block-relation/:userId
+// ==========================================
+export const getBlockRelation = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+  const { User } = require('../models/user');
+  const me = (req.user as any)._id.toString();
+  const other = req.params.userId;
+
+  if (me === other) {
+    return res.status(200).json({
+      status: 'success',
+      data: { blockedByMe: false, blockedMe: false }
+    });
+  }
+
+  const [a, b] = await Promise.all([
+    User.findById(me).select('blockedUsers'),
+    User.findById(other).select('blockedUsers')
+  ]);
+
+  const blockedByMe = !!(a?.blockedUsers?.some((id: any) => id.toString() === other));
+  const blockedMe = !!(b?.blockedUsers?.some((id: any) => id.toString() === me));
+
+  res.status(200).json({
+    status: 'success',
+    data: { blockedByMe, blockedMe }
   });
 });
 
@@ -394,11 +591,23 @@ export const toggleBlockUser = catchAsync(async (req: Request, res: Response, ne
       (id: any) => id.toString() !== targetUserId
     );
     await currentUser.save({ validateBeforeSave: false });
+
+    const io = req.app.get('io');
+    if (io) {
+      io.to(targetUserId).emit('block-status-changed', { blockerId: currentUserId, blocked: false });
+    }
+
     return res.status(200).json({ status: 'success', message: 'User unblocked.' });
   } else {
     // Block
     currentUser.blockedUsers = [...(currentUser.blockedUsers || []), targetUserId];
     await currentUser.save({ validateBeforeSave: false });
+
+    const io = req.app.get('io');
+    if (io) {
+      io.to(targetUserId).emit('block-status-changed', { blockerId: currentUserId, blocked: true });
+    }
+
     return res.status(200).json({ status: 'success', message: 'User blocked.' });
   }
 });
@@ -452,4 +661,138 @@ export const sendFriendRequest = catchAsync(async (req: Request, res: Response, 
     status: 'success',
     message: 'Friend request sent successfully.'
   });
+});
+
+// ==========================================
+// 🗑️ Delete a Message
+// DELETE /api/v1/messages/:id
+// ==========================================
+export const deleteMessage = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+  const { id } = req.params;
+  const { type } = req.body; // 'me' or 'everyone'
+  const userId = (req.user as any)._id.toString();
+
+  const message = await Message.findById(id);
+  if (!message) return next(new AppError('Message not found', 404));
+
+  if (type === 'everyone') {
+    if (message.senderId.toString() !== userId) {
+      return next(new AppError('You can only delete your own messages for everyone', 403));
+    }
+    
+    // Delete associated files from disk
+    try {
+      if (message.audioUrl) {
+        const filePath = path.join(__dirname, '..', '..', message.audioUrl);
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      }
+      if (message.attachments && message.attachments.length > 0) {
+        message.attachments.forEach(att => {
+          if (att.fileUrl) {
+            const filePath = path.join(__dirname, '..', '..', att.fileUrl);
+            if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+          }
+        });
+      }
+    } catch (err) {
+      console.error("Failed to delete files from disk:", err);
+    }
+
+    await message.deleteOne();
+
+    const io = req.app.get('io');
+    io.to(message.chatId.toString()).emit('messageDeleted', { messageId: id, type: 'everyone' });
+  } else {
+    // Delete for me
+    if (!message.hiddenFor.includes(userId as any)) {
+      message.hiddenFor.push(userId as any);
+      await message.save();
+    }
+  }
+
+  res.status(200).json({ status: 'success', message: 'Message deleted successfully' });
+});
+
+// ==========================================
+// ✏️ Edit a Message
+// PUT /api/v1/messages/:id/edit
+// ==========================================
+export const editMessage = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+  const { id } = req.params;
+  const { content } = req.body;
+  const userId = (req.user as any)._id.toString();
+
+  const message = await Message.findById(id);
+  if (!message) return next(new AppError('Message not found', 404));
+
+  if (message.senderId.toString() !== userId) {
+    return next(new AppError('You can only edit your own messages', 403));
+  }
+
+  if (message.messageType !== 'text') {
+    return next(new AppError('Only text messages can be edited', 400));
+  }
+
+  if (message.isDeletedForEveryone) {
+    return next(new AppError('Cannot edit a deleted message', 400));
+  }
+
+  message.content = content;
+  message.isEdited = true;
+  await message.save();
+
+  const io = req.app.get('io');
+  io.to(message.chatId.toString()).emit('messageEdited', { messageId: id, content: content });
+
+  res.status(200).json({ status: 'success', data: { message } });
+});
+
+// ==========================================
+// 📌 Toggle Pin Message
+// PUT /api/v1/messages/:id/pin
+// ==========================================
+export const togglePinMessage = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+  const { id } = req.params;
+  const message = await Message.findById(id);
+  if (!message) return next(new AppError('Message not found', 404));
+
+  message.isPinned = !message.isPinned;
+  await message.save();
+
+  const io = req.app.get('io');
+  io.to(message.chatId.toString()).emit('messagePinned', { messageId: id, isPinned: message.isPinned });
+
+  res.status(200).json({ status: 'success', data: { isPinned: message.isPinned } });
+});
+
+// ==========================================
+// 😂 React to Message
+// POST /api/v1/messages/:id/react
+// ==========================================
+export const reactToMessage = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+  const { id } = req.params;
+  const { emoji } = req.body;
+  const userId = (req.user as any)._id;
+
+  const message = await Message.findById(id);
+  if (!message) return next(new AppError('Message not found', 404));
+
+  const existingReactionIndex = message.reactions.findIndex(
+    r => r.userId.toString() === userId.toString() && r.emoji === emoji
+  );
+
+  if (existingReactionIndex > -1) {
+    // If same user clicks same emoji, remove it (toggle)
+    message.reactions.splice(existingReactionIndex, 1);
+  } else {
+    // Add the new reaction
+    message.reactions.push({ userId, emoji });
+  }
+
+  await message.save();
+
+  const io = req.app.get('io');
+  io.to(message.chatId.toString()).emit('messageReacted', { messageId: id, reactions: message.reactions });
+
+  res.status(200).json({ status: 'success', data: { reactions: message.reactions } });
 });
