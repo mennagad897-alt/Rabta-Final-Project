@@ -398,9 +398,11 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       }));
     };
 
-    const handleMessagesRead = ({ chatId }: { chatId: string }) => {
+    const handleMessagesRead = ({ chatId, readBy }: { chatId: string; readBy?: string }) => {
       if (!setMessages) return;
       if (String(chatId) !== String(activeChatId)) return;
+      // Ignore when we marked incoming messages read — only the other party reading our sends updates ticks
+      if (readBy && String(readBy) === String(currentUser._id)) return;
       setMessages((prev) => prev.map((m) => (
         m.isMine ? { ...m, status: 'read', isPending: false } : m
       )));
@@ -431,11 +433,11 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   useEffect(() => {
     if (!socket || !activeChatId || !messages.length) return;
     if (document.visibilityState !== 'visible' || !document.hasFocus()) return;
-    const lastMessage = messages[messages.length - 1];
-    if (!lastMessage || lastMessage.isMine) return;
+    const hasUnreadFromOther = messages.some((m) => !m.isMine && m.status !== 'read');
+    if (!hasUnreadFromOther) return;
     socket.emit('markAsRead', { chatId: activeChatId, userId: currentUser._id });
-  }, [socket, activeChatId, messages, currentUser._id]);
-
+  }, [socket, setMessages, activeChatId, currentUser._id]);
+  
   const handleRecordingComplete = (blob: Blob, durationSeconds: number) => {
     setVoiceBlob(blob);
     setVoiceDuration(durationSeconds);

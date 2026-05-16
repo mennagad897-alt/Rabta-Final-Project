@@ -417,26 +417,33 @@ export const sendFileMessage = catchAsync(async (req: Request, res: Response, ne
 
 export const markMessagesAsRead = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
   const { id } = req.params; // chatId
-  const currentUserId = (req.user as any)._id; // Maintain as ObjectId
-
+  const currentUserId = (req.user as any)._id;
   // Find all unread messages in this chat sent by the OTHER person
-  await require('../models/Message').default.updateMany(
-    { 
-      chatId: id, 
+  // Only mark incoming messages as read — never the current user's own sends
+  const result = await Message.updateMany(
+    {
+      chatId: id,
       senderId: { $ne: currentUserId },
-      status: { $ne: 'read' }
-    },
+      status: { $ne: 'read' },    },
     { 
       $set: { status: 'read' },
-      $addToSet: { readBy: currentUserId }
+      $addToSet: { readBy: currentUserId },
     }
   );
 
-  // Retrieve io from Express app
   const io = req.app.get('io');
   // Emit the event to the chat room to update UI instantly
-  io.to(id).emit('messages-read', { chatId: id, readBy: currentUserId.toString() });
-
+  if (io && result.modifiedCount > 0) {
+    const chat = await Chat.findById(id).select('users');
+    const readByStr = currentUserId.toString();
+    // Notify message senders only (not the reader) so their ticks update
+    chat?.users?.forEach((userId: any) => {
+      const uid = userId.toString();
+      if (uid !== readByStr) {
+        io.to(uid).emit('messages-read', { chatId: id, readBy: readByStr });
+      }
+    });
+  }
   res.status(200).json({
     status: 'success',
     message: 'Messages marked as read'

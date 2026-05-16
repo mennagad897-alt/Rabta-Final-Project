@@ -131,7 +131,9 @@ export const HomeFeed = () => {
         const sortedMessages = [...response.data.data.messages].sort((a: any, b: any) =>
           new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
         );
-        const formatted = sortedMessages.map((m: { _id: string; messageType: string; content: string; createdAt: string; senderId: { _id?: string } | string; duration?: number; isDeletedForEveryone?: boolean; isEdited?: boolean; isPinned?: boolean; reactions?: any[]; attachments?: any[]; replyTo?: any }) => ({
+        const formatted = sortedMessages.map((m: { _id: string; messageType: string; content: string; createdAt: string; senderId: { _id?: string } | string; status?: MessageType['status']; duration?: number; isDeletedForEveryone?: boolean; isEdited?: boolean; isPinned?: boolean; reactions?: any[]; attachments?: any[]; replyTo?: any }) => {
+          const isMine = (typeof m.senderId === 'string' ? m.senderId : m.senderId._id) === currentUser._id;
+          return {
           id: m._id,
           type: (['text', 'audio', 'file', 'image', 'video'].includes(m.messageType) ? m.messageType : (m.content?.endsWith('.webm') ? 'audio' : 'text')) as 'text' | 'audio' | 'file' | 'image' | 'video' | 'call_summary',
           content: m.content,
@@ -145,8 +147,10 @@ export const HomeFeed = () => {
           reactions: m.reactions || [],
           replyTo: m.replyTo,
           time: new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          isMine: (typeof m.senderId === 'string' ? m.senderId : m.senderId._id) === currentUser._id
-        }));
+          isMine,
+          status: m.status || (isMine ? 'sent' : undefined),
+        };
+        });
         if (String(targetChatId) === String(activeChatId)) {
           setMessages(formatted);
         }
@@ -200,12 +204,14 @@ export const HomeFeed = () => {
       upsertChatPreview(chatId, incoming);
     };
 
-    const handleStatusUpdate = (payload: { chatId: string; status: 'delivered' | 'read' }) => {
+    const handleStatusUpdate = (payload: { chatId: string; status: 'delivered' | 'read'; readBy?: string }) => {
       if (!payload?.chatId) return;
-      setChats((prev) => prev.map((chat) => String(chat._id) === String(payload.chatId)
-        ? { ...chat, lastMessageStatus: payload.status }
-        : chat
-      ));
+      setChats((prev) => prev.map((chat) => {
+        if (String(chat._id) !== String(payload.chatId)) return chat;
+        if (!chat.lastMessageIsMine) return chat;
+        if (payload.readBy && String(payload.readBy) === String(currentUserId)) return chat;
+        return { ...chat, lastMessageStatus: payload.status };
+      }));
     };
 
     socket.on('receiveMessage', handleRealtimeMessage);
@@ -217,18 +223,16 @@ export const HomeFeed = () => {
         : chat
       ));
     });
-    socket.on('messagesRead', ({ chatId }: { chatId: string }) => {
-      setChats((prev) => prev.map((chat) => String(chat._id) === String(chatId)
-        ? { ...chat, lastMessageStatus: 'read' }
-        : chat
-      ));
-    });
-    socket.on('messages-read', ({ chatId }: { chatId: string }) => {
-      setChats((prev) => prev.map((chat) => String(chat._id) === String(chatId)
-        ? { ...chat, lastMessageStatus: 'read' }
-        : chat
-      ));
-    });
+    const handleMessagesReadPreview = ({ chatId, readBy }: { chatId: string; readBy?: string }) => {
+      setChats((prev) => prev.map((chat) => {
+        if (String(chat._id) !== String(chatId)) return chat;
+        if (!chat.lastMessageIsMine) return chat;
+        if (readBy && String(readBy) === String(currentUserId)) return chat;
+        return { ...chat, lastMessageStatus: 'read' };
+      }));
+    };
+    socket.on('messagesRead', handleMessagesReadPreview);
+    socket.on('messages-read', handleMessagesReadPreview);
 
     socket.on('chatCleared', ({ chatId }: { chatId: string }) => {
       setChats((prev) => prev.filter((chat) => String(chat._id) !== String(chatId)));
@@ -242,8 +246,8 @@ export const HomeFeed = () => {
       socket.off('receive-message', handleRealtimeMessage);
       socket.off('message-status-update', handleStatusUpdate);
       socket.off('messageDelivered');
-      socket.off('messagesRead');
-      socket.off('messages-read');
+      socket.off('messagesRead', handleMessagesReadPreview);
+      socket.off('messages-read', handleMessagesReadPreview);
       socket.off('chatCleared');
     };
   }, [socket, activeChatId, currentUserId]);
