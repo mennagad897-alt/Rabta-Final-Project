@@ -1,19 +1,24 @@
-import mongoose, { Schema, Document } from 'mongoose';
-
+import mongoose, { Schema, Document } from "mongoose";
 
 export interface IMessage extends Document {
   chatId: mongoose.Types.ObjectId;
   senderId: mongoose.Types.ObjectId;
   content?: string;
   audioUrl?: string;
-  messageType: 'text' | 'code_snippet' | 'image' | 'file' | 'audio' | 'call_summary';
+  messageType:
+    | "text"
+    | "code_snippet"
+    | "image"
+    | "file"
+    | "audio"
+    | "call_summary";
   attachments?: {
     fileUrl: string;
     fileType: string;
     fileSize: number;
   }[];
   readBy?: mongoose.Types.ObjectId[];
-  status: 'sending' | 'sent' | 'delivered' | 'read';
+  status: "sending" | "sent" | "delivered" | "read";
   isEdited: boolean;
   isDeletedForEveryone: boolean;
   hiddenFor: mongoose.Types.ObjectId[];
@@ -25,40 +30,49 @@ export interface IMessage extends Document {
     userId: mongoose.Types.ObjectId;
     emoji: string;
   }[];
-  signal: 'high' | 'low' | 'noise';
   createdAt: Date;
   updatedAt: Date;
 }
 
-const MessageSchema: Schema = new Schema({
-  chatId: { type: Schema.Types.ObjectId, ref: 'Chat', required: true },
-  senderId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-  content: { type: String },
-  audioUrl: { type: String },
-  messageType: { 
-    type: String, 
-    enum: ['text', 'code_snippet', 'image', 'file', 'audio', 'call_summary'], 
-    default: 'text' 
+const MessageSchema: Schema = new Schema(
+  {
+    chatId: { type: Schema.Types.ObjectId, ref: "Chat", required: true },
+    senderId: { type: Schema.Types.ObjectId, ref: "User", required: true },
+    content: { type: String },
+    audioUrl: { type: String },
+    messageType: {
+      type: String,
+      enum: ["text", "code_snippet", "image", "file", "audio", "call_summary"],
+      default: "text",
+    },
+    attachments: [
+      {
+        fileUrl: String,
+        fileType: String,
+        fileSize: Number,
+      },
+    ],
+    readBy: [{ type: Schema.Types.ObjectId, ref: "User" }],
+    status: {
+      type: String,
+      enum: ["sending", "sent", "delivered", "read"],
+      default: "sent",
+    },
+    isEdited: { type: Boolean, default: false },
+    isDeletedForEveryone: { type: Boolean, default: false },
+    hiddenFor: [{ type: Schema.Types.ObjectId, ref: "User" }],
+    duration: { type: Number },
+    isPinned: { type: Boolean, default: false },
+    isForwarded: { type: Boolean, default: false },
+    replyTo: { type: Schema.Types.ObjectId, ref: "Message" },
+    reactions: [
+      {
+        userId: { type: Schema.Types.ObjectId, ref: "User" },
+        emoji: String,
+      },
+    ],
   },
-  attachments: [{
-    fileUrl: String,
-    fileType: String,
-    fileSize: Number
-  }],
-  readBy: [{ type: Schema.Types.ObjectId, ref: 'User' }],
-  status: { type: String, enum: ['sending', 'sent', 'delivered', 'read'], default: 'sent' },
-  isEdited: { type: Boolean, default: false },
-  isDeletedForEveryone: { type: Boolean, default: false },
-  hiddenFor: [{ type: Schema.Types.ObjectId, ref: 'User' }],
-  duration: { type: Number },
-  isPinned: { type: Boolean, default: false },
-  isForwarded: { type: Boolean, default: false },
-  replyTo: { type: Schema.Types.ObjectId, ref: 'Message' },
-  reactions: [{
-    userId: { type: Schema.Types.ObjectId, ref: 'User' },
-    emoji: String
-  }],
-  signal: { type: String, enum: ['high', 'low', 'noise'], default: 'low' }
-}, { timestamps: true });
+  { timestamps: true },
+);
 
-export default mongoose.model<IMessage>('Message', MessageSchema);
+export default mongoose.model<IMessage>("Message", MessageSchema);

@@ -96,9 +96,6 @@ export const createMessage = async (data: {
     throw new AppError("You cannot interact with this user.", 403);
   }
 
-  // Ø¥Ù†Ø´Ø§Ø¡ Ø§Ù„Ø±Ø³Ø§Ù„Ø© ÙÙŠ Ø§Ù„Ø¯Ø§ØªØ§ Ø¨ÙŠØ²
-  const signal = aiService.analyzeSignal(data.content || "");
-
   const newMessage = new Message({
     chatId: data.chatId,
     senderId: data.senderId,
@@ -110,14 +107,8 @@ export const createMessage = async (data: {
     attachments: data.attachments || [],
     replyTo: data.replyTo,
     isForwarded: data.isForwarded || false,
-    signal,
   });
   await newMessage.save();
-
-  // Extract tasks in background
-  aiService
-    .extractTasks(newMessage)
-    .catch((err) => console.error("AI Extraction Error:", err));
 
   // ØªØ­Ø¯ÙŠØ« Ø¢Ø®Ø± Ø±Ø³Ø§Ù„Ø© ÙÙŠ Ø§Ù„Ø´Ø§Øª Ø¹Ø´Ø§Ù† Ø§Ù„ÙØ±ÙˆÙ†Øª Ø¥Ù†Ø¯ ÙŠØ¹Ø±Ø¶Ù‡Ø§ ÙÙŠ Ù‚Ø§Ø¦Ù…Ø© Ø§Ù„Ù…Ø­Ø§Ø¯Ø«Ø§Øª
   await Chat.findByIdAndUpdate(data.chatId, { latestMessage: newMessage._id });
