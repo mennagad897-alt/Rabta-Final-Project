@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import axiosInstance from '../api/axiosInstance';
 import toast from 'react-hot-toast';
 import { AiAssistant } from '../components/shared/AiAssistant';
-import { ChatWindow } from '../components/chat/ChatWindow';
+import { ChatWindow, type MessageType } from '../components/chat/ChatWindow';
 import { SharedMediaSidePanel } from '../components/chat/SharedMediaSidePanel';
 
 interface Community {
@@ -19,6 +19,13 @@ interface Community {
   unreadCount?: number;
 }
 
+const resolveCommunityChatId = (community: Community): string | null => {
+  const chatId = community.chatId;
+  if (!chatId) return null;
+  if (typeof chatId === 'string') return chatId;
+  return chatId._id ?? null;
+};
+
 export const GroupsFeed = () => {
   const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
   const currentUserId = currentUser._id;
@@ -29,6 +36,8 @@ export const GroupsFeed = () => {
   const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
   const [isSideBarOpen, setIsSideBarOpen] = useState(true);
   const [isSharedMediaOpen, setIsSharedMediaOpen] = useState(false);
+  const [messages, setMessages] = useState<MessageType[]>([]);
+  const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const navigate = useNavigate();
 
   // Derived: only allow collapsing when a group is actually selected
@@ -43,6 +52,86 @@ export const GroupsFeed = () => {
   useEffect(() => {
     setIsSharedMediaOpen(false);
   }, [activeGroupId]);
+
+  useEffect(() => {
+    const community = communities.find((c) => c._id === activeGroupId);
+    const chatId = community ? resolveCommunityChatId(community) : null;
+    setActiveChatId(chatId);
+    setMessages([]);
+  }, [activeGroupId, communities]);
+
+  useEffect(() => {
+    if (!activeChatId) return;
+
+    const fetchMessages = async () => {
+      const targetChatId = activeChatId;
+      try {
+        const response = await axiosInstance.get(`/chats/${targetChatId}/messages`);
+        const sortedMessages = [...response.data.data.messages].sort(
+          (a: { createdAt: string }, b: { createdAt: string }) =>
+            new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+        );
+        const formatted: MessageType[] = sortedMessages.map(
+          (m: {
+            _id: string;
+            messageType: string;
+            content: string;
+            createdAt: string;
+            senderId: { _id?: string; fullName?: string } | string;
+            status?: MessageType['status'];
+            duration?: number;
+            isDeletedForEveryone?: boolean;
+            isEdited?: boolean;
+            isPinned?: boolean;
+            reactions?: MessageType['reactions'];
+            attachments?: Array<{ fileUrl?: string; fileType?: string; fileSize?: number }>;
+            replyTo?: MessageType['replyTo'];
+          }) => {
+            const isMine =
+              (typeof m.senderId === 'string' ? m.senderId : m.senderId?._id) === currentUserId;
+            const senderName =
+              typeof m.senderId === 'object' ? m.senderId?.fullName : undefined;
+            return {
+              id: m._id,
+              type: (['text', 'audio', 'file', 'image', 'video'].includes(m.messageType)
+                ? m.messageType
+                : m.content?.endsWith('.webm')
+                  ? 'audio'
+                  : 'text') as MessageType['type'],
+              content: m.content,
+              fileUrl:
+                m.attachments?.[0]?.fileUrl ||
+                (['image', 'video', 'file'].includes(m.messageType) ? m.content : undefined),
+              fileName: m.attachments?.[0]?.fileType || 'Attachment',
+              fileSize: m.attachments?.[0]?.fileSize
+                ? (m.attachments[0].fileSize / 1024 / 1024).toFixed(2) + ' MB'
+                : undefined,
+              duration: m.duration,
+              isDeletedForEveryone: m.isDeletedForEveryone,
+              isEdited: m.isEdited,
+              isPinned: m.isPinned,
+              reactions: m.reactions || [],
+              replyTo: m.replyTo,
+              time: new Date(m.createdAt).toLocaleTimeString([], {
+                hour: '2-digit',
+                minute: '2-digit',
+              }),
+              isMine,
+              status: m.status || (isMine ? 'sent' : undefined),
+              senderName,
+            };
+          }
+        );
+        if (String(targetChatId) === String(activeChatId)) {
+          setMessages(formatted);
+        }
+      } catch {
+        toast.error('Failed to load messages');
+      }
+    };
+
+    fetchMessages();
+  }, [activeChatId, currentUserId]);
   
   const filters = ["All", "Programming", "UI/UX", "Data", "Cyber", "Cloud"];
 
@@ -256,11 +345,12 @@ export const GroupsFeed = () => {
           return (
             <div className="flex flex-1 min-h-0 min-w-0">
             <ChatWindow 
-              chatId={activeCommunity?.chatId?._id || activeCommunity?.chatId || activeGroupId}
+              chatId={activeChatId || resolveCommunityChatId(activeCommunity!) || ''}
               chatName={activeCommunity?.name || "Group Chat"} 
               isOnline={true} 
               isGroup={true}
-              messages={[]} 
+              messages={messages}
+              setMessages={setMessages}
               groupMembers={activeCommunity?.members}
               groupAdmins={activeCommunity?.admins}
               isPrivateGroup={activeCommunity?.isPublic === false}
@@ -269,7 +359,7 @@ export const GroupsFeed = () => {
               onOpenSharedMedia={() => setIsSharedMediaOpen(true)}
             />
             {isSharedMediaOpen && (
-              <SharedMediaSidePanel messages={[]} onClose={() => setIsSharedMediaOpen(false)} />
+              <SharedMediaSidePanel messages={messages} onClose={() => setIsSharedMediaOpen(false)} />
             )}
             </div>
           );

@@ -29,6 +29,7 @@ export type MessageType = {
   reactions?: { userId: string; emoji: string }[];
   replyTo?: any; // To store reference if replied
   isForwarded?: boolean;
+  senderName?: string;
 };
 
 interface ChatWindowProps {
@@ -349,6 +350,11 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       const resolvedType = incomingMsg.messageType || incomingMsg.type || 'text';
       const resolvedContent = incomingMsg.content ?? incomingMsg.text ?? '';
       const createdAt = incomingMsg.createdAt || new Date().toISOString();
+      const senderName =
+        typeof senderRaw === 'object' && senderRaw?.fullName
+          ? senderRaw.fullName
+          : undefined;
+
       const formatted: MessageType = {
         id: incomingMsg._id || incomingMsg.id || `socket-${Date.now()}`,
         type: ['text', 'audio', 'file', 'image', 'video', 'call_summary'].includes(resolvedType) ? resolvedType as MessageType['type'] : 'text',
@@ -359,7 +365,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         time: new Date(createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         isMine: false,
         status: 'delivered',
-        replyTo: incomingMsg.replyTo
+        replyTo: incomingMsg.replyTo,
+        senderName,
       };
 
       // Functional state update avoids stale closure issues
@@ -1055,6 +1062,17 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                   <div className={`text-[10px] text-[#7C3AED] flex items-center gap-1 mb-1 ${msg.isMine ? 'justify-end' : 'justify-start'}`}>
                     <span className="material-icons-round text-[10px]">push_pin</span> Pinned
                   </div>
+                )}
+                {isGroup && !msg.isDeletedForEveryone && (
+                  <span
+                    className={`text-xs font-semibold mb-0.5 px-0.5 ${
+                      msg.isMine
+                        ? 'text-[#7C3AED] dark:text-[#8B5CF6] self-end'
+                        : 'text-gray-500 dark:text-gray-400 self-start'
+                    }`}
+                  >
+                    {msg.isMine ? 'You' : (msg.senderName || 'Member')}
+                  </span>
                 )}
                 {msg.isDeletedForEveryone ? (
                    <div className="bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 italic rounded-xl p-3 text-sm flex items-center gap-2">
