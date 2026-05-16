@@ -446,7 +446,7 @@ export const markMessagesAsRead = catchAsync(async (req: Request, res: Response,
   }
   res.status(200).json({
     status: 'success',
-    message: 'Messages marked as read'
+    message: 'Messages marked as read',
   });
 });
 

@@ -28,7 +28,6 @@ interface ChatsListProps {
   onClose?: () => void;
   onAddContact?: () => void;
   onToggleFocusMode?: () => void;
-  onCloseActiveChat?: () => void;
   onDeleteChat?: (chatId: string) => void;
 }
 
@@ -40,7 +39,6 @@ export const ChatsList: React.FC<ChatsListProps> = ({
   onClose, 
   onAddContact,
   onToggleFocusMode,
-  onCloseActiveChat,
   onDeleteChat
 }) => {
   const navigate = useNavigate();
@@ -90,13 +88,6 @@ export const ChatsList: React.FC<ChatsListProps> = ({
                     >
                       <span className="material-icons-round text-[18px]">fullscreen</span>
                       Focus Mode
-                    </button>
-                    <button 
-                      onClick={() => { setIsMenuOpen(false); onCloseActiveChat?.(); }}
-                      className="w-full text-left px-4 py-2 hover:bg-gray-50 dark:hover:bg-[#171717] text-sm text-[#171717] dark:text-[#F5F5F5] flex items-center gap-3 transition-colors text-red-500 hover:text-red-600"
-                    >
-                      <span className="material-icons-round text-[18px]">close</span>
-                      Close Chat
                     </button>
                   </div>
                 </>

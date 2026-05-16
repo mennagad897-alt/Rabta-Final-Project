@@ -350,7 +350,6 @@ export const HomeFeed = () => {
           setSearchAttempted(false);
         }}
         onToggleFocusMode={() => setIsChatListOpen(false)}
-        onCloseActiveChat={() => setActiveChatId(null)}
         onDeleteChat={handleDeleteChat}
       />
 
@@ -382,6 +381,7 @@ export const HomeFeed = () => {
               setProfileUserId(null);
               setIsChatSearchOpen(false);
             }}
+            onCloseChat={() => setActiveChatId(null)}
           />
           {isSharedMediaOpen ? (
             <SharedMediaSidePanel

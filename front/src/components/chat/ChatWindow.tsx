@@ -53,6 +53,8 @@ interface ChatWindowProps {
   onOpenProfile?: (userId: string) => void;
   /** Open shared media / files / links panel (parent layout; keeps chat context). */
   onOpenSharedMedia?: () => void;
+  /** Close the active chat view without deleting history. */
+  onCloseChat?: () => void;
 }
 
 type SearchUser = {
@@ -81,7 +83,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   isChatSearchOpen,
   onChatSearchOpenChange,
   onOpenProfile,
-  onOpenSharedMedia
+  onOpenSharedMedia,
+  onCloseChat
 }) => {
   const activeChatId = chatId;
   const [showUserDetails, setShowUserDetails] = useState(false);
@@ -959,6 +962,21 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                     {isMuted ? 'Unmute Notifications' : 'Mute Notifications'}
                   </button>
                   
+                  {onCloseChat && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowHeaderMenu(false);
+                        onCloseChat();
+                      }}
+                      className="w-full text-left flex items-center gap-3 px-4 py-3 text-sm text-gray-200 hover:bg-gray-700 transition-colors cursor-pointer"
+                    >
+                      <span className="material-icons-round text-[18px] text-gray-400">close</span>
+                      Close Chat
+                    </button>
+                  )}
+
                   <div className="h-px bg-gray-100 dark:bg-gray-700/50 my-1"></div>
                   
                   <button 
