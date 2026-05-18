@@ -6,6 +6,8 @@ import {
   searchCommunities,
   createCommunity,
   joinCommunity,
+  manageJoinRequest,
+  leaveCommunity,
   getCommunityFeed,
   getCommunityChat,
 } from "../controllers/community.controller";
@@ -18,6 +20,8 @@ router.get("/", listCommunities);
 router.get("/search", searchCommunities);
 router.post("/", createCommunity);
 router.post("/:id/join", joinCommunity);
+router.post("/:id/leave", leaveCommunity);
+router.put("/:id/requests/:userId", manageJoinRequest);
 router.get("/:id/feed", getCommunityFeed);
 router.get("/:id/chat", getCommunityChat);
 

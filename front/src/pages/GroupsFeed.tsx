@@ -8,6 +8,13 @@ import { SharedMediaSidePanel } from '../components/chat/SharedMediaSidePanel';
 import { GroupDetails } from '../components/chat/GroupDetails';
 import { useChat } from '../context/ChatContext';
 
+interface JoinRequest {
+  _id?: string;
+  userId: string | { _id?: string; fullName?: string; avatar?: string };
+  status?: "pending" | "accepted" | "rejected";
+  requestedAt?: string;
+}
+
 interface Community {
   _id: string;
   name: string;
@@ -16,7 +23,9 @@ interface Community {
   tags: string[];
   members: string[] | any[];
   admins?: string[];
+  owner?: string | { _id?: string };
   isPublic?: boolean;
+  joinRequests?: JoinRequest[];
   chatId?: any;
   unreadCount?: number;
 }
@@ -83,6 +92,51 @@ const isCommunityMember = (
     const memberId = typeof m === 'string' ? m : m?._id;
     return memberId != null && String(memberId) === String(userId);
   });
+};
+
+const isCommunityAdmin = (
+  community: Community,
+  userId: string | undefined,
+): boolean => {
+  if (!userId) return false;
+  const ownerId =
+    typeof community.owner === "string"
+      ? community.owner
+      : community.owner?._id;
+  if (ownerId && String(ownerId) === String(userId)) return true;
+  return (community.admins ?? []).some((a: string | { _id?: string }) => {
+    const adminId = typeof a === "string" ? a : a?._id;
+    return adminId != null && String(adminId) === String(userId);
+  });
+};
+
+const hasPendingJoinRequest = (
+  community: Community,
+  userId: string | undefined,
+): boolean => {
+  if (!userId) return false;
+  return (community.joinRequests ?? []).some((r) => {
+    const requestUserId =
+      typeof r.userId === "string" ? r.userId : r.userId?._id;
+    return (
+      requestUserId != null &&
+      String(requestUserId) === String(userId) &&
+      (r.status === "pending" || !r.status)
+    );
+  });
+};
+
+const mergeCommunityIntoList = (
+  prev: Community[],
+  community: Community,
+): Community[] => {
+  const exists = prev.some((c) => c._id === community._id);
+  if (exists) {
+    return prev.map((c) =>
+      c._id === community._id ? { ...c, ...community } : c,
+    );
+  }
+  return sortCommunitiesByRecent([...prev, community]);
 };
 
 const mergeCommunitiesLists = (prev: Community[], loaded: Community[]): Community[] => {
@@ -326,15 +380,57 @@ export const GroupsFeed = () => {
     loadCommunitiesRef.current = loadCommunities;
   }, [loadCommunities]);
 
+  const openGroupPreview = useCallback((community: Community) => {
+    setCommunities((prev) => mergeCommunityIntoList(prev, community));
+    setActiveGroupId(community._id);
+  }, []);
+
   const handleJoinGroup = useCallback(
-    async (communityId: string, communityName?: string) => {
+    async (community: Community) => {
+      const communityId = community._id;
+      const communityName = community.name;
+      const isPrivate = community.isPublic === false;
+
       try {
-        await axiosInstance.post(`/groups/${communityId}/join`);
+        const { data } = await axiosInstance.post(`/groups/${communityId}/join`);
+        if (data.data?.requestSent) {
+          setCommunities((prev) =>
+            prev.map((c) =>
+              c._id === communityId
+                ? {
+                    ...c,
+                    joinRequests: [
+                      ...(c.joinRequests ?? []).filter((r) => {
+                        const uid =
+                          typeof r.userId === "string"
+                            ? r.userId
+                            : r.userId?._id;
+                        return String(uid) !== String(currentUserId);
+                      }),
+                      {
+                        userId: currentUserId,
+                        status: "pending" as const,
+                        requestedAt: new Date().toISOString(),
+                      },
+                    ],
+                  }
+                : c,
+            ),
+          );
+          toast.success("Join request sent!");
+          return;
+        }
       } catch (error: unknown) {
         const status = (error as { response?: { status?: number } })?.response
           ?.status;
+        const message = (error as { response?: { data?: { message?: string } } })
+          ?.response?.data?.message;
+        if (status === 400 && message?.toLowerCase().includes("pending")) {
+          toast.error(message);
+          return;
+        }
         if (status !== 400) {
-          toast.error("Failed to join group");
+          toast.error(isPrivate ? "Failed to send join request" : "Failed to join group");
           return;
         }
       }
@@ -351,7 +447,58 @@ export const GroupsFeed = () => {
       socket?.emit("join-room", communityId);
       toast.success(`Joined ${communityName || "the group"}!`);
     },
+    [loadCommunities, socket, currentUserId],
+  );
+
+  const handleLeaveGroup = useCallback(
+    async (communityId: string) => {
+      try {
+        await axiosInstance.post(`/groups/${communityId}/leave`);
+        setShowGroupDetailsPanel(false);
+        setActiveGroupId(null);
+        socket?.emit("leave-room", communityId);
+        setCommunities((prev) => prev.filter((c) => c._id !== communityId));
+        await loadCommunities({ silent: true });
+        toast.success("You left the group");
+      } catch (error: unknown) {
+        const message = (error as { response?: { data?: { message?: string } } })
+          ?.response?.data?.message;
+        toast.error(message || "Failed to leave group");
+      }
+    },
     [loadCommunities, socket],
+  );
+
+  const handleRespondToJoinRequest = useCallback(
+    async (communityId: string, userId: string, action: "accept" | "reject") => {
+      try {
+        const { data } = await axiosInstance.put(
+          `/groups/${communityId}/requests/${userId}`,
+          { action },
+        );
+        setCommunities((prev) =>
+          prev.map((c) => {
+            if (c._id !== communityId) return c;
+            const nextRequests = (c.joinRequests ?? []).filter((r) => {
+              const uid = typeof r.userId === "string" ? r.userId : r.userId?._id;
+              return String(uid) !== String(userId);
+            });
+            if (action === "accept" && data.data?.community) {
+              return { ...data.data.community, unreadCount: c.unreadCount ?? 0 };
+            }
+            return { ...c, joinRequests: nextRequests };
+          }),
+        );
+        toast.success(
+          action === "accept" ? "Request accepted" : "Request rejected",
+        );
+      } catch (error: unknown) {
+        const message = (error as { response?: { data?: { message?: string } } })
+          ?.response?.data?.message;
+        toast.error(message || "Failed to update join request");
+      }
+    },
+    [],
   );
 
   useEffect(() => {
@@ -728,17 +875,26 @@ export const GroupsFeed = () => {
                     <span>{activeCommunity?.members?.length || 0} members</span>
                   </div>
 
-                  <button 
-                    onClick={() =>
-                      void handleJoinGroup(
-                        activeGroupId,
-                        activeCommunity?.name,
-                      )
-                    }
-                    className="w-full bg-[#7C3AED] hover:bg-[#6D28D9] text-white py-3 rounded-xl font-bold transition-colors"
-                  >
-                    Join Group
-                  </button>
+                  {(() => {
+                    const isPrivate = activeCommunity?.isPublic === false;
+                    const pending = hasPendingJoinRequest(
+                      activeCommunity!,
+                      currentUserId,
+                    );
+                    const joinLabel = isPrivate ? "Request to Join" : "Join Group";
+                    return (
+                      <button
+                        type="button"
+                        disabled={pending}
+                        onClick={() =>
+                          void handleJoinGroup(activeCommunity!)
+                        }
+                        className="w-full bg-[#7C3AED] hover:bg-[#6D28D9] disabled:opacity-60 disabled:cursor-not-allowed text-white py-3 rounded-xl font-bold transition-colors"
+                      >
+                        {pending ? "Pending Request" : joinLabel}
+                      </button>
+                    );
+                  })()}
                 </div>
               </main>
             );
@@ -747,6 +903,14 @@ export const GroupsFeed = () => {
           const groupAdminIds = (activeCommunity?.admins || []).map(
             (a: string | { _id?: string }) =>
               typeof a === "string" ? a : a._id || "",
+          );
+          const ownerId =
+            typeof activeCommunity?.owner === "string"
+              ? activeCommunity.owner
+              : activeCommunity?.owner?._id;
+          const isGroupAdmin = isCommunityAdmin(activeCommunity!, currentUserId);
+          const pendingJoinRequests = (activeCommunity?.joinRequests ?? []).filter(
+            (r) => r.status === "pending" || !r.status,
           );
 
           return (
@@ -777,14 +941,21 @@ export const GroupsFeed = () => {
                   chatName={activeCommunity.name}
                   isPrivateGroup={activeCommunity.isPublic === false}
                   groupMembers={activeCommunity.members}
-                  groupAdmins={groupAdminIds}
-                  canAddMembers={
-                    !activeCommunity.isPublic ||
-                    groupAdminIds.includes(currentUserId)
+                  groupAdmins={
+                    ownerId && !groupAdminIds.includes(ownerId)
+                      ? [ownerId, ...groupAdminIds]
+                      : groupAdminIds
+                  }
+                  canAddMembers={isGroupAdmin}
+                  isGroupAdmin={isGroupAdmin}
+                  joinRequests={pendingJoinRequests}
+                  communityId={activeCommunity._id}
+                  onRespondToJoinRequest={(userId: string, action: 'accept' | 'reject') =>
+                    handleRespondToJoinRequest(activeCommunity._id, userId, action)
                   }
                   onClose={() => setShowGroupDetailsPanel(false)}
                   onAddMember={() => toast("Add member coming soon")}
-                  onLeaveGroup={() => toast("Leave group coming soon")}
+                  onLeaveGroup={() => void handleLeaveGroup(activeCommunity._id)}
                   onSearchClick={() => setShowGroupDetailsPanel(false)}
                   onEditGroup={() => toast("Edit group coming soon")}
                   isMuted={false}
@@ -834,7 +1005,7 @@ export const GroupsFeed = () => {
                     void runGlobalSearch();
                   }
                 }}
-                placeholder="Search public communities..."
+                placeholder="Search communities..."
                 className="flex-1 px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-[#FAFAFA] dark:bg-[#171717] text-sm outline-none focus:ring-2 focus:ring-[#7C3AED]/50"
               />
               <button
@@ -858,12 +1029,12 @@ export const GroupsFeed = () => {
                   <button
                     key={community._id}
                     type="button"
-                    onClick={async () => {
+                    onClick={() => {
                       setShowGlobalSearchModal(false);
                       if (isCommunityMember(community, currentUserId)) {
                         selectCommunity(community as Community);
                       } else {
-                        await handleJoinGroup(community._id, community.name);
+                        openGroupPreview(community as Community);
                       }
                     }}
                     className="w-full text-left p-3 rounded-xl border border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"

@@ -1,6 +1,12 @@
 import React, { useState } from 'react';
 import toast from 'react-hot-toast';
 
+interface JoinRequestItem {
+  _id?: string;
+  userId: string | { _id?: string; fullName?: string; avatar?: string };
+  status?: string;
+}
+
 interface GroupDetailsProps {
   chatId: string;
   chatName: string;
@@ -8,6 +14,10 @@ interface GroupDetailsProps {
   groupMembers: any[];
   groupAdmins: string[];
   canAddMembers: boolean;
+  isGroupAdmin?: boolean;
+  joinRequests?: JoinRequestItem[];
+  communityId?: string;
+  onRespondToJoinRequest?: (userId: string, action: 'accept' | 'reject') => void | Promise<void>;
   onClose: () => void;
   onAddMember: () => void;
   onLeaveGroup: () => void;
@@ -24,6 +34,9 @@ export const GroupDetails: React.FC<GroupDetailsProps> = ({
   groupMembers,
   groupAdmins,
   canAddMembers,
+  isGroupAdmin = false,
+  joinRequests = [],
+  onRespondToJoinRequest,
   onClose,
   onAddMember,
   onLeaveGroup,
@@ -33,6 +46,17 @@ export const GroupDetails: React.FC<GroupDetailsProps> = ({
   onToggleMute
 }) => {
   const [activeTab, setActiveTab] = useState<'Members' | 'Media' | 'Posts'>('Members');
+  const [processingUserId, setProcessingUserId] = useState<string | null>(null);
+
+  const handleRequestAction = async (userId: string, action: 'accept' | 'reject') => {
+    if (!onRespondToJoinRequest) return;
+    setProcessingUserId(userId);
+    try {
+      await onRespondToJoinRequest(userId, action);
+    } finally {
+      setProcessingUserId(null);
+    }
+  };
 
   return (
     <div className="flex flex-col h-full">
@@ -107,6 +131,64 @@ export const GroupDetails: React.FC<GroupDetailsProps> = ({
               Welcome to the group!
             </p>
           </div>
+
+          {isGroupAdmin && joinRequests.length > 0 && (
+            <div className="w-full bg-[#FAFAFA] dark:bg-[#171717] rounded-2xl p-4 mb-4 border border-gray-100 dark:border-gray-800">
+              <h4 className="text-xs font-bold text-[#7C3AED] uppercase tracking-wider mb-3">
+                Join Requests
+              </h4>
+              <div className="flex flex-col gap-2">
+                {joinRequests.map((request) => {
+                  const userId =
+                    typeof request.userId === 'string'
+                      ? request.userId
+                      : request.userId?._id || '';
+                  const displayName =
+                    typeof request.userId === 'object'
+                      ? request.userId?.fullName || 'User'
+                      : 'User';
+                  const isProcessing = processingUserId === userId;
+                  return (
+                    <div
+                      key={request._id || userId}
+                      className="flex items-center gap-2 p-2 bg-white dark:bg-[#262626] rounded-xl border border-gray-100 dark:border-gray-800"
+                    >
+                      <div className="w-9 h-9 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-xs font-bold text-gray-500 shrink-0 overflow-hidden">
+                        {typeof request.userId === 'object' && request.userId?.avatar ? (
+                          <img
+                            src={request.userId.avatar}
+                            alt=""
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          displayName.charAt(0)
+                        )}
+                      </div>
+                      <span className="text-sm font-medium text-[#171717] dark:text-[#F5F5F5] flex-1 truncate">
+                        {displayName}
+                      </span>
+                      <button
+                        type="button"
+                        disabled={isProcessing}
+                        onClick={() => void handleRequestAction(userId, 'accept')}
+                        className="px-2.5 py-1 text-xs font-bold text-white bg-[#10B981] hover:bg-[#059669] rounded-lg disabled:opacity-50"
+                      >
+                        Accept
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isProcessing}
+                        onClick={() => void handleRequestAction(userId, 'reject')}
+                        className="px-2.5 py-1 text-xs font-bold text-red-500 bg-red-50 dark:bg-red-500/10 hover:bg-red-100 dark:hover:bg-red-500/20 rounded-lg disabled:opacity-50"
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {canAddMembers && (
             <div className="w-full bg-[#FAFAFA] dark:bg-[#171717] rounded-2xl p-4 mb-6 border border-gray-100 dark:border-gray-800">
