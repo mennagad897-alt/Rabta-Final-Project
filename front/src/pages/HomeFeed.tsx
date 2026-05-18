@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { ChatsList } from '../components/chat/ChatsList';
 import type { ChatItem } from '../components/chat/ChatsList';
@@ -22,6 +22,7 @@ export const HomeFeed = () => {
   const [chats, setChats] = useState<ChatItem[]>([]);
   const [messages, setMessages] = useState<MessageType[]>([]);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
+  const activeChatIdRef = useRef<string | null>(null);
   const [, setIsLoadingChats] = useState(true);
   
   // 2. State: التحكم في النوافذ المنبثقة
@@ -80,13 +81,17 @@ export const HomeFeed = () => {
         updatedAt: payload.createdAt || new Date().toISOString(),
         lastMessageIsMine: senderIdStr === currentUserId,
         lastMessageStatus: payload.status || (senderIdStr === currentUserId ? 'sent' : target.lastMessageStatus),
-        unreadCount: String(chatId) === String(activeChatId) ? 0 : (senderIdStr === currentUserId ? target.unreadCount : (target.unreadCount || 0) + 1)
+        unreadCount: String(chatId) === String(activeChatIdRef.current) ? 0 : (senderIdStr === currentUserId ? target.unreadCount : (target.unreadCount || 0) + 1)
       };
       const next = prev.filter((c) => String(c._id) !== String(chatId));
       return [updated, ...next];
     });
   };
 
+
+  useEffect(() => {
+    activeChatIdRef.current = activeChatId;
+  }, [activeChatId]);
 
   // CRITICAL: Always force sidebar open if no chat is selected
   useEffect(() => {
@@ -214,15 +219,12 @@ export const HomeFeed = () => {
       }));
     };
 
-    socket.on('receiveMessage', handleRealtimeMessage);
-    socket.on('receive-message', handleRealtimeMessage);
-    socket.on('message-status-update', handleStatusUpdate);
-    socket.on('messageDelivered', ({ chatId }: { chatId: string }) => {
+    const handleMessageDelivered = ({ chatId }: { chatId: string }) => {
       setChats((prev) => prev.map((chat) => String(chat._id) === String(chatId)
         ? { ...chat, lastMessageStatus: 'delivered' }
         : chat
       ));
-    });
+    };
     const handleMessagesReadPreview = ({ chatId, readBy }: { chatId: string; readBy?: string }) => {
       setChats((prev) => prev.map((chat) => {
         if (String(chat._id) !== String(chatId)) return chat;
@@ -231,26 +233,29 @@ export const HomeFeed = () => {
         return { ...chat, lastMessageStatus: 'read' };
       }));
     };
-    socket.on('messagesRead', handleMessagesReadPreview);
-    socket.on('messages-read', handleMessagesReadPreview);
-
-    socket.on('chatCleared', ({ chatId }: { chatId: string }) => {
+    const handleChatCleared = ({ chatId }: { chatId: string }) => {
       setChats((prev) => prev.filter((chat) => String(chat._id) !== String(chatId)));
-      if (String(chatId) === String(activeChatId)) {
+      if (String(chatId) === String(activeChatIdRef.current)) {
         setActiveChatId(null);
       }
-    });
+    };
+
+    socket.on('receive-message', handleRealtimeMessage);
+    socket.on('message-status-update', handleStatusUpdate);
+    socket.on('messageDelivered', handleMessageDelivered);
+    socket.on('messagesRead', handleMessagesReadPreview);
+    socket.on('messages-read', handleMessagesReadPreview);
+    socket.on('chatCleared', handleChatCleared);
 
     return () => {
-      socket.off('receiveMessage', handleRealtimeMessage);
       socket.off('receive-message', handleRealtimeMessage);
       socket.off('message-status-update', handleStatusUpdate);
-      socket.off('messageDelivered');
+      socket.off('messageDelivered', handleMessageDelivered);
       socket.off('messagesRead', handleMessagesReadPreview);
       socket.off('messages-read', handleMessagesReadPreview);
-      socket.off('chatCleared');
+      socket.off('chatCleared', handleChatCleared);
     };
-  }, [socket, activeChatId, currentUserId]);
+  }, [socket, currentUserId]);
 
   // تحديد بيانات الشات المفتوح حالياً لتمريرها كـ Props
   const activeChat = chats.find(c => c._id === activeChatId);

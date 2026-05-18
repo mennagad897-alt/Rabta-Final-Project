@@ -323,6 +323,8 @@ export const sendMessage = catchAsync(async (req: Request, res: Response, next: 
     });
   }
 
+  await chatService.emitNewCommunityMessage(io, id, savedMsg as any);
+
   res.status(201).json({
     status: 'success',
     data: { message: savedMsg }
@@ -360,6 +362,8 @@ export const sendAudioMessage = catchAsync(async (req: Request, res: Response, n
   // Emit the message in real-time
   io.to(id).emit('receiveMessage', message);
   io.to(id).emit('receive-message', message);
+
+  await chatService.emitNewCommunityMessage(io, id, message as any);
 
   res.status(201).json({
     status: 'success',
@@ -408,6 +412,8 @@ export const sendFileMessage = catchAsync(async (req: Request, res: Response, ne
   const io = req.app.get('io');
   io.to(id).emit('receiveMessage', message);
   io.to(id).emit('receive-message', message);
+
+  await chatService.emitNewCommunityMessage(io, id, message as any);
 
   res.status(201).json({
     status: 'success',
@@ -472,6 +478,37 @@ export const getSharedContent = catchAsync(async (req: Request, res: Response, n
   });
 });
 
+// ==========================================
+// 🧹 Soft clear chat history (per-user clearStates)
+// POST /api/v1/chats/:id/clear
+// ==========================================
+export const clearChat = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+  const { id } = req.params;
+  const userId = (req.user as any)._id.toString();
+
+  const chat = await Chat.findById(id);
+  if (!chat) {
+    return next(new AppError('Chat not found', 404));
+  }
+
+  const isMember = chat.users.some((u: any) => u.toString() === userId);
+  if (!isMember) {
+    return next(new AppError('You are not a member of this chat', 403));
+  }
+
+  const clearedAt = await chatService.upsertChatClearState(id as string, userId);
+
+  res.status(200).json({
+    status: 'success',
+    message: 'Chat cleared successfully',
+    data: { clearedAt },
+  });
+});
+
+// ==========================================
+// 🙈 Hide chat from sidebar (hiddenBy — separate from soft clear)
+// DELETE /api/v1/chats/:id/clear
+// ==========================================
 export const clearChatHistory = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
   const { id } = req.params;
   const userId = (req.user as any)._id;
@@ -486,14 +523,12 @@ export const clearChatHistory = catchAsync(async (req: Request, res: Response, n
     return next(new AppError('You are not a member of this chat', 403));
   }
 
-  // Hide the chat from the sidebar instead of deleting messages
   await Chat.findByIdAndUpdate(
     id,
     { $addToSet: { hiddenBy: userId } },
     { new: true }
   );
 
-  // Emit a real-time event to the specific user's socket room to update their UI
   const io = req.app.get('io');
   if (io) {
     io.to(userId.toString()).emit('chatCleared', { chatId: id });
@@ -501,7 +536,37 @@ export const clearChatHistory = catchAsync(async (req: Request, res: Response, n
 
   res.status(200).json({
     status: 'success',
-    message: 'Chat history deleted successfully'
+    message: 'Chat hidden from list successfully',
+  });
+});
+
+// ==========================================
+// 🔢 Unread message count for a chat
+// GET /api/v1/chats/:chatId/unread-count
+// ==========================================
+export const getChatUnreadCount = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+  const { chatId } = req.params;
+  const userId = (req.user as any)._id.toString();
+
+  const chat = await Chat.findById(chatId);
+  if (!chat) {
+    return next(new AppError('Chat not found', 404));
+  }
+
+  const isMember = chat.users.some((u: any) => u.toString() === userId);
+  if (!isMember) {
+    return next(new AppError('You are not a member of this chat', 403));
+  }
+
+  const unreadCount = await chatService.countUnreadMessages(
+    chatId as string,
+    userId,
+    chat,
+  );
+
+  res.status(200).json({
+    status: 'success',
+    data: { unreadCount },
   });
 });
 

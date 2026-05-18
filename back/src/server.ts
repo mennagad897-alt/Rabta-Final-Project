@@ -276,6 +276,8 @@ io.on('connection', (socket) => {
         });
       }
 
+      await chatService.emitNewCommunityMessage(io, data.chatId, savedMessage as any);
+
       console.log(`💬 Message from [${authenticatedUserId}] in chat [${data.chatId}]`);
     } catch (error: any) {
       if (error?.statusCode === 403) {

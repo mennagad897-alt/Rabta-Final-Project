@@ -142,13 +142,29 @@ const CreateGroup: React.FC = () => {
         invitedUsers: invitedUsers
       };
 
-      await axiosInstance.post('/groups', payload);
-      
+      const { data } = await axiosInstance.post('/groups', payload);
+      const community = data.data?.community;
+
       toast.success('Group created successfully!');
-      navigate('/groups');
-    } catch (error: any) {
-      const msg = error.response?.data?.message || 'Failed to create group';
-      toast.error(msg);
+      navigate('/groups', {
+        replace: true,
+        state: {
+          openGroupId: community?._id,
+          newCommunity: community,
+        },
+      });
+    } catch (error: unknown) {
+      const axiosError = error as {
+        response?: { status?: number; data?: { message?: string } };
+      };
+      const status = axiosError.response?.status;
+      const serverMessage = axiosError.response?.data?.message;
+
+      if (status && status >= 400 && status < 500 && serverMessage) {
+        toast.error(serverMessage);
+      } else {
+        toast.error('Something went wrong! Please try again.');
+      }
     } finally {
       setIsSubmitting(false);
     }

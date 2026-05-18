@@ -56,7 +56,24 @@ interface ChatWindowProps {
   onOpenSharedMedia?: () => void;
   /** Close the active chat view without deleting history. */
   onCloseChat?: () => void;
+  /** Open group details in parent layout (keeps chat visible). */
+  onOpenGroupDetails?: () => void;
 }
+
+const formatGroupMemberLabel = (members: unknown[]): string => {
+  const names = (members || [])
+    .filter(Boolean)
+    .map((m) => {
+      if (typeof m === "string") return null;
+      const member = m as { fullName?: string; name?: string };
+      return member.fullName || member.name || null;
+    })
+    .filter((name): name is string => Boolean(name));
+
+  if (names.length === 0) return "Group members";
+  if (names.length <= 2) return names.join(", ");
+  return `${names.slice(0, 2).join(", ")}, +${names.length - 2} others`;
+};
 
 type SearchUser = {
   _id: string;
@@ -85,7 +102,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   onChatSearchOpenChange,
   onOpenProfile,
   onOpenSharedMedia,
-  onCloseChat
+  onCloseChat,
+  onOpenGroupDetails,
 }) => {
   const activeChatId = chatId;
   const [showUserDetails, setShowUserDetails] = useState(false);
@@ -799,6 +817,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         <header 
           onClick={(e) => {
             if (!(e.target as HTMLElement).closest('button')) {
+              if (isGroup && onOpenGroupDetails) {
+                onOpenGroupDetails();
+                return;
+              }
               setShowUserDetails(true);
               setActiveSidePanel('details');
             }
@@ -819,11 +841,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             <h2 className="text-[#171717] dark:text-[#F5F5F5] font-bold text-base truncate">{chatName || 'Unknown Chat'}</h2>
             {isGroup ? (
               <span className="text-gray-500 dark:text-gray-400 text-xs truncate">
-                {groupMembers && groupMembers?.filter(Boolean)?.length > 0 
-                  ? (groupMembers?.filter(Boolean)?.length <= 2 
-                      ? groupMembers?.filter(Boolean)?.join(", ") 
-                      : `${groupMembers?.filter(Boolean)?.slice(0, 2).join(", ")}, +${groupMembers?.filter(Boolean)?.length - 2} others`)
-                  : "Group members"}
+                {formatGroupMemberLabel(groupMembers)}
               </span>
             ) : (
               (isOnline && showOnlineStatus) && <span className="text-[#7C3AED] dark:text-[#8B5CF6] text-xs font-medium">Online</span>
@@ -884,7 +902,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                       e.stopPropagation();
                       e.preventDefault();
                       setShowHeaderMenu(false);
-                      if (isGroup) {
+                      if (isGroup && onOpenGroupDetails) {
+                        onOpenGroupDetails();
+                      } else if (isGroup) {
                         navigate(`/groups/${chatId}`);
                       } else if (receiverId && onOpenProfile) {
                         onOpenProfile(receiverId);

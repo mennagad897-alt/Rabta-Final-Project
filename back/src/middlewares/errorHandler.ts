@@ -26,7 +26,11 @@ export const errorHandler = (err: any, req: Request, res: Response, next: NextFu
 
   if (err.code === 11000) {
     statusCode = 400;
-    message = 'These data (such as email or phone number) are already registered with us.';
+    const duplicateField =
+      (err.keyValue && Object.keys(err.keyValue)[0]) ||
+      (err.keyPattern && Object.keys(err.keyPattern)[0]) ||
+      'value';
+    message = `${duplicateField} is already registered.`;
   }
 
   if (err.name === 'ValidationError') {
