@@ -5,6 +5,112 @@ import Community from "../models/Community";
 import { User } from "../models/user";
 import { AppError } from "../utils/AppError";
 
+export type ClearStateEntry = {
+  user?: mongoose.Types.ObjectId | { toString(): string };
+  clearedAt?: Date;
+};
+
+export type ChatClearContext = {
+  clearStates?: ClearStateEntry[];
+  isGroup?: boolean;
+};
+
+/** Returns the user's soft-clear timestamp, if any. */
+export const getClearedAtForUser = (
+  chat: ChatClearContext,
+  userId: string,
+): Date | null => {
+  const entry = chat.clearStates?.find(
+    (s) => s.user?.toString() === userId,
+  );
+  return entry?.clearedAt ? new Date(entry.clearedAt) : null;
+};
+
+/** Message visibility filter: after clearStates.clearedAt + not hiddenFor user. */
+export const buildVisibleMessageFilter = (
+  chatId: mongoose.Types.ObjectId | string,
+  userId: string,
+  chat: ChatClearContext,
+  extraAnd: Record<string, unknown>[] = [],
+): Record<string, unknown> => {
+  const userOid = new mongoose.Types.ObjectId(userId);
+  const andClauses: Record<string, unknown>[] = [...extraAnd];
+
+  const clearedAt = getClearedAtForUser(chat, userId);
+  if (clearedAt) {
+    andClauses.push({ createdAt: { $gt: clearedAt } });
+  }
+
+  andClauses.push({
+    $or: [
+      { hiddenFor: { $exists: false } },
+      { hiddenFor: { $size: 0 } },
+      { hiddenFor: { $not: { $elemMatch: { $eq: userOid } } } },
+    ],
+  });
+
+  const filter: Record<string, unknown> = {
+    chatId:
+      typeof chatId === "string"
+        ? new mongoose.Types.ObjectId(chatId)
+        : chatId,
+  };
+  if (andClauses.length) filter.$and = andClauses;
+  return filter;
+};
+
+/** Per-user soft clear: upsert clearStates entry with current timestamp. */
+export const upsertChatClearState = async (
+  chatId: string,
+  userId: string,
+): Promise<Date> => {
+  const clearedAt = new Date();
+  const userOid = new mongoose.Types.ObjectId(userId);
+
+  const updated = await Chat.findOneAndUpdate(
+    { _id: chatId, "clearStates.user": userOid },
+    { $set: { "clearStates.$.clearedAt": clearedAt } },
+    { new: true },
+  );
+
+  if (!updated) {
+    await Chat.findByIdAndUpdate(chatId, {
+      $push: { clearStates: { user: userOid, clearedAt } },
+    });
+  }
+
+  return clearedAt;
+};
+
+/** Unread count respecting clearStates, hiddenFor, and chat type. */
+export const countUnreadMessages = async (
+  chatId: string,
+  userId: string,
+  chat?: ChatClearContext | null,
+): Promise<number> => {
+  const chatDoc =
+    chat && chat.clearStates !== undefined
+      ? chat
+      : await Chat.findById(chatId).select("clearStates isGroup");
+  if (!chatDoc) throw new AppError("Chat not found", 404);
+
+  const userOid = new mongoose.Types.ObjectId(userId);
+  const visibilityFilter = buildVisibleMessageFilter(chatId, userId, chatDoc);
+
+  const unreadFilter: Record<string, unknown> = {
+    ...visibilityFilter,
+    senderId: { $ne: userOid },
+  };
+
+  if (chatDoc.isGroup) {
+    unreadFilter.readBy = { $nin: [userOid] };
+  } else {
+    unreadFilter.status = { $ne: "read" };
+  }
+
+  return Message.countDocuments(unreadFilter);
+};
+
 /** Check block status between users in a direct chat. */
 export const checkDirectChatBlockStatus = async (
   senderId: string,
@@ -125,6 +231,76 @@ export const createMessage = async (data: {
   return populatedMessage;
 };
 
+// Phase 3: Sidebar sync for community chats
+type SocketEmitter = {
+  to: (room: string) => { emit: (event: string, payload: unknown) => void };
+};
+
+export const emitNewCommunityMessage = async (
+  io: SocketEmitter | undefined,
+  chatId: string,
+  savedMessage: { toObject?: () => Record<string, unknown> } & Record<string, unknown>,
+) => {
+  if (!io) return;
+
+  const community = await Community.findOne({ chatId }).select("_id");
+  if (!community) return;
+
+  const messageObj = savedMessage.toObject?.() ?? savedMessage;
+  const rawSender = messageObj.senderId as
+    | {
+        _id?: { toString(): string };
+        fullName?: string;
+        name?: string;
+        avatar?: string;
+        toString?: () => string;
+      }
+    | string
+    | undefined;
+
+  let senderId: string;
+  let sender: { _id: string; fullName?: string; name?: string; avatar?: string };
+
+  if (typeof rawSender === "object" && rawSender !== null) {
+    senderId =
+      rawSender._id?.toString?.() ??
+      rawSender.toString?.() ??
+      String(rawSender);
+    const displayName = rawSender.fullName || rawSender.name;
+    sender = {
+      _id: senderId,
+      fullName: displayName,
+      name: displayName,
+      avatar: rawSender.avatar,
+    };
+  } else {
+    senderId = rawSender?.toString?.() ?? String(rawSender);
+    const userDoc = await User.findById(senderId).select("fullName avatar").lean();
+    const displayName = userDoc?.fullName;
+    sender = {
+      _id: senderId,
+      fullName: displayName,
+      name: displayName,
+      avatar: userDoc?.avatar,
+    };
+  }
+
+  const communityId = community._id.toString();
+  const rawId = messageObj._id as { toString(): string } | string | undefined;
+
+  io.to(communityId).emit("new-community-message", {
+    communityId,
+    lastMessage: {
+      _id: rawId?.toString?.() ?? rawId,
+      content: messageObj.content,
+      messageType: messageObj.messageType,
+    },
+    timestamp: messageObj.createdAt ?? new Date(),
+    senderId,
+    sender,
+  });
+};
+
 // ==========================================
 // ðŸ“œ Ø¬Ù„Ø¨ ØªØ§Ø±ÙŠØ® Ø§Ù„Ø±Ø³Ø§Ø¦Ù„ (History) Ù„Ø´Ø§Øª Ù…Ø¹ÙŠÙ†
 // ==========================================
@@ -145,34 +321,12 @@ export const getChatMessages = async (
   const isMember = chat.users.some((userId_) => userId_.toString() === userId);
   if (!isMember) throw new AppError("You are not a member of this chat", 403);
 
-  const userOid = new mongoose.Types.ObjectId(userId);
-  const clearEntry = (chat as any).clearStates?.find(
-    (s: { user?: { toString: () => string }; clearedAt?: Date }) =>
-      s.user?.toString() === userId,
-  );
-
-  const query: Record<string, unknown> = { chatId };
   const andClauses: Record<string, unknown>[] = [];
-
-  if (clearEntry?.clearedAt) {
-    andClauses.push({ createdAt: { $gt: new Date(clearEntry.clearedAt) } });
-  }
-
-  andClauses.push({
-    $or: [
-      { hiddenFor: { $exists: false } },
-      { hiddenFor: { $size: 0 } },
-      { hiddenFor: { $not: { $elemMatch: { $eq: userOid } } } },
-    ],
-  });
-
   if (before) {
     andClauses.push({ _id: { $lt: new mongoose.Types.ObjectId(before) } });
   }
 
-  if (andClauses.length) {
-    query.$and = andClauses;
-  }
+  const query = buildVisibleMessageFilter(chatId, userId, chat, andClauses);
 
   const safeLimit = Math.min(Math.max(limit, 20), 50);
 
@@ -680,30 +834,23 @@ export const getUserChats = async (userId: string) => {
           (id: any) => id.toString() === userId.toString(),
         )
       ) {
-        const realLatestMessage = await Message.findOne({
-          chatId: chat._id,
-          $or: [
-            { hiddenFor: { $exists: false } },
-            { hiddenFor: { $size: 0 } },
-            { hiddenFor: { $ne: userId } },
-          ],
-        })
+        const visibleFilter = buildVisibleMessageFilter(
+          chat._id,
+          userId,
+          chat,
+        );
+        const realLatestMessage = await Message.findOne(visibleFilter)
           .sort({ createdAt: -1 })
           .populate("senderId", "fullName _id");
 
         latestMsg = realLatestMessage;
       }
 
-      const unreadCount = await Message.countDocuments({
-        chatId: chat._id,
-        senderId: { $ne: userId },
-        status: { $ne: "read" },
-        $or: [
-          { hiddenFor: { $exists: false } },
-          { hiddenFor: { $size: 0 } },
-          { hiddenFor: { $ne: userId } },
-        ],
-      });
+      const unreadCount = await countUnreadMessages(
+        chat._id.toString(),
+        userId,
+        chat,
+      );
       const chatObj = chat.toObject();
       chatObj.latestMessage = latestMsg;
       chatObj.users = chatObj.users.map(
@@ -811,28 +958,11 @@ export const getSharedContent = async (
   const isMember = chat.users.some((u: any) => u.toString() === userId);
   if (!isMember) throw new AppError("You are not a member of this chat", 403);
 
-  const userOid = new mongoose.Types.ObjectId(userId);
-  const clearEntry = (chat as any).clearStates?.find(
-    (s: { user?: { toString: () => string }; clearedAt?: Date }) =>
-      s.user?.toString() === userId,
-  );
+  const andClauses: Record<string, unknown>[] = [
+    { isDeletedForEveryone: { $ne: true } },
+  ];
 
-  const query: Record<string, unknown> = { chatId };
-  const andClauses: Record<string, unknown>[] = [];
-
-  if (clearEntry?.clearedAt) {
-    andClauses.push({ createdAt: { $gt: new Date(clearEntry.clearedAt) } });
-  }
-
-  andClauses.push({
-    $or: [
-      { hiddenFor: { $exists: false } },
-      { hiddenFor: { $size: 0 } },
-      { hiddenFor: { $not: { $elemMatch: { $eq: userOid } } } },
-    ],
-  });
-
-  andClauses.push({ isDeletedForEveryone: { $ne: true } });
+  const query = buildVisibleMessageFilter(chatId, userId, chat, andClauses);
 
   andClauses.push({
     $or: [

@@ -29,6 +29,7 @@ export type MessageType = {
   reactions?: { userId: string; emoji: string }[];
   replyTo?: any; // To store reference if replied
   isForwarded?: boolean;
+  senderName?: string;
 };
 
 interface ChatWindowProps {
@@ -53,7 +54,26 @@ interface ChatWindowProps {
   onOpenProfile?: (userId: string) => void;
   /** Open shared media / files / links panel (parent layout; keeps chat context). */
   onOpenSharedMedia?: () => void;
+  /** Close the active chat view without deleting history. */
+  onCloseChat?: () => void;
+  /** Open group details in parent layout (keeps chat visible). */
+  onOpenGroupDetails?: () => void;
 }
+
+const formatGroupMemberLabel = (members: unknown[]): string => {
+  const names = (members || [])
+    .filter(Boolean)
+    .map((m) => {
+      if (typeof m === "string") return null;
+      const member = m as { fullName?: string; name?: string };
+      return member.fullName || member.name || null;
+    })
+    .filter((name): name is string => Boolean(name));
+
+  if (names.length === 0) return "Group members";
+  if (names.length <= 2) return names.join(", ");
+  return `${names.slice(0, 2).join(", ")}, +${names.length - 2} others`;
+};
 
 type SearchUser = {
   _id: string;
@@ -81,7 +101,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   isChatSearchOpen,
   onChatSearchOpenChange,
   onOpenProfile,
-  onOpenSharedMedia
+  onOpenSharedMedia,
+  onCloseChat,
+  onOpenGroupDetails,
 }) => {
   const activeChatId = chatId;
   const [showUserDetails, setShowUserDetails] = useState(false);
@@ -346,6 +368,11 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       const resolvedType = incomingMsg.messageType || incomingMsg.type || 'text';
       const resolvedContent = incomingMsg.content ?? incomingMsg.text ?? '';
       const createdAt = incomingMsg.createdAt || new Date().toISOString();
+      const senderName =
+        typeof senderRaw === 'object' && senderRaw?.fullName
+          ? senderRaw.fullName
+          : undefined;
+
       const formatted: MessageType = {
         id: incomingMsg._id || incomingMsg.id || `socket-${Date.now()}`,
         type: ['text', 'audio', 'file', 'image', 'video', 'call_summary'].includes(resolvedType) ? resolvedType as MessageType['type'] : 'text',
@@ -356,7 +383,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         time: new Date(createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         isMine: false,
         status: 'delivered',
-        replyTo: incomingMsg.replyTo
+        replyTo: incomingMsg.replyTo,
+        senderName,
       };
 
       // Functional state update avoids stale closure issues
@@ -398,9 +426,11 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       }));
     };
 
-    const handleMessagesRead = ({ chatId }: { chatId: string }) => {
+    const handleMessagesRead = ({ chatId, readBy }: { chatId: string; readBy?: string }) => {
       if (!setMessages) return;
       if (String(chatId) !== String(activeChatId)) return;
+      // Ignore when we marked incoming messages read — only the other party reading our sends updates ticks
+      if (readBy && String(readBy) === String(currentUser._id)) return;
       setMessages((prev) => prev.map((m) => (
         m.isMine ? { ...m, status: 'read', isPending: false } : m
       )));
@@ -431,11 +461,11 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   useEffect(() => {
     if (!socket || !activeChatId || !messages.length) return;
     if (document.visibilityState !== 'visible' || !document.hasFocus()) return;
-    const lastMessage = messages[messages.length - 1];
-    if (!lastMessage || lastMessage.isMine) return;
+    const hasUnreadFromOther = messages.some((m) => !m.isMine && m.status !== 'read');
+    if (!hasUnreadFromOther) return;
     socket.emit('markAsRead', { chatId: activeChatId, userId: currentUser._id });
-  }, [socket, activeChatId, messages, currentUser._id]);
-
+  }, [socket, setMessages, activeChatId, currentUser._id]);
+  
   const handleRecordingComplete = (blob: Blob, durationSeconds: number) => {
     setVoiceBlob(blob);
     setVoiceDuration(durationSeconds);
@@ -787,6 +817,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         <header 
           onClick={(e) => {
             if (!(e.target as HTMLElement).closest('button')) {
+              if (isGroup && onOpenGroupDetails) {
+                onOpenGroupDetails();
+                return;
+              }
               setShowUserDetails(true);
               setActiveSidePanel('details');
             }
@@ -807,11 +841,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             <h2 className="text-[#171717] dark:text-[#F5F5F5] font-bold text-base truncate">{chatName || 'Unknown Chat'}</h2>
             {isGroup ? (
               <span className="text-gray-500 dark:text-gray-400 text-xs truncate">
-                {groupMembers && groupMembers?.filter(Boolean)?.length > 0 
-                  ? (groupMembers?.filter(Boolean)?.length <= 2 
-                      ? groupMembers?.filter(Boolean)?.join(", ") 
-                      : `${groupMembers?.filter(Boolean)?.slice(0, 2).join(", ")}, +${groupMembers?.filter(Boolean)?.length - 2} others`)
-                  : "Group members"}
+                {formatGroupMemberLabel(groupMembers)}
               </span>
             ) : (
               (isOnline && showOnlineStatus) && <span className="text-[#7C3AED] dark:text-[#8B5CF6] text-xs font-medium">Online</span>
@@ -872,7 +902,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                       e.stopPropagation();
                       e.preventDefault();
                       setShowHeaderMenu(false);
-                      if (isGroup) {
+                      if (isGroup && onOpenGroupDetails) {
+                        onOpenGroupDetails();
+                      } else if (isGroup) {
                         navigate(`/groups/${chatId}`);
                       } else if (receiverId && onOpenProfile) {
                         onOpenProfile(receiverId);
@@ -957,6 +989,21 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                     {isMuted ? 'Unmute Notifications' : 'Mute Notifications'}
                   </button>
                   
+                  {onCloseChat && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowHeaderMenu(false);
+                        onCloseChat();
+                      }}
+                      className="w-full text-left flex items-center gap-3 px-4 py-3 text-sm text-gray-200 hover:bg-gray-700 transition-colors cursor-pointer"
+                    >
+                      <span className="material-icons-round text-[18px] text-gray-400">close</span>
+                      Close Chat
+                    </button>
+                  )}
+
                   <div className="h-px bg-gray-100 dark:bg-gray-700/50 my-1"></div>
                   
                   <button 
@@ -1035,6 +1082,17 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                   <div className={`text-[10px] text-[#7C3AED] flex items-center gap-1 mb-1 ${msg.isMine ? 'justify-end' : 'justify-start'}`}>
                     <span className="material-icons-round text-[10px]">push_pin</span> Pinned
                   </div>
+                )}
+                {isGroup && !msg.isDeletedForEveryone && (
+                  <span
+                    className={`text-xs font-semibold mb-0.5 px-0.5 ${
+                      msg.isMine
+                        ? 'text-[#7C3AED] dark:text-[#8B5CF6] self-end'
+                        : 'text-gray-500 dark:text-gray-400 self-start'
+                    }`}
+                  >
+                    {msg.isMine ? 'You' : (msg.senderName || 'Member')}
+                  </span>
                 )}
                 {msg.isDeletedForEveryone ? (
                    <div className="bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 italic rounded-xl p-3 text-sm flex items-center gap-2">

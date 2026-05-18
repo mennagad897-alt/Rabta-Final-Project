@@ -3,6 +3,7 @@ import { protect } from "../middlewares/auth.middleware";
 import { restrictTo } from "../middlewares/authorize.middleware";
 import {
   listCommunities,
+  searchCommunities,
   createCommunity,
   joinCommunity,
   getCommunityFeed,
@@ -14,6 +15,7 @@ const router = Router();
 router.use(protect);
 
 router.get("/", listCommunities);
+router.get("/search", searchCommunities);
 router.post("/", createCommunity);
 router.post("/:id/join", joinCommunity);
 router.get("/:id/feed", getCommunityFeed);

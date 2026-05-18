@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { ChatsList } from '../components/chat/ChatsList';
 import type { ChatItem } from '../components/chat/ChatsList';
@@ -22,6 +22,7 @@ export const HomeFeed = () => {
   const [chats, setChats] = useState<ChatItem[]>([]);
   const [messages, setMessages] = useState<MessageType[]>([]);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
+  const activeChatIdRef = useRef<string | null>(null);
   const [, setIsLoadingChats] = useState(true);
   
   // 2. State: التحكم في النوافذ المنبثقة
@@ -80,13 +81,17 @@ export const HomeFeed = () => {
         updatedAt: payload.createdAt || new Date().toISOString(),
         lastMessageIsMine: senderIdStr === currentUserId,
         lastMessageStatus: payload.status || (senderIdStr === currentUserId ? 'sent' : target.lastMessageStatus),
-        unreadCount: String(chatId) === String(activeChatId) ? 0 : (senderIdStr === currentUserId ? target.unreadCount : (target.unreadCount || 0) + 1)
+        unreadCount: String(chatId) === String(activeChatIdRef.current) ? 0 : (senderIdStr === currentUserId ? target.unreadCount : (target.unreadCount || 0) + 1)
       };
       const next = prev.filter((c) => String(c._id) !== String(chatId));
       return [updated, ...next];
     });
   };
 
+
+  useEffect(() => {
+    activeChatIdRef.current = activeChatId;
+  }, [activeChatId]);
 
   // CRITICAL: Always force sidebar open if no chat is selected
   useEffect(() => {
@@ -131,7 +136,9 @@ export const HomeFeed = () => {
         const sortedMessages = [...response.data.data.messages].sort((a: any, b: any) =>
           new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
         );
-        const formatted = sortedMessages.map((m: { _id: string; messageType: string; content: string; createdAt: string; senderId: { _id?: string } | string; duration?: number; isDeletedForEveryone?: boolean; isEdited?: boolean; isPinned?: boolean; reactions?: any[]; attachments?: any[]; replyTo?: any }) => ({
+        const formatted = sortedMessages.map((m: { _id: string; messageType: string; content: string; createdAt: string; senderId: { _id?: string } | string; status?: MessageType['status']; duration?: number; isDeletedForEveryone?: boolean; isEdited?: boolean; isPinned?: boolean; reactions?: any[]; attachments?: any[]; replyTo?: any }) => {
+          const isMine = (typeof m.senderId === 'string' ? m.senderId : m.senderId._id) === currentUser._id;
+          return {
           id: m._id,
           type: (['text', 'audio', 'file', 'image', 'video'].includes(m.messageType) ? m.messageType : (m.content?.endsWith('.webm') ? 'audio' : 'text')) as 'text' | 'audio' | 'file' | 'image' | 'video' | 'call_summary',
           content: m.content,
@@ -145,8 +152,10 @@ export const HomeFeed = () => {
           reactions: m.reactions || [],
           replyTo: m.replyTo,
           time: new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          isMine: (typeof m.senderId === 'string' ? m.senderId : m.senderId._id) === currentUser._id
-        }));
+          isMine,
+          status: m.status || (isMine ? 'sent' : undefined),
+        };
+        });
         if (String(targetChatId) === String(activeChatId)) {
           setMessages(formatted);
         }
@@ -200,53 +209,53 @@ export const HomeFeed = () => {
       upsertChatPreview(chatId, incoming);
     };
 
-    const handleStatusUpdate = (payload: { chatId: string; status: 'delivered' | 'read' }) => {
+    const handleStatusUpdate = (payload: { chatId: string; status: 'delivered' | 'read'; readBy?: string }) => {
       if (!payload?.chatId) return;
-      setChats((prev) => prev.map((chat) => String(chat._id) === String(payload.chatId)
-        ? { ...chat, lastMessageStatus: payload.status }
-        : chat
-      ));
+      setChats((prev) => prev.map((chat) => {
+        if (String(chat._id) !== String(payload.chatId)) return chat;
+        if (!chat.lastMessageIsMine) return chat;
+        if (payload.readBy && String(payload.readBy) === String(currentUserId)) return chat;
+        return { ...chat, lastMessageStatus: payload.status };
+      }));
     };
 
-    socket.on('receiveMessage', handleRealtimeMessage);
-    socket.on('receive-message', handleRealtimeMessage);
-    socket.on('message-status-update', handleStatusUpdate);
-    socket.on('messageDelivered', ({ chatId }: { chatId: string }) => {
+    const handleMessageDelivered = ({ chatId }: { chatId: string }) => {
       setChats((prev) => prev.map((chat) => String(chat._id) === String(chatId)
         ? { ...chat, lastMessageStatus: 'delivered' }
         : chat
       ));
-    });
-    socket.on('messagesRead', ({ chatId }: { chatId: string }) => {
-      setChats((prev) => prev.map((chat) => String(chat._id) === String(chatId)
-        ? { ...chat, lastMessageStatus: 'read' }
-        : chat
-      ));
-    });
-    socket.on('messages-read', ({ chatId }: { chatId: string }) => {
-      setChats((prev) => prev.map((chat) => String(chat._id) === String(chatId)
-        ? { ...chat, lastMessageStatus: 'read' }
-        : chat
-      ));
-    });
-
-    socket.on('chatCleared', ({ chatId }: { chatId: string }) => {
+    };
+    const handleMessagesReadPreview = ({ chatId, readBy }: { chatId: string; readBy?: string }) => {
+      setChats((prev) => prev.map((chat) => {
+        if (String(chat._id) !== String(chatId)) return chat;
+        if (!chat.lastMessageIsMine) return chat;
+        if (readBy && String(readBy) === String(currentUserId)) return chat;
+        return { ...chat, lastMessageStatus: 'read' };
+      }));
+    };
+    const handleChatCleared = ({ chatId }: { chatId: string }) => {
       setChats((prev) => prev.filter((chat) => String(chat._id) !== String(chatId)));
-      if (String(chatId) === String(activeChatId)) {
+      if (String(chatId) === String(activeChatIdRef.current)) {
         setActiveChatId(null);
       }
-    });
+    };
+
+    socket.on('receive-message', handleRealtimeMessage);
+    socket.on('message-status-update', handleStatusUpdate);
+    socket.on('messageDelivered', handleMessageDelivered);
+    socket.on('messagesRead', handleMessagesReadPreview);
+    socket.on('messages-read', handleMessagesReadPreview);
+    socket.on('chatCleared', handleChatCleared);
 
     return () => {
-      socket.off('receiveMessage', handleRealtimeMessage);
       socket.off('receive-message', handleRealtimeMessage);
       socket.off('message-status-update', handleStatusUpdate);
-      socket.off('messageDelivered');
-      socket.off('messagesRead');
-      socket.off('messages-read');
-      socket.off('chatCleared');
+      socket.off('messageDelivered', handleMessageDelivered);
+      socket.off('messagesRead', handleMessagesReadPreview);
+      socket.off('messages-read', handleMessagesReadPreview);
+      socket.off('chatCleared', handleChatCleared);
     };
-  }, [socket, activeChatId, currentUserId]);
+  }, [socket, currentUserId]);
 
   // تحديد بيانات الشات المفتوح حالياً لتمريرها كـ Props
   const activeChat = chats.find(c => c._id === activeChatId);
@@ -346,7 +355,6 @@ export const HomeFeed = () => {
           setSearchAttempted(false);
         }}
         onToggleFocusMode={() => setIsChatListOpen(false)}
-        onCloseActiveChat={() => setActiveChatId(null)}
         onDeleteChat={handleDeleteChat}
       />
 
@@ -378,6 +386,7 @@ export const HomeFeed = () => {
               setProfileUserId(null);
               setIsChatSearchOpen(false);
             }}
+            onCloseChat={() => setActiveChatId(null)}
           />
           {isSharedMediaOpen ? (
             <SharedMediaSidePanel

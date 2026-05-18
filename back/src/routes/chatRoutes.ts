@@ -12,7 +12,9 @@ import {
   sendAudioMessage,
   markMessagesAsRead,
   getSharedContent,
+  clearChat,
   clearChatHistory,
+  getChatUnreadCount,
   toggleMuteChat,
   sendFileMessage
 } from '../controllers/chat.controller';
@@ -49,7 +51,10 @@ router.put('/:id/read', markMessagesAsRead);
 // جلب المحتوى المشارك في شات معين
 router.get('/:id/shared', getSharedContent);
 
-// حذف الشات
+// Soft clear chat history (per-user clearStates)
+router.post('/:id/clear', clearChat);
+
+// Hide chat from sidebar list
 router.delete('/:id/clear', clearChatHistory);
 
 // كتم الشات
@@ -58,6 +63,9 @@ router.put('/:id/mute', toggleMuteChat);
 // ==========================================
 // 📜 مسار تاريخ الرسائل (History)
 // ==========================================
+// Unread count for a chat (respects clearStates)
+router.get('/:chatId/unread-count', getChatUnreadCount);
+
 // جلب رسائل شات معين (مع limit و cursor pagination)
 // مثال: GET /api/v1/chats/abc123/messages?limit=30&before=xyz789
 router.get('/:chatId/messages', getMessageHistory);
