@@ -8,6 +8,75 @@ import { embeddingsModel } from "./core.ai.service";
 import { tool } from "@langchain/core/tools";
 import { z } from "zod";
 import Job from "../../models/Job";
+import http from "http";
+import https from "https";
+import fs from "fs/promises";
+import path from "path";
+import PDFParser from "pdf2json";
+
+const fetchBuffer = (fileUrl: string): Promise<Buffer> => {
+  return new Promise((resolve, reject) => {
+    const urlObj = new URL(fileUrl);
+    const client = urlObj.protocol === "https:" ? https : http;
+
+    const request = client.get(urlObj, (response) => {
+      if (response.statusCode && response.statusCode >= 400) {
+        reject(new Error(`Failed to fetch PDF: ${response.statusCode}`));
+        return;
+      }
+
+      const chunks: Buffer[] = [];
+      response.on("data", (chunk) => chunks.push(chunk));
+      response.on("end", () => resolve(Buffer.concat(chunks)));
+      response.on("error", reject);
+    });
+
+    request.on("error", reject);
+  });
+};
+
+// دالة مساعدة لاستخراج النص من الـ PDF
+// دالة مساعدة لاستخراج النص من الـ PDF (تدعم Cloudinary والملفات المحلية)
+
+export const extractTextFromPDF = async (fileUrl: string): Promise<string> => {
+  return new Promise(async (resolve) => {
+    try {
+      let buffer: Buffer;
+
+      if (fileUrl.startsWith("http://") || fileUrl.startsWith("https://")) {
+        const response = await fetch(fileUrl, {
+          headers: { "User-Agent": "Mozilla/5.0" }
+        });
+        if (!response.ok) throw new Error(`Status: ${response.status}`);
+        const arrayBuffer = await response.arrayBuffer();
+        buffer = Buffer.from(arrayBuffer);
+      } else {
+        buffer = await fs.readFile(path.join(process.cwd(), fileUrl));
+      }
+      
+      // تهيئة المكتبة الجديدة (true معناه استخراج النص الخام فقط)
+      const pdfParser = new PDFParser(null, true);
+      
+      pdfParser.on("pdfParser_dataError", (errData: any) => {
+        console.error(`❌ PDF Parser Error:`, errData.parserError);
+        resolve(""); // لو حصل إيرور نرجع نص فاضي عشان السيرفر ميقعش
+      });
+      
+      pdfParser.on("pdfParser_dataReady", () => {
+        const text = pdfParser.getRawTextContent();
+        console.log("✅ PDF Text Extracted, Length:", text.length);
+        resolve(text); // نرجع النص السليم
+      });
+      
+      // تشغيل عملية القراءة على الملف
+      pdfParser.parseBuffer(buffer);
+      
+    } catch (error) {
+      console.error(`❌ Failed to fetch/parse PDF:`, error);
+      resolve(""); 
+    }
+  });
+};
 
 // 1. دالة تجميع الداتا وتخزينها (Ingestion)
 export const processCommunityKnowledge = async (communityId: string) => {
@@ -29,20 +98,50 @@ export const processCommunityKnowledge = async (communityId: string) => {
   if (community.chatId) {
     const messages = await Message.find({
       chatId: community.chatId,
-      messageType: "text",
+      messageType: { $in: ["text", "file"] },
     }).populate("senderId", "fullName");
-    messages.forEach((msg) => {
-      const senderName = (msg.senderId as any)?.fullName || "Unknown User";
-      rawTexts.push({
-        text: `${senderName} said: ${msg.content}`,
-        metadata: {
-          authorId: (msg.senderId as any)?._id || null,
-          sourceId: msg._id,
-          sourceType: "chat",
-          timestamp: msg.createdAt,
-        },
-      });
-    });
+    // --- بداية الجزء الجراحي الجديد ---
+    const messageItems = await Promise.all(
+      messages.map(async (msg) => {
+        let text = msg.content ? `${msg.content}\n` : "";
+
+        // لو الرسالة عبارة عن ملف وفيها مرفقات
+        if (
+          msg.messageType === "file" &&
+          msg.attachments &&
+          msg.attachments.length > 0
+        ) {
+          for (const attachment of msg.attachments) {
+            // لو الملف PDF
+            if (
+              attachment.fileType === "application/pdf" ||
+              attachment.fileUrl.toLowerCase().endsWith(".pdf")
+            ) {
+              const pdfText = await extractTextFromPDF(attachment.fileUrl);
+              text += `[محتوى ملف PDF مرفق]: \n${pdfText}\n`;
+            }
+          }
+        }
+
+        if (text.trim() === "") return null;
+
+        return {
+          text: `Message from ${(msg.senderId as any)?.fullName || "Unknown User"}: ${text}`,
+          metadata: {
+            sourceId: msg._id,
+            sourceType: "community_info",
+            senderId: (msg.senderId as any)?._id || null,
+            timestamp: msg.createdAt,
+          },
+        };
+      }),
+    );
+
+    // فلترة النصوص الفاضية وإضافتها
+    const validMessageItems = messageItems.filter(
+      (item): item is { text: string; metadata: any } => item !== null,
+    );
+    rawTexts.push(...validMessageItems);
   }
 
   const posts = await Post.find({ communityId: commId }).populate(
@@ -84,6 +183,7 @@ export const processCommunityKnowledge = async (communityId: string) => {
   const splitter = new RecursiveCharacterTextSplitter({
     chunkSize: 500,
     chunkOverlap: 50,
+    separators: ["\n\n", "\n", ".", "!", "?", " "],
   });
   await CommunityChunk.deleteMany({ communityId: commId });
 
@@ -146,7 +246,7 @@ export const createSearchTool = (communityId: string) => {
         `--- Agent is searching for: "${query}" in community: ${communityId} ---`,
       );
       const results = await searchCommunityRAG(communityId, query);
-
+      console.log("Database Search Results:", results);
       // تحويل النتائج لتكست بسيط الـ Agent يفهمه
       if (results.length === 0)
         return "No relevant information found in the community records.";

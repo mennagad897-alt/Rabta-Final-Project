@@ -93,7 +93,7 @@ export const uploadProfileAvatar = catchAsync(async (req: Request, res: Response
 
     // 2. ده المسار اللي اتسيف فيه الملف على السيرفر
     // بنحول الـ Backslashes لـ Forward Slashes عشان الـ URL يشتغل صح في كل الأنظمة
-    const avatarUrl = `${req.protocol}://${req.get('host')}/uploads/avatars/${req.file.filename}`;
+    const avatarUrl = req.file.path;
 
     console.log('🔗 Generated URL:', avatarUrl);
     console.log('🔗 Generated URL:', avatarUrl);

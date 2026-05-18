@@ -20,7 +20,8 @@ export const ingestCommunity = catchAsync(
 export const askCommunityAgent = catchAsync(
   async (req: Request, res: Response) => {
     const communityId = req.params.communityId as string;
-    const { message, threadId, userId } = req.body; // userId مهم عشان الموديلز الجديدة
+    const { message, threadId } = req.body;
+    const userId = req.user?._id; // 👈 هياخده من التوكن مباشرة
 
     const rag_agent = await getCommunityAgent(communityId);
 

@@ -1,31 +1,30 @@
 import multer from 'multer';
-import path from 'path';
-import fs from 'fs';
+import { v2 as cloudinary } from 'cloudinary';
+import { CloudinaryStorage } from 'multer-storage-cloudinary';
 import { AppError } from '../utils/AppError';
 
-// التأكد من وجود مجلد الرفع بمسار مطلق
-const uploadDir = path.join(process.cwd(), 'uploads', 'avatars');
-console.log('📂 Initializing Upload Directory at:', uploadDir);
-
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
-
-// 1. إعداد التخزين المحلي (Disk Storage)
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, uploadDir);
-  },
-  filename: (req, file, cb) => {
-    // تسمية الملف: userId + الوقت الحالي + الامتداد الأصلي
-    const userId = (req as any).user?._id || 'unknown';
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    cb(null, `avatar-${userId}-${uniqueSuffix}${path.extname(file.originalname)}`);
-  }
+// ==========================================
+// ☁️ إعداد الاتصال بـ Cloudinary
+// ==========================================
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-// 2. فلتر الأمان
-const fileFilter = (req: any, file: any, cb: any) => {
+// ==========================================
+// 🖼️ إعداد رفع الصور (Avatars)
+// ==========================================
+const avatarStorage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'rabta_avatars', // اسم الفولدر اللي هيتكريت على كلاوديناري
+    allowed_formats: ['jpg', 'png', 'jpeg', 'webp'],
+    resource_type: 'image',
+  } as any,
+});
+
+const imageFilter = (req: any, file: any, cb: any) => {
   if (file.mimetype.startsWith('image')) {
     cb(null, true);
   } else {
@@ -33,32 +32,21 @@ const fileFilter = (req: any, file: any, cb: any) => {
   }
 };
 
-// 3. تصدير الميدل وير للصور
 export const uploadAvatar = multer({
-  storage: storage,
-  fileFilter: fileFilter,
-  limits: { fileSize: 5 * 1024 * 1024 } // 5MB
+  storage: avatarStorage,
+  fileFilter: imageFilter,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
 });
 
 // ==========================================
-// 🎙️ إعداد رفع الملفات الصوتية (Audio Upload)
+// 🎙️ إعداد رفع الملفات الصوتية (Audio)
 // ==========================================
-const audioUploadDir = path.join(process.cwd(), 'uploads', 'audio');
-if (!fs.existsSync(audioUploadDir)) {
-  fs.mkdirSync(audioUploadDir, { recursive: true });
-}
-
-const audioStorage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, audioUploadDir);
-  },
-  filename: (req, file, cb) => {
-    const userId = (req as any).user?._id || 'unknown';
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    // Use .webm as default since browsers record in webm
-    const ext = path.extname(file.originalname) || '.webm';
-    cb(null, `audio-${userId}-${uniqueSuffix}${ext}`);
-  }
+const audioStorage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'rabta_audio',
+    resource_type: 'video', // ملاحظة: Cloudinary بيعامل الملفات الصوتية على إنها Video
+  } as any,
 });
 
 const audioFilter = (req: any, file: any, cb: any) => {
@@ -72,27 +60,18 @@ const audioFilter = (req: any, file: any, cb: any) => {
 export const uploadAudio = multer({
   storage: audioStorage,
   fileFilter: audioFilter,
-  limits: { fileSize: 15 * 1024 * 1024 } // 15MB limit for voice notes
+  limits: { fileSize: 15 * 1024 * 1024 }, // 15MB
 });
 
 // ==========================================
-// 📄 إعداد رفع المستندات (Document Upload)
+// 📄 إعداد رفع المستندات (Documents)
 // ==========================================
-const documentUploadDir = path.join(process.cwd(), 'uploads', 'documents');
-if (!fs.existsSync(documentUploadDir)) {
-  fs.mkdirSync(documentUploadDir, { recursive: true });
-}
-
-const documentStorage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, documentUploadDir);
-  },
-  filename: (req, file, cb) => {
-    const userId = (req as any).user?._id || 'unknown';
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    const ext = path.extname(file.originalname);
-    cb(null, `doc-${userId}-${uniqueSuffix}${ext}`);
-  }
+const documentStorage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'rabta_documents',
+    resource_type: 'raw', // ملفات الـ PDF والـ Word بتترفع كـ Raw data
+  } as any,
 });
 
 const documentFilter = (req: any, file: any, cb: any) => {
@@ -100,9 +79,9 @@ const documentFilter = (req: any, file: any, cb: any) => {
     'application/pdf',
     'application/msword',
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    'text/plain'
+    'text/plain',
   ];
-  
+
   if (allowedMimeTypes.includes(file.mimetype)) {
     cb(null, true);
   } else {
@@ -113,27 +92,29 @@ const documentFilter = (req: any, file: any, cb: any) => {
 export const uploadDocument = multer({
   storage: documentStorage,
   fileFilter: documentFilter,
-  limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit for documents
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
 });
 
 // ==========================================
 // 📎 إعداد رفع المرفقات العامة (General Attachments)
 // ==========================================
-const attachmentUploadDir = path.join(process.cwd(), 'uploads', 'attachments');
-if (!fs.existsSync(attachmentUploadDir)) {
-  fs.mkdirSync(attachmentUploadDir, { recursive: true });
-}
+// ==========================================
+// 📎 إعداد رفع المرفقات العامة (General Attachments)
+// ==========================================
+const attachmentStorage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: async (req, file) => {
+    const isDocument = file.mimetype === 'application/pdf' || file.mimetype.includes('document') || file.mimetype.includes('text');
+    
+    // هبنعمل اسم فريد للملَف وبنحافظ على الامتداد الأصلي (.pdf) في الآخر
+    const uniqueFileName = `${Date.now()}-${file.originalname}`;
 
-const attachmentStorage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, attachmentUploadDir);
+    return {
+      folder: 'rabta_attachments',
+      resource_type: isDocument ? 'raw' : 'auto', 
+      public_id: uniqueFileName, // 👈 السطر ده هيجبر كلاوديناري يحفظ الملف بامتداده الأصلي
+    };
   },
-  filename: (req, file, cb) => {
-    const userId = (req as any).user?._id || 'unknown';
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    const ext = path.extname(file.originalname);
-    cb(null, `attachment-${userId}-${uniqueSuffix}${ext}`);
-  }
 });
 
 const attachmentFilter = (req: any, file: any, cb: any) => {
@@ -148,9 +129,9 @@ const attachmentFilter = (req: any, file: any, cb: any) => {
     'image/webp',
     'video/mp4',
     'video/webm',
-    'video/quicktime'
+    'video/quicktime',
   ];
-  
+
   if (allowedMimeTypes.includes(file.mimetype)) {
     cb(null, true);
   } else {
@@ -161,5 +142,5 @@ const attachmentFilter = (req: any, file: any, cb: any) => {
 export const uploadAttachment = multer({
   storage: attachmentStorage,
   fileFilter: attachmentFilter,
-  limits: { fileSize: 50 * 1024 * 1024 } // 50MB limit for general attachments including videos
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB
 });
