@@ -44,7 +44,7 @@ function isDocFile(url: string, type: MessageType['type'], fileName?: string): b
     return true;
   }
   if (DOC_EXT_IN_PATH.test(url)) return true;
-  return type === 'file';
+  return false;
 }
 
 function buildBuckets(messages: MessageType[]) {

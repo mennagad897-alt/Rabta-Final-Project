@@ -7,7 +7,7 @@ import Chat from "../models/chat";
 import fs from "fs";
 import path from "path";
 import { isUserOnline } from "../server";
-import { embeddingsModel } from "../services/Ai/core.ai.service";
+
 // ==========================================
 // 💬 كنترولر الشات والرسائل والجروبات والمجتمعات
 // ==========================================
@@ -27,22 +27,6 @@ export const getMessageHistory = catchAsync(
     // الـ limit بين 20 و 50 عشان نحمي السيرفر من الطلبات الكبيرة
     const limit = parseInt(req.query.limit as string) || 30;
     const before = req.query.before as string; // cursor-based pagination
-
-    const ChatModel = require("../models/chat").default;
-    const chatDoc = await ChatModel.findById(chatId).select(
-      "isGroup status initiatedBy users",
-    );
-    if (
-      chatDoc &&
-      !chatDoc.isGroup &&
-      chatDoc.status === "pending"
-    ) {
-      return res.status(200).json({
-        status: "success",
-        results: 0,
-        data: { messages: [] },
-      });
-    }
 
     const messages = await chatService.getChatMessages(
       chatId as string,
@@ -86,47 +70,6 @@ export const accessChat = catchAsync(
 
     res.status(200).json({
       status: "success",
-      data: { chat },
-    });
-  },
-);
-
-export const respondToChatRequest = catchAsync(
-  async (req: Request, res: Response, next: NextFunction) => {
-    const userId = (req.user as any)._id.toString();
-    const chatId = String(req.params.id);
-    const { action } = req.body;
-
-    if (!["accept", "reject"].includes(action)) {
-      return next(new AppError("Action must be 'accept' or 'reject'", 400));
-    }
-
-    const chat = await chatService.respondToChatRequest(
-      chatId,
-      userId,
-      action,
-    );
-
-    const io = req.app.get("io");
-    if (io && chat) {
-      const payload = { chat };
-      chat.users.forEach((u: { _id?: { toString(): string }; toString?: () => string }) => {
-        const uid =
-          typeof u === "object" && u !== null && "_id" in u
-            ? u._id?.toString()
-            : u?.toString?.();
-        if (uid) io.to(uid).emit("chat-request-updated", payload);
-      });
-    } else if (io && action === "reject") {
-      io.to(userId).emit("chat-request-rejected", { chatId });
-    }
-
-    res.status(200).json({
-      status: "success",
-      message:
-        action === "accept"
-          ? "Chat request accepted"
-          : "Chat request declined",
       data: { chat },
     });
   },
@@ -433,19 +376,9 @@ export const sendMessage = catchAsync(
     const initialStatus: "sent" | "delivered" =
       recipientId && isUserOnline(recipientId) ? "delivered" : "sent";
 
-   let savedMsg;
+    let savedMsg;
     try {
-      // 1. نعمل الـ Embedding الأول (لو في محتوى نصي)
-      let messageEmbedding: number[] = [];
-    if (content) {
-        try {
-          messageEmbedding = await embeddingsModel.embedQuery(content);
-          console.log("✅ Embedding success! Length:", messageEmbedding.length); // سطر التيست ده مهم جداً
-        } catch (error) {
-          console.error("❌ Error from OpenAI Embeddings:", error);
-        }
-      }
-      // 2. بعد ما الأرقام جهزت، نحفظ الرسالة في الداتابيز
+      // createMessage persists to DB (await save) before returning
       savedMsg = await chatService.createMessage({
         chatId: id,
         senderId,
@@ -457,9 +390,8 @@ export const sendMessage = catchAsync(
         duration,
         attachments,
         status: initialStatus,
-        embedding: messageEmbedding // دلوقتي الكود شايف الأرقام صح وهيبعتها
       });
-     } catch (error) {
+    } catch (error) {
       console.error("Validation Error in sendMessage:", error);
       throw error;
     }
@@ -479,6 +411,47 @@ export const sendMessage = catchAsync(
     }
 
   await chatService.emitNewCommunityMessage(io, id, savedMsg as any);
+
+    if (io) {
+      const { User } = require("../models/user");
+      const fullChat = await Chat.findById(id).select("users isGroup groupName");
+      const receiverId = fullChat && !fullChat.isGroup
+        ? (fullChat.users || []).find((uid: any) => uid.toString() !== (req.user as any)._id.toString())?.toString()
+        : null;
+
+      // Direct chat notification
+      if (receiverId) {
+        const receiverUser = await User.findById(receiverId)
+          .select('notificationSettings').lean();
+        if (receiverUser?.notificationSettings?.chatMessages !== false) {
+          io.to(receiverId).emit('notification', {
+            type: 'chat',
+            message: `New message from ${(req.user as any).fullName || 'Someone'}`,
+            senderId: (req.user as any)._id.toString(),
+            chatId: id
+          });
+        }
+      }
+
+      // Group chat notification
+      if (fullChat?.isGroup) {
+        const groupMembers = (fullChat.users || []).filter(
+          (uid: any) => uid.toString() !== (req.user as any)._id.toString()
+        );
+        for (const memberId of groupMembers) {
+          const memberUser = await User.findById(memberId)
+            .select('notificationSettings').lean();
+          if (memberUser?.notificationSettings?.communityMentions !== false) {
+            io.to(memberId.toString()).emit('notification', {
+              type: 'group',
+              message: `New message in ${fullChat.groupName || 'a group'} from ${(req.user as any).fullName || 'Someone'}`,
+              senderId: (req.user as any)._id.toString(),
+              chatId: id
+            });
+          }
+        }
+      }
+    }
 
     res.status(201).json({
       status: "success",

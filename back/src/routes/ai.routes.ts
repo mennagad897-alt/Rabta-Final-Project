@@ -4,9 +4,8 @@ import { protect } from "../middlewares/auth.middleware";
 import {
   ingestCommunity,
   askCommunityAgent,
-} from "../controllers/community.ai.controller";
-import { createVectorStore } from "../controllers/globalAi.controller";
-import * as aiController from "../controllers/globalAi.controller";
+} from "../controllers/ai.controller";
+
 const router = Router();
 
 // Endpoint عشان نـ Generate الـ Vectors لجروب معين
@@ -20,9 +19,4 @@ router.post(
   checkCommunityMembership, // 👈 ده البواب الجديد بتاعنا
   askCommunityAgent,
 );
-router.post("/create-vector-store",protect, aiController.createVectorStore);
-
-router.post("/ask-global", protect,aiController.askGlobalAi);
-
-router.post("/smart-search/:chatId", protect, aiController.smartSearch);
 export default router;

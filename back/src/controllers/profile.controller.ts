@@ -311,7 +311,6 @@ export const getSavedItems = catchAsync(async (req: Request, res: Response, next
 // 11. Get My Contacts (Role-based visibility)
 export const getMyContacts = catchAsync(async (req: Request, res: Response) => {
   const user = req.user as IUser;
-  const connectionsOnly = req.query.connectionsOnly === 'true';
   let contactIds: mongoose.Types.ObjectId[] = [];
 
   if (user.role === 'employer') {
@@ -325,20 +324,19 @@ export const getMyContacts = catchAsync(async (req: Request, res: Response) => {
       contactIds.push(...user.savedFreelancers);
     }
   } else {
+    // 1. Users in the freelancer's manually added connections
     if (user.connections) {
       contactIds.push(...user.connections as mongoose.Types.ObjectId[]);
     }
 
-    if (!connectionsOnly) {
-      const chats = await Chat.find({
-        users: user._id,
-        hiddenBy: { $ne: user._id },
-      });
-      const chatUsers = chats
-        .flatMap((chat) => chat.users)
-        .filter((id) => id.toString() !== user._id.toString());
-      contactIds.push(...(chatUsers as mongoose.Types.ObjectId[]));
-    }
+    // 2. Fallback to chat history: Users they have an existing chat history with
+    const chats = await Chat.find({ 
+      users: user._id,
+      hiddenBy: { $ne: user._id }
+    });
+    const chatUsers = chats.flatMap(chat => chat.users)
+      .filter(id => id.toString() !== user._id.toString());
+    contactIds.push(...chatUsers as mongoose.Types.ObjectId[]);
   }
 
   // Deduplicate and filter out own ID
@@ -359,37 +357,6 @@ export const getMyContacts = catchAsync(async (req: Request, res: Response) => {
   res.status(200).json({
     status: 'success',
     data: { contacts }
-  });
-});
-
-// Recent contacts from 1-to-1 chat history
-export const getRecentContacts = catchAsync(async (req: Request, res: Response) => {
-  const user = req.user as IUser;
-  const userId = user._id.toString();
-  const myBlockedUsers = user.blockedUsers || [];
-
-  const chats = await Chat.find({
-    isGroup: false,
-    users: userId,
-    $or: [{ hiddenBy: { $exists: false } }, { hiddenBy: { $ne: userId } }],
-  }).select('users');
-
-  const contactIds = new Set<string>();
-  chats.forEach((chat) => {
-    chat.users.forEach((id) => {
-      const otherId = id.toString();
-      if (otherId !== userId) contactIds.add(otherId);
-    });
-  });
-
-  const contacts = await User.find({
-    _id: { $in: Array.from(contactIds), $nin: myBlockedUsers },
-    blockedUsers: { $ne: user._id },
-  }).select('fullName avatar phoneNumber jobTitle status role');
-
-  res.status(200).json({
-    status: 'success',
-    data: { contacts },
   });
 });
 

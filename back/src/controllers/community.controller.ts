@@ -10,7 +10,6 @@ import { AppError } from "../utils/AppError";
 import {
   countUnreadMessages,
   getChatMessages,
-  leaveCommunity as leaveCommunityService,
 } from "../services/chat.service";
 
 // ==========================================
@@ -23,17 +22,12 @@ export const listCommunities = catchAsync(
     const { category } = req.query;
     const userId = (req.user as any)._id.toString();
 
-    const filter: any = {
-      $or: [{ members: userId }, { invitedUsers: userId }],
-    };
+    // [FIX #9] الـ filter الرئيسي: بس الـ communities اللي المستخدم في الـ members بتاعتها
+    const filter: any = { members: userId };
     if (category) filter.category = category;
 
     const communities = await Community.find(filter)
-      .populate("owner", "fullName avatar")
       .populate("members", "fullName avatar")
-      .populate("admins", "fullName avatar")
-      .populate("invitedUsers", "fullName avatar")
-      .populate("joinRequests.userId", "fullName avatar")
       .populate({
         path: "chatId",
         populate: {
@@ -87,6 +81,7 @@ export const searchCommunities = catchAsync(
     const regex = new RegExp(escaped, "i");
 
     const communities = await Community.find({
+      isPublic: true,
       $or: [
         { name: regex },
         { description: regex },
@@ -95,10 +90,7 @@ export const searchCommunities = catchAsync(
       ],
     })
       .populate("owner", "fullName avatar")
-      .populate("joinRequests.userId", "fullName avatar")
-      .select(
-        "name description avatar members tags category isPublic createdAt joinRequests",
-      )
+      .select("name description avatar members tags category isPublic createdAt")
       .limit(30)
       .sort("-createdAt");
 
@@ -193,7 +185,7 @@ export const createCommunity = catchAsync(
 );
 
 // ==========================================
-// 🚪 Join community (public) or request access (private)
+// 🚪 الانضمام لـ Community عامة (Public)
 // ==========================================
 export const joinCommunity = catchAsync(
   async (req: Request, res: Response, next: NextFunction) => {
@@ -202,43 +194,28 @@ export const joinCommunity = catchAsync(
 
     const userId = (req.user as any)._id;
 
+    // التحقق إن المستخدم مش عضو بالفعل
     if (community.members.some((m) => m.toString() === userId.toString())) {
       return next(
         new AppError("You are already a member of this community", 400),
       );
     }
 
+    // [FIX #10] لو الـ community خاصة، مينفعش ينضم مباشرة
     if (!community.isPublic) {
-      const existingRequest = community.joinRequests.find(
-        (r) =>
-          r.userId.toString() === userId.toString() && r.status === "pending",
+      return next(
+        new AppError(
+          "This community is private. Please send a join request instead.",
+          403,
+        ),
       );
-      if (existingRequest) {
-        return next(
-          new AppError(
-            "You already have a pending join request for this community",
-            400,
-          ),
-        );
-      }
-
-      community.joinRequests.push({
-        userId,
-        requestedAt: new Date(),
-        status: "pending",
-      });
-      await community.save();
-
-      return res.status(200).json({
-        status: "success",
-        message: "Request sent",
-        data: { requestSent: true },
-      });
     }
 
+    // إضافة المستخدم للـ members
     community.members.push(userId);
     await community.save();
 
+    // إضافة المستخدم للـ Chat المرتبط بالـ community
     if (community.chatId) {
       await Chat.findByIdAndUpdate(community.chatId, {
         $addToSet: { users: userId },
@@ -248,19 +225,77 @@ export const joinCommunity = catchAsync(
     res.status(200).json({
       status: "success",
       message: "Joined community successfully",
-      data: { requestSent: false },
     });
   },
 );
 
 // ==========================================
-// ✅❌ Accept or reject a join request (admins only)
+// 📩 إرسال طلب انضمام لـ Community خاصة (Private)
 // ==========================================
-export const manageJoinRequest = catchAsync(
+// [FIX #10] ميزة جديدة: المستخدم يبعت request والأدمن يقبل أو يرفض
+export const requestJoinCommunity = catchAsync(
   async (req: Request, res: Response, next: NextFunction) => {
-    const communityId = String(req.params.id);
-    const targetUserId = String(req.params.userId);
-    const { action } = req.body;
+    const community = await Community.findById(req.params.id);
+    if (!community) return next(new AppError("Community not found", 404));
+
+    const userId = (req.user as any)._id;
+
+    // التحقق إن المستخدم مش عضو بالفعل
+    if (community.members.some((m) => m.toString() === userId.toString())) {
+      return next(
+        new AppError("You are already a member of this community", 400),
+      );
+    }
+
+    // التحقق إن المستخدم ماعندوش request معلق بالفعل
+    const existingRequest = community.joinRequests.find(
+      (r) =>
+        r.userId.toString() === userId.toString() && r.status === "pending",
+    );
+    if (existingRequest) {
+      return next(
+        new AppError(
+          "You already have a pending join request for this community",
+          400,
+        ),
+      );
+    }
+
+    // لو الـ community عامة، المستخدم يانضم مباشرة بدل ما يبعت request
+    if (community.isPublic) {
+      return next(
+        new AppError(
+          "This community is public. Use the join endpoint instead.",
+          400,
+        ),
+      );
+    }
+
+    // إضافة الطلب
+    community.joinRequests.push({
+      userId,
+      requestedAt: new Date(),
+      status: "pending",
+    });
+    await community.save();
+
+    // TODO (المرحلة 6): إرسال إشعار للأدمنز عبر الـ Socket
+
+    res.status(200).json({
+      status: "success",
+      message: "Join request sent successfully. Waiting for admin approval.",
+    });
+  },
+);
+
+// ==========================================
+// ✅❌ الرد على طلب الانضمام (قبول أو رفض) — للأدمنز بس
+// ==========================================
+// [FIX #10] الأدمن يقدر يقبل أو يرفض طلبات الانضمام
+export const respondToJoinRequest = catchAsync(
+  async (req: Request, res: Response, next: NextFunction) => {
+    const { id: communityId, requestId } = req.params;
+    const { action } = req.body; // action: 'accept' | 'reject'
     const adminId = (req.user as any)._id.toString();
 
     if (!["accept", "reject"].includes(action)) {
@@ -270,6 +305,7 @@ export const manageJoinRequest = catchAsync(
     const community = await Community.findById(communityId);
     if (!community) return next(new AppError("Community not found", 404));
 
+    // التحقق إن المستخدم الحالي أدمن في الـ community
     const isAdmin =
       community.owner.toString() === adminId ||
       community.admins.some((a) => a.toString() === adminId);
@@ -280,253 +316,48 @@ export const manageJoinRequest = catchAsync(
       );
     }
 
-    const requestIndex = community.joinRequests.findIndex(
-      (r) =>
-        r.userId.toString() === targetUserId.toString() &&
-        r.status === "pending",
+    // إيجاد الطلب
+    const joinRequest = community.joinRequests.find(
+      (r) => r._id?.toString() === requestId,
     );
-    if (requestIndex === -1) {
+    if (!joinRequest) {
       return next(new AppError("Join request not found", 404));
     }
-
-    community.joinRequests.splice(requestIndex, 1);
+    if (joinRequest.status !== "pending") {
+      return next(new AppError("This request has already been processed", 400));
+    }
 
     if (action === "accept") {
-      if (
-        !community.members.some((m) => m.toString() === targetUserId.toString())
-      ) {
-        community.members.push(new mongoose.Types.ObjectId(targetUserId));
-      }
+      // قبول الطلب: إضافة المستخدم للـ members
+      joinRequest.status = "accepted";
+      community.members.push(joinRequest.userId);
       await community.save();
 
+      // إضافة المستخدم للـ Chat المرتبط
       if (community.chatId) {
         await Chat.findByIdAndUpdate(community.chatId, {
-          $addToSet: { users: targetUserId },
+          $addToSet: { users: joinRequest.userId },
         });
       }
 
-      const populatedCommunity = await Community.findById(community._id)
-        .populate("members", "fullName avatar")
-        .populate("admins", "fullName avatar")
-        .populate("joinRequests.userId", "fullName avatar")
-        .populate({
-          path: "chatId",
-          populate: {
-            path: "latestMessage",
-            populate: { path: "senderId", select: "fullName" },
-          },
-        });
+      // TODO (المرحلة 6): إرسال إشعار للمستخدم بالقبول عبر الـ Socket
 
-      const io = req.app.get("io");
-      if (io && populatedCommunity) {
-        io.to(targetUserId.toString()).emit("added-to-community", {
-          community: populatedCommunity,
-        });
-      }
-
-      return res.status(200).json({
+      res.status(200).json({
         status: "success",
         message: "Join request accepted. User has been added to the community.",
-        data: { community: populatedCommunity },
+      });
+    } else {
+      // رفض الطلب
+      joinRequest.status = "rejected";
+      await community.save();
+
+      // TODO (المرحلة 6): إرسال إشعار للمستخدم بالرفض عبر الـ Socket
+
+      res.status(200).json({
+        status: "success",
+        message: "Join request rejected.",
       });
     }
-
-    await community.save();
-
-    res.status(200).json({
-      status: "success",
-      message: "Join request rejected.",
-    });
-  },
-);
-
-// ==========================================
-// 🚪 Leave community
-// ==========================================
-export const leaveCommunity = catchAsync(
-  async (req: Request, res: Response, next: NextFunction) => {
-    const userId = (req.user as any)._id.toString();
-    const result = await leaveCommunityService(String(req.params.id), userId);
-    res.status(200).json({
-      status: "success",
-      message: result.message,
-    });
-  },
-);
-
-const populateCommunityForClient = (communityId: string) =>
-  Community.findById(communityId)
-    .populate("members", "fullName avatar")
-    .populate("admins", "fullName avatar")
-    .populate("owner", "fullName avatar")
-    .populate("invitedUsers", "fullName avatar")
-    .populate("joinRequests.userId", "fullName avatar")
-    .populate({
-      path: "chatId",
-      populate: {
-        path: "latestMessage",
-        populate: { path: "senderId", select: "fullName" },
-      },
-    });
-
-// ==========================================
-// ➕ Invite user to community (owner/admin only)
-// ==========================================
-export const addCommunityMember = catchAsync(
-  async (req: Request, res: Response, next: NextFunction) => {
-    const adminId = (req.user as any)._id.toString();
-    const communityId = String(req.params.id);
-    const targetUserId = String(req.body.userId);
-
-    if (!targetUserId) {
-      return next(new AppError("userId is required", 400));
-    }
-
-    const community = await Community.findById(communityId);
-    if (!community) return next(new AppError("Community not found", 404));
-
-    const isAdmin =
-      community.owner.toString() === adminId ||
-      community.admins.some((a) => a.toString() === adminId);
-    if (!isAdmin) {
-      return next(new AppError("Only admins can invite members", 403));
-    }
-
-    if (community.members.some((m) => m.toString() === targetUserId)) {
-      return next(new AppError("User is already a member", 400));
-    }
-
-    if (community.invitedUsers?.some((id) => id.toString() === targetUserId)) {
-      return next(new AppError("User already has a pending invitation", 400));
-    }
-
-    community.invitedUsers = community.invitedUsers || [];
-    community.invitedUsers.push(new mongoose.Types.ObjectId(targetUserId));
-    await community.save();
-
-    const populatedCommunity = await populateCommunityForClient(communityId);
-
-    const io = req.app.get("io");
-    if (io && populatedCommunity) {
-      io.to(targetUserId).emit("invited-to-community", {
-        community: populatedCommunity,
-      });
-    }
-
-    res.status(200).json({
-      status: "success",
-      message: "Invitation sent",
-      data: { community: populatedCommunity },
-    });
-  },
-);
-
-// ==========================================
-// ✅ Accept community invitation
-// ==========================================
-export const acceptCommunityInvite = catchAsync(
-  async (req: Request, res: Response, next: NextFunction) => {
-    const userId = (req.user as any)._id.toString();
-    const communityId = String(req.params.id);
-
-    const community = await Community.findById(communityId);
-    if (!community) return next(new AppError("Community not found", 404));
-
-    const invited = community.invitedUsers?.some(
-      (id) => id.toString() === userId,
-    );
-    if (!invited) {
-      return next(new AppError("No pending invitation for this community", 404));
-    }
-
-    community.invitedUsers = (community.invitedUsers || []).filter(
-      (id) => id.toString() !== userId,
-    );
-    if (!community.members.some((m) => m.toString() === userId)) {
-      community.members.push(new mongoose.Types.ObjectId(userId));
-    }
-    await community.save();
-
-    if (community.chatId) {
-      await Chat.findByIdAndUpdate(community.chatId, {
-        $addToSet: { users: userId },
-      });
-    }
-
-    const populatedCommunity = await populateCommunityForClient(communityId);
-
-    const io = req.app.get("io");
-    if (io && populatedCommunity) {
-      io.to(userId).emit("added-to-community", { community: populatedCommunity });
-    }
-
-    res.status(200).json({
-      status: "success",
-      message: "Invitation accepted",
-      data: { community: populatedCommunity },
-    });
-  },
-);
-
-// ==========================================
-// ❌ Decline community invitation
-// ==========================================
-export const declineCommunityInvite = catchAsync(
-  async (req: Request, res: Response, next: NextFunction) => {
-    const userId = (req.user as any)._id.toString();
-    const communityId = String(req.params.id);
-
-    const community = await Community.findById(communityId);
-    if (!community) return next(new AppError("Community not found", 404));
-
-    const before = community.invitedUsers?.length ?? 0;
-    community.invitedUsers = (community.invitedUsers || []).filter(
-      (id) => id.toString() !== userId,
-    );
-    if (community.invitedUsers.length === before) {
-      return next(new AppError("No pending invitation for this community", 404));
-    }
-    await community.save();
-
-    res.status(200).json({
-      status: "success",
-      message: "Invitation declined",
-    });
-  },
-);
-
-// ==========================================
-// 🗑️ Delete community (owner/admin only)
-// ==========================================
-export const deleteCommunity = catchAsync(
-  async (req: Request, res: Response, next: NextFunction) => {
-    const userId = (req.user as any)._id.toString();
-    const community = await Community.findById(req.params.id);
-
-    if (!community) {
-      return next(new AppError("Community not found", 404));
-    }
-
-    const isOwnerOrAdmin =
-      community.owner.toString() === userId ||
-      community.admins.some((a) => a.toString() === userId);
-
-    if (!isOwnerOrAdmin) {
-      return next(
-        new AppError("You are not authorized to delete this community", 403),
-      );
-    }
-
-    const chatId = community.chatId;
-    await Community.findByIdAndDelete(community._id);
-    if (chatId) {
-      await Chat.findByIdAndDelete(chatId);
-    }
-
-    res.status(200).json({
-      status: "success",
-      message: "Community deleted successfully",
-    });
   },
 );
 

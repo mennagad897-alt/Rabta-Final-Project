@@ -174,7 +174,7 @@ export const Settings = () => {
               </span>
             </div>
 
-            <div 
+            {/* <div 
               className="flex items-center gap-4 p-4 hover:bg-gray-50 dark:hover:bg-white/2 cursor-pointer transition-colors"
               onClick={() => handleToggle('notifications', 'aiJobMatches')}
             >
@@ -188,7 +188,7 @@ export const Settings = () => {
               <div className={`w-10 h-5 rounded-full relative transition-all ${settings.notifications.aiJobMatches ? 'bg-[#7C3AED] dark:bg-[#8B5CF6]' : 'bg-gray-200 dark:bg-gray-700'}`}>
                 <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${settings.notifications.aiJobMatches ? 'translate-x-5' : 'translate-x-1'}`}></div>
               </div>
-            </div>
+            </div> */}
           </div>
 
           {/* Logout Button */}

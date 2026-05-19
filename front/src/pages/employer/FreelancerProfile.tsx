@@ -78,7 +78,7 @@ const FreelancerProfile: React.FC = () => {
           </div>
           <div className="flex-1">
             <h1 className="text-3xl font-bold mb-1">{profile.fullName}</h1>
-            <p className="text-[#7C3AED] dark:text-[#8B5CF6] font-medium text-lg mb-4">{profile.jobTitle || 'Freelancer'}</p>
+            <p className="text-[#7C3AED] dark:text-[#8B5CF6] font-medium text-lg mb-4">{profile.jobTitle || (profile.role === 'employer' ? 'Employer' : 'Freelancer')}</p>
             <p className="text-gray-600 dark:text-gray-400 leading-relaxed mb-6">
               {profile.bio || "No bio provided."}
             </p>

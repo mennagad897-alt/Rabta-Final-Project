@@ -21,7 +21,6 @@ import {
   deleteMyAccount,
   searchUsers,
   getMyContacts,
-  getRecentContacts,
   findByPhone,
   addConnection,
 } from "../controllers/profile.controller";
@@ -45,7 +44,7 @@ import employerRoutes from "./employer.routes";
 import communityRoutes from "./communityRoutes";
 import postRoutes from "./postRoutes";
 import jobRoutes from "./jobRoutes";
-import notificationRoutes from "./notificationRoutes";
+import notificationRoutes from "./notification.routes";
 import adminRoutes from "./admin.routes";
 import aiRoutes from "./ai.routes";
 
@@ -139,7 +138,6 @@ router.put("/users/verify-request", protect, requestVerification);
 
 // Saved Items — MUST be above /users/:id to prevent wildcard capture
 router.get("/users/my-contacts", protect, getMyContacts);
-router.get("/users/recent-contacts", protect, getRecentContacts);
 router.get("/users/find-by-phone", protect, findByPhone);
 router.post("/users/add-connection", protect, addConnection);
 router.get("/users/saved-items", protect, getSavedItems);

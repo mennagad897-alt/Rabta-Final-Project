@@ -4,11 +4,6 @@ export interface IMessage extends Document {
   chatId: mongoose.Types.ObjectId;
   senderId: mongoose.Types.ObjectId;
   content?: string;
-  embedding: {
-      type: [Number],
-      default: [], // عشان لو رسالة مفيهاش نص ميعملش مشكلة
-      select: false // (اختياري) عشان الأرقام دي مترجعش للفرونت إند وتقلل سرعة الشات، إحنا محتاجينها في الباك إند بس للبحث
- },
   audioUrl?: string;
   messageType:
     | "text"
@@ -44,10 +39,6 @@ const MessageSchema: Schema = new Schema(
     chatId: { type: Schema.Types.ObjectId, ref: "Chat", required: true },
     senderId: { type: Schema.Types.ObjectId, ref: "User", required: true },
     content: { type: String },
-    embedding: { 
-      type: [Number], 
-      default: [] 
-    },
     audioUrl: { type: String },
     messageType: {
       type: String,
