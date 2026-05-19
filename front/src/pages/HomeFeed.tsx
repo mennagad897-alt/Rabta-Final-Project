@@ -62,7 +62,13 @@ export const HomeFeed = () => {
       isGroup: false,
       unreadCount: chat.unreadCount || 0,
       lastMessageIsMine,
-      lastMessageStatus
+      lastMessageStatus,
+      chatStatus: chat.status || 'accepted',
+      initiatedBy:
+        typeof chat.initiatedBy === 'object'
+          ? chat.initiatedBy?._id
+          : chat.initiatedBy,
+      isPendingRequest: chat.status === 'pending',
     };
   };
 
@@ -257,8 +263,77 @@ export const HomeFeed = () => {
     };
   }, [socket, currentUserId]);
 
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleChatRequestUpdated = (payload: { chat?: { _id?: string; status?: string } }) => {
+      const chat = payload?.chat;
+      if (!chat?._id) return;
+      const formatted = formatChatFromApi(chat);
+      setChats((prev) => {
+        const exists = prev.some((c) => String(c._id) === String(chat._id));
+        if (exists) {
+          return prev.map((c) =>
+            String(c._id) === String(chat._id) ? { ...c, ...formatted } : c,
+          );
+        }
+        return [formatted, ...prev];
+      });
+    };
+
+    const handleChatRequestRejected = ({ chatId }: { chatId: string }) => {
+      setChats((prev) => prev.filter((c) => String(c._id) !== String(chatId)));
+      if (String(chatId) === String(activeChatId)) {
+        setActiveChatId(null);
+      }
+    };
+
+    socket.on('chat-request-updated', handleChatRequestUpdated);
+    socket.on('chat-request-rejected', handleChatRequestRejected);
+    return () => {
+      socket.off('chat-request-updated', handleChatRequestUpdated);
+      socket.off('chat-request-rejected', handleChatRequestRejected);
+    };
+  }, [socket, activeChatId, currentUserId]);
+
+  const handleRespondToChatRequest = async (
+    chatId: string,
+    action: 'accept' | 'reject',
+  ) => {
+    try {
+      const { data } = await axiosInstance.put(`/chats/${chatId}/request`, {
+        action,
+      });
+      if (action === 'reject') {
+        setChats((prev) => prev.filter((c) => String(c._id) !== String(chatId)));
+        setActiveChatId(null);
+        toast.success('Chat request declined');
+        return;
+      }
+      const updated = data.data?.chat;
+      if (updated) {
+        const formatted = formatChatFromApi(updated);
+        setChats((prev) =>
+          prev.map((c) =>
+            String(c._id) === String(chatId) ? { ...c, ...formatted } : c,
+          ),
+        );
+      }
+      toast.success('Chat request accepted');
+    } catch (error: unknown) {
+      const message = (error as { response?: { data?: { message?: string } } })
+        ?.response?.data?.message;
+      toast.error(message || 'Failed to update chat request');
+    }
+  };
+
   // تحديد بيانات الشات المفتوح حالياً لتمريرها كـ Props
   const activeChat = chats.find(c => c._id === activeChatId);
+  const isPendingChat = activeChat?.chatStatus === 'pending';
+  const isChatInitiator =
+    isPendingChat && String(activeChat?.initiatedBy) === String(currentUserId);
+  const isChatRecipient =
+    isPendingChat && String(activeChat?.initiatedBy) !== String(currentUserId);
 
   // New Message Search Logic
   const [phoneQuery, setPhoneQuery] = useState('');
@@ -367,6 +442,12 @@ export const HomeFeed = () => {
             showOnlineStatus={activeChat.showOnlineStatus !== false}
             isGroup={activeChat.isGroup || false}
             receiverId={activeChat.receiverId}
+            chatStatus={activeChat.chatStatus}
+            isChatInitiator={isChatInitiator}
+            isChatRecipient={isChatRecipient}
+            onRespondToChatRequest={(action) =>
+              void handleRespondToChatRequest(activeChatId, action)
+            }
             messages={messages}
             setMessages={setMessages}
             isChatSearchOpen={isChatSearchOpen}

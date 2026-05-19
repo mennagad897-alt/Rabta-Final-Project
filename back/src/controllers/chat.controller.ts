@@ -28,6 +28,22 @@ export const getMessageHistory = catchAsync(
     const limit = parseInt(req.query.limit as string) || 30;
     const before = req.query.before as string; // cursor-based pagination
 
+    const ChatModel = require("../models/chat").default;
+    const chatDoc = await ChatModel.findById(chatId).select(
+      "isGroup status initiatedBy users",
+    );
+    if (
+      chatDoc &&
+      !chatDoc.isGroup &&
+      chatDoc.status === "pending"
+    ) {
+      return res.status(200).json({
+        status: "success",
+        results: 0,
+        data: { messages: [] },
+      });
+    }
+
     const messages = await chatService.getChatMessages(
       chatId as string,
       userId,
@@ -70,6 +86,47 @@ export const accessChat = catchAsync(
 
     res.status(200).json({
       status: "success",
+      data: { chat },
+    });
+  },
+);
+
+export const respondToChatRequest = catchAsync(
+  async (req: Request, res: Response, next: NextFunction) => {
+    const userId = (req.user as any)._id.toString();
+    const chatId = String(req.params.id);
+    const { action } = req.body;
+
+    if (!["accept", "reject"].includes(action)) {
+      return next(new AppError("Action must be 'accept' or 'reject'", 400));
+    }
+
+    const chat = await chatService.respondToChatRequest(
+      chatId,
+      userId,
+      action,
+    );
+
+    const io = req.app.get("io");
+    if (io && chat) {
+      const payload = { chat };
+      chat.users.forEach((u: { _id?: { toString(): string }; toString?: () => string }) => {
+        const uid =
+          typeof u === "object" && u !== null && "_id" in u
+            ? u._id?.toString()
+            : u?.toString?.();
+        if (uid) io.to(uid).emit("chat-request-updated", payload);
+      });
+    } else if (io && action === "reject") {
+      io.to(userId).emit("chat-request-rejected", { chatId });
+    }
+
+    res.status(200).json({
+      status: "success",
+      message:
+        action === "accept"
+          ? "Chat request accepted"
+          : "Chat request declined",
       data: { chat },
     });
   },

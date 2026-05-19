@@ -11,6 +11,7 @@ import {
   sendMessage,
   sendAudioMessage,
   markMessagesAsRead,
+  respondToChatRequest,
   getSharedContent,
   clearChat,
   clearChatHistory,
@@ -55,6 +56,9 @@ router.post(
 
 // تحديد الرسائل كمقروءة
 router.put("/:id/read", markMessagesAsRead);
+
+// Accept or reject a pending 1-to-1 chat request
+router.put('/:id/request', respondToChatRequest);
 
 // جلب المحتوى المشارك في شات معين
 router.get("/:id/shared", getSharedContent);
