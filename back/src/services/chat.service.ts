@@ -183,6 +183,7 @@ export const createMessage = async (data: {
   replyTo?: string;
   isForwarded?: boolean;
   attachments?: { fileUrl: string; fileType: string; fileSize?: number }[];
+  embedding?: number[];
 }) => {
   // Ø§Ù„ØªØ£ÙƒØ¯ Ø¥Ù† Ø§Ù„Ø´Ø§Øª Ù…ÙˆØ¬ÙˆØ¯ ÙØ¹Ù„Ø§Ù‹
   const chat = await Chat.findById(data.chatId);
@@ -213,6 +214,7 @@ export const createMessage = async (data: {
     attachments: data.attachments || [],
     replyTo: data.replyTo,
     isForwarded: data.isForwarded || false,
+    embedding: data.embedding,
   });
   await newMessage.save();
 

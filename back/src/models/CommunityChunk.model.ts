@@ -17,7 +17,12 @@ const CommunityChunkSchema: Schema = new Schema(
     communityId: {
       type: Schema.Types.ObjectId,
       ref: "Community",
-      required: true,
+      required: false,
+    },
+    chatId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Chat",
+      required: false,
     },
     content: { type: String, required: true },
     embedding: { type: [Number], required: true },

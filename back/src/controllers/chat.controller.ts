@@ -7,7 +7,7 @@ import Chat from "../models/chat";
 import fs from "fs";
 import path from "path";
 import { isUserOnline } from "../server";
-
+import { embeddingsModel } from "../services/Ai/core.ai.service";
 // ==========================================
 // 💬 كنترولر الشات والرسائل والجروبات والمجتمعات
 // ==========================================
@@ -376,9 +376,19 @@ export const sendMessage = catchAsync(
     const initialStatus: "sent" | "delivered" =
       recipientId && isUserOnline(recipientId) ? "delivered" : "sent";
 
-    let savedMsg;
+   let savedMsg;
     try {
-      // createMessage persists to DB (await save) before returning
+      // 1. نعمل الـ Embedding الأول (لو في محتوى نصي)
+      let messageEmbedding: number[] = [];
+    if (content) {
+        try {
+          messageEmbedding = await embeddingsModel.embedQuery(content);
+          console.log("✅ Embedding success! Length:", messageEmbedding.length); // سطر التيست ده مهم جداً
+        } catch (error) {
+          console.error("❌ Error from OpenAI Embeddings:", error);
+        }
+      }
+      // 2. بعد ما الأرقام جهزت، نحفظ الرسالة في الداتابيز
       savedMsg = await chatService.createMessage({
         chatId: id,
         senderId,
@@ -390,8 +400,9 @@ export const sendMessage = catchAsync(
         duration,
         attachments,
         status: initialStatus,
+        embedding: messageEmbedding // دلوقتي الكود شايف الأرقام صح وهيبعتها
       });
-    } catch (error) {
+     } catch (error) {
       console.error("Validation Error in sendMessage:", error);
       throw error;
     }
