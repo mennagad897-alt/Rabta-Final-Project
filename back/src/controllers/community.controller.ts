@@ -11,6 +11,7 @@ import {
   countUnreadMessages,
   getChatMessages,
   leaveCommunity as leaveCommunityService,
+  addMemberToCommunity as addMemberToCommunityService,
 } from "../services/chat.service";
 
 // ==========================================
@@ -348,6 +349,87 @@ export const leaveCommunity = catchAsync(
     res.status(200).json({
       status: "success",
       message: result.message,
+    });
+  },
+);
+
+// ==========================================
+// ➕ Add member (owner/admin only)
+// ==========================================
+export const addCommunityMember = catchAsync(
+  async (req: Request, res: Response, next: NextFunction) => {
+    const adminId = (req.user as any)._id.toString();
+    const communityId = String(req.params.id);
+    const { userId } = req.body;
+
+    if (!userId) {
+      return next(new AppError("userId is required", 400));
+    }
+
+    const community = await addMemberToCommunityService(
+      communityId,
+      adminId,
+      String(userId),
+    );
+
+    const populatedCommunity = await Community.findById(community?._id)
+      .populate("members", "fullName avatar")
+      .populate("admins", "fullName avatar")
+      .populate("owner", "fullName avatar")
+      .populate("joinRequests.userId", "fullName avatar")
+      .populate({
+        path: "chatId",
+        populate: {
+          path: "latestMessage",
+          populate: { path: "senderId", select: "fullName" },
+        },
+      });
+
+    const io = req.app.get("io");
+    if (io && populatedCommunity) {
+      io.to(String(userId)).emit("added-to-community", {
+        community: populatedCommunity,
+      });
+    }
+
+    res.status(200).json({
+      status: "success",
+      data: { community: populatedCommunity },
+    });
+  },
+);
+
+// ==========================================
+// 🗑️ Delete community (owner/admin only)
+// ==========================================
+export const deleteCommunity = catchAsync(
+  async (req: Request, res: Response, next: NextFunction) => {
+    const userId = (req.user as any)._id.toString();
+    const community = await Community.findById(req.params.id);
+
+    if (!community) {
+      return next(new AppError("Community not found", 404));
+    }
+
+    const isOwnerOrAdmin =
+      community.owner.toString() === userId ||
+      community.admins.some((a) => a.toString() === userId);
+
+    if (!isOwnerOrAdmin) {
+      return next(
+        new AppError("You are not authorized to delete this community", 403),
+      );
+    }
+
+    const chatId = community.chatId;
+    await Community.findByIdAndDelete(community._id);
+    if (chatId) {
+      await Chat.findByIdAndDelete(chatId);
+    }
+
+    res.status(200).json({
+      status: "success",
+      message: "Community deleted successfully",
     });
   },
 );

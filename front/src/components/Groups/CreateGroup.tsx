@@ -62,7 +62,9 @@ const CreateGroup: React.FC = () => {
   useEffect(() => {
     const fetchUsers = async () => {
       try {
-        const response = await axiosInstance.get('/users/my-contacts');
+        const response = await axiosInstance.get('/users/my-contacts', {
+          params: { connectionsOnly: true },
+        });
         const usersList = response.data.data.contacts.map((u: any) => ({
           id: u._id,
           name: u.fullName,

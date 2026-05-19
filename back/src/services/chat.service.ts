@@ -652,7 +652,9 @@ export const addMemberToCommunity = async (
   const community = await Community.findById(communityId);
   if (!community) throw new AppError("Community not found", 404);
 
-  const isAdmin = community.admins.some((id) => id.toString() === adminId);
+  const isAdmin =
+    community.owner.toString() === adminId ||
+    community.admins.some((id) => id.toString() === adminId);
   if (!isAdmin) throw new AppError("Only admins can add members", 403);
 
   const alreadyMember = community.members.some(

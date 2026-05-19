@@ -311,6 +311,7 @@ export const getSavedItems = catchAsync(async (req: Request, res: Response, next
 // 11. Get My Contacts (Role-based visibility)
 export const getMyContacts = catchAsync(async (req: Request, res: Response) => {
   const user = req.user as IUser;
+  const connectionsOnly = req.query.connectionsOnly === 'true';
   let contactIds: mongoose.Types.ObjectId[] = [];
 
   if (user.role === 'employer') {
@@ -324,19 +325,20 @@ export const getMyContacts = catchAsync(async (req: Request, res: Response) => {
       contactIds.push(...user.savedFreelancers);
     }
   } else {
-    // 1. Users in the freelancer's manually added connections
     if (user.connections) {
       contactIds.push(...user.connections as mongoose.Types.ObjectId[]);
     }
 
-    // 2. Fallback to chat history: Users they have an existing chat history with
-    const chats = await Chat.find({ 
-      users: user._id,
-      hiddenBy: { $ne: user._id }
-    });
-    const chatUsers = chats.flatMap(chat => chat.users)
-      .filter(id => id.toString() !== user._id.toString());
-    contactIds.push(...chatUsers as mongoose.Types.ObjectId[]);
+    if (!connectionsOnly) {
+      const chats = await Chat.find({
+        users: user._id,
+        hiddenBy: { $ne: user._id },
+      });
+      const chatUsers = chats
+        .flatMap((chat) => chat.users)
+        .filter((id) => id.toString() !== user._id.toString());
+      contactIds.push(...(chatUsers as mongoose.Types.ObjectId[]));
+    }
   }
 
   // Deduplicate and filter out own ID

@@ -501,6 +501,26 @@ export const GroupsFeed = () => {
     [],
   );
 
+  const handleDeleteGroup = useCallback(
+    async (communityId: string) => {
+      try {
+        await axiosInstance.delete(`/groups/${communityId}`);
+        setShowGroupDetailsPanel(false);
+        setActiveGroupId(null);
+        socket?.emit("leave-room", communityId);
+        setCommunities((prev) => prev.filter((c) => c._id !== communityId));
+        await loadCommunities({ silent: true });
+        toast.success("Group deleted successfully");
+      } catch (error: unknown) {
+        const message = (error as { response?: { data?: { message?: string } } })
+          ?.response?.data?.message;
+        toast.error(message || "Failed to delete group");
+        throw error;
+      }
+    },
+    [loadCommunities, socket],
+  );
+
   useEffect(() => {
     loadCommunities();
   }, [loadCommunities]);
@@ -939,6 +959,7 @@ export const GroupsFeed = () => {
                 <GroupDetails
                   chatId={activeChatId || resolveCommunityChatId(activeCommunity) || ""}
                   chatName={activeCommunity.name}
+                  description={activeCommunity.description}
                   isPrivateGroup={activeCommunity.isPublic === false}
                   groupMembers={activeCommunity.members}
                   groupAdmins={
@@ -953,8 +974,15 @@ export const GroupsFeed = () => {
                   onRespondToJoinRequest={(userId: string, action: 'accept' | 'reject') =>
                     handleRespondToJoinRequest(activeCommunity._id, userId, action)
                   }
+                  onMembersUpdated={(members) =>
+                    setCommunities((prev) =>
+                      prev.map((c) =>
+                        c._id === activeCommunity._id ? { ...c, members } : c,
+                      ),
+                    )
+                  }
+                  onDeleteGroup={() => handleDeleteGroup(activeCommunity._id)}
                   onClose={() => setShowGroupDetailsPanel(false)}
-                  onAddMember={() => toast("Add member coming soon")}
                   onLeaveGroup={() => void handleLeaveGroup(activeCommunity._id)}
                   onSearchClick={() => setShowGroupDetailsPanel(false)}
                   onEditGroup={() => toast("Edit group coming soon")}
