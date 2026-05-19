@@ -21,6 +21,7 @@ import {
   deleteMyAccount,
   searchUsers,
   getMyContacts,
+  getRecentContacts,
   findByPhone,
   addConnection,
 } from "../controllers/profile.controller";
@@ -138,6 +139,7 @@ router.put("/users/verify-request", protect, requestVerification);
 
 // Saved Items — MUST be above /users/:id to prevent wildcard capture
 router.get("/users/my-contacts", protect, getMyContacts);
+router.get("/users/recent-contacts", protect, getRecentContacts);
 router.get("/users/find-by-phone", protect, findByPhone);
 router.post("/users/add-connection", protect, addConnection);
 router.get("/users/saved-items", protect, getSavedItems);

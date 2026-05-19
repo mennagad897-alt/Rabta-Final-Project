@@ -9,6 +9,8 @@ import {
   manageJoinRequest,
   leaveCommunity,
   addCommunityMember,
+  acceptCommunityInvite,
+  declineCommunityInvite,
   deleteCommunity,
   getCommunityFeed,
   getCommunityChat,
@@ -24,6 +26,8 @@ router.post("/", createCommunity);
 router.post("/:id/join", joinCommunity);
 router.post("/:id/leave", leaveCommunity);
 router.post("/:id/members", addCommunityMember);
+router.post("/:id/invite/accept", acceptCommunityInvite);
+router.post("/:id/invite/decline", declineCommunityInvite);
 router.put("/:id/requests/:userId", manageJoinRequest);
 router.delete("/:id", deleteCommunity);
 router.get("/:id/feed", getCommunityFeed);

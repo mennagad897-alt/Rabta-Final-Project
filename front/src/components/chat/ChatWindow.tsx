@@ -58,6 +58,14 @@ interface ChatWindowProps {
   onCloseChat?: () => void;
   /** Open group details in parent layout (keeps chat visible). */
   onOpenGroupDetails?: () => void;
+  chatStatus?: 'pending' | 'accepted';
+  isChatInitiator?: boolean;
+  isChatRecipient?: boolean;
+  onRespondToChatRequest?: (action: 'accept' | 'reject') => void | Promise<void>;
+  /** Restricted group invite preview (no messages, accept/decline only). */
+  isGroupInviteView?: boolean;
+  onAcceptGroupInvitation?: () => void | Promise<void>;
+  onDeclineGroupInvitation?: () => void | Promise<void>;
 }
 
 const formatGroupMemberLabel = (members: unknown[]): string => {
@@ -104,6 +112,13 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   onOpenSharedMedia,
   onCloseChat,
   onOpenGroupDetails,
+  chatStatus = 'accepted',
+  isChatInitiator = false,
+  isChatRecipient = false,
+  onRespondToChatRequest,
+  isGroupInviteView = false,
+  onAcceptGroupInvitation,
+  onDeclineGroupInvitation,
 }) => {
   const activeChatId = chatId;
   const [showUserDetails, setShowUserDetails] = useState(false);
@@ -1437,7 +1452,61 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             </div>
           )}
 
-          {(!isParticipant && isGroup) ? (
+          {isGroupInviteView ? (
+            <div className="max-w-md mx-auto py-8 px-6 text-center">
+              <div className="w-16 h-16 bg-[#7C3AED]/10 rounded-full flex items-center justify-center mx-auto mb-4 text-[#7C3AED]">
+                <span className="material-icons-round text-3xl">mail</span>
+              </div>
+              <h3 className="text-lg font-bold text-[#171717] dark:text-[#F5F5F5] mb-2">
+                Group Invitation
+              </h3>
+              <p className="text-sm text-gray-500 mb-6">
+                You have been invited to join <strong>{chatName}</strong>. Accept to see messages and participate.
+              </p>
+              <div className="flex flex-col gap-3">
+                <button
+                  type="button"
+                  onClick={() => void onAcceptGroupInvitation?.()}
+                  className="w-full bg-[#7C3AED] hover:bg-[#6D28D9] text-white py-3 rounded-xl font-bold transition-colors"
+                >
+                  Accept Invitation
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void onDeclineGroupInvitation?.()}
+                  className="w-full bg-red-50 dark:bg-red-500/10 text-red-500 py-3 rounded-xl font-bold hover:bg-red-100 dark:hover:bg-red-500/20 transition-colors"
+                >
+                  Decline Invitation
+                </button>
+              </div>
+            </div>
+          ) : isChatInitiator && chatStatus === 'pending' ? (
+            <div className="max-w-4xl mx-auto py-4 px-4 rounded-xl bg-[#7C3AED]/10 text-center text-sm text-[#7C3AED] border border-[#7C3AED]/20 font-medium">
+              Request Sent... waiting for approval
+            </div>
+          ) : isChatRecipient && chatStatus === 'pending' ? (
+            <div className="max-w-md mx-auto py-6 px-4 text-center">
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                <strong>{chatName}</strong> wants to message you.
+              </p>
+              <div className="flex gap-3 justify-center">
+                <button
+                  type="button"
+                  onClick={() => void onRespondToChatRequest?.('accept')}
+                  className="px-5 py-2.5 bg-[#7C3AED] hover:bg-[#6D28D9] text-white rounded-xl font-bold text-sm"
+                >
+                  Accept
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void onRespondToChatRequest?.('reject')}
+                  className="px-5 py-2.5 bg-red-50 dark:bg-red-500/10 text-red-500 rounded-xl font-bold text-sm hover:bg-red-100"
+                >
+                  Reject
+                </button>
+              </div>
+            </div>
+          ) : (!isParticipant && isGroup) ? (
             <div className="max-w-4xl mx-auto py-4 px-4 rounded-xl bg-gray-100 dark:bg-gray-800 text-center text-sm text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700">
               You can't send messages to this group because you're no longer a participant.
             </div>

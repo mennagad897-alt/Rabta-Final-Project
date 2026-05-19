@@ -32,6 +32,9 @@ interface GroupDetailsProps {
   ) => void | Promise<void>;
   onMembersUpdated?: (members: any[]) => void;
   onDeleteGroup?: () => void | Promise<void>;
+  isInvitedView?: boolean;
+  onAcceptInvitation?: () => void | Promise<void>;
+  onDeclineInvitation?: () => void | Promise<void>;
   /** Legacy hook for ChatWindow; GroupsFeed uses built-in modal when communityId is set */
   onAddMember?: () => void;
   onClose: () => void;
@@ -56,6 +59,9 @@ export const GroupDetails: React.FC<GroupDetailsProps> = ({
   onRespondToJoinRequest,
   onMembersUpdated,
   onDeleteGroup,
+  isInvitedView = false,
+  onAcceptInvitation,
+  onDeclineInvitation,
   onAddMember,
   onClose,
   onLeaveGroup,
@@ -70,8 +76,10 @@ export const GroupDetails: React.FC<GroupDetailsProps> = ({
   const [processingUserId, setProcessingUserId] = useState<string | null>(null);
   const [showAddMembersModal, setShowAddMembersModal] = useState(false);
   const [addMemberQuery, setAddMemberQuery] = useState("");
-  const [connections, setConnections] = useState<ContactOption[]>([]);
-  const [loadingConnections, setLoadingConnections] = useState(false);
+  const [recentContacts, setRecentContacts] = useState<ContactOption[]>([]);
+  const [searchResults, setSearchResults] = useState<ContactOption[]>([]);
+  const [loadingContacts, setLoadingContacts] = useState(false);
+  const [searchingUsers, setSearchingUsers] = useState(false);
   const [addingUserId, setAddingUserId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -86,14 +94,16 @@ export const GroupDetails: React.FC<GroupDetailsProps> = ({
   );
 
   useEffect(() => {
-    if (!showAddMembersModal) return;
+    if (!showAddMembersModal) {
+      setAddMemberQuery("");
+      setSearchResults([]);
+      return;
+    }
 
-    const fetchConnections = async () => {
-      setLoadingConnections(true);
+    const fetchRecent = async () => {
+      setLoadingContacts(true);
       try {
-        const { data } = await axiosInstance.get("/users/my-contacts", {
-          params: { connectionsOnly: true },
-        });
+        const { data } = await axiosInstance.get("/users/recent-contacts");
         const contacts: ContactOption[] = (data.data?.contacts ?? [])
           .map(
             (u: {
@@ -110,21 +120,62 @@ export const GroupDetails: React.FC<GroupDetailsProps> = ({
             }),
           )
           .filter((c: ContactOption) => !memberIds.has(String(c.id)));
-        setConnections(contacts);
+        setRecentContacts(contacts);
       } catch {
-        toast.error("Failed to load connections");
-        setConnections([]);
+        toast.error("Failed to load recent contacts");
+        setRecentContacts([]);
       } finally {
-        setLoadingConnections(false);
+        setLoadingContacts(false);
       }
     };
 
-    void fetchConnections();
+    void fetchRecent();
   }, [showAddMembersModal, memberIds]);
 
-  const filteredConnections = connections.filter((c) =>
-    c.name.toLowerCase().includes(addMemberQuery.trim().toLowerCase()),
-  );
+  useEffect(() => {
+    if (!showAddMembersModal) return;
+    const q = addMemberQuery.trim();
+    if (!q) {
+      setSearchResults([]);
+      return;
+    }
+
+    const timer = window.setTimeout(async () => {
+      setSearchingUsers(true);
+      try {
+        const { data } = await axiosInstance.get("/users/search/all", {
+          params: { keyword: q, limit: 20 },
+        });
+        const users: ContactOption[] = (data.data?.users ?? data.data ?? [])
+          .map(
+            (u: {
+              _id: string;
+              fullName?: string;
+              avatar?: string;
+              jobTitle?: string;
+              role?: string;
+            }) => ({
+              id: u._id,
+              name: u.fullName || "User",
+              avatar: u.avatar,
+              role: u.jobTitle || u.role,
+            }),
+          )
+          .filter((c: ContactOption) => !memberIds.has(String(c.id)));
+        setSearchResults(users);
+      } catch {
+        setSearchResults([]);
+      } finally {
+        setSearchingUsers(false);
+      }
+    }, 350);
+
+    return () => window.clearTimeout(timer);
+  }, [addMemberQuery, showAddMembersModal, memberIds]);
+
+  const displayContacts = addMemberQuery.trim()
+    ? searchResults
+    : recentContacts;
 
   const handleAddMember = async (userId: string) => {
     if (!communityId) return;
@@ -138,8 +189,9 @@ export const GroupDetails: React.FC<GroupDetailsProps> = ({
       );
       const updatedMembers = data.data?.community?.members ?? groupMembers;
       onMembersUpdated?.(updatedMembers);
-      setConnections((prev) => prev.filter((c) => c.id !== userId));
-      toast.success("Member added");
+      setRecentContacts((prev) => prev.filter((c) => c.id !== userId));
+      setSearchResults((prev) => prev.filter((c) => c.id !== userId));
+      toast.success("Invitation sent");
     } catch (error: unknown) {
       const message = (error as { response?: { data?: { message?: string } } })
         ?.response?.data?.message;
@@ -442,6 +494,25 @@ export const GroupDetails: React.FC<GroupDetailsProps> = ({
             )}
           </div>
 
+          {isInvitedView ? (
+            <div className="mt-8 flex flex-col gap-3">
+              <button
+                type="button"
+                onClick={() => void onAcceptInvitation?.()}
+                className="flex items-center justify-center gap-2 w-full py-3 bg-[#7C3AED] hover:bg-[#6D28D9] text-white rounded-xl font-bold transition-colors"
+              >
+                Accept Invitation
+              </button>
+              <button
+                type="button"
+                onClick={() => void onDeclineInvitation?.()}
+                className="flex items-center justify-center gap-2 w-full py-3 bg-red-50 dark:bg-red-500/10 text-red-500 rounded-xl hover:bg-red-100 dark:hover:bg-red-500/20 transition-colors font-bold"
+              >
+                Decline Invitation
+              </button>
+            </div>
+          ) : (
+            <>
           <button
             type="button"
             onClick={onLeaveGroup}
@@ -475,6 +546,8 @@ export const GroupDetails: React.FC<GroupDetailsProps> = ({
               {isDeleting ? "Deleting..." : "Delete Group"}
             </button>
           )}
+            </>
+          )}
         </div>
       </div>
 
@@ -502,20 +575,22 @@ export const GroupDetails: React.FC<GroupDetailsProps> = ({
               type="text"
               value={addMemberQuery}
               onChange={(e) => setAddMemberQuery(e.target.value)}
-              placeholder="Search your connections..."
+              placeholder="Search users globally..."
               className="w-full px-4 py-2.5 mb-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-[#FAFAFA] dark:bg-[#171717] text-sm outline-none focus:ring-2 focus:ring-[#7C3AED]/50"
             />
             <div className="max-h-60 overflow-y-auto space-y-1">
-              {loadingConnections ? (
+              {loadingContacts || searchingUsers ? (
                 <p className="text-sm text-gray-500 text-center py-6">
-                  Loading connections...
+                  {searchingUsers ? "Searching..." : "Loading recent contacts..."}
                 </p>
-              ) : filteredConnections.length === 0 ? (
+              ) : displayContacts.length === 0 ? (
                 <p className="text-sm text-gray-500 text-center py-6">
-                  No connections available to add.
+                  {addMemberQuery.trim()
+                    ? "No users found."
+                    : "No recent contacts to invite."}
                 </p>
               ) : (
-                filteredConnections.map((contact) => (
+                displayContacts.map((contact: ContactOption) => (
                   <div
                     key={contact.id}
                     className="flex items-center justify-between gap-3 p-2 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800/50"
@@ -549,7 +624,7 @@ export const GroupDetails: React.FC<GroupDetailsProps> = ({
                       onClick={() => void handleAddMember(contact.id)}
                       className="px-3 py-1.5 text-xs font-bold text-white bg-[#7C3AED] hover:bg-[#6D28D9] rounded-lg disabled:opacity-50 shrink-0"
                     >
-                      {addingUserId === contact.id ? "..." : "Add"}
+                      {addingUserId === contact.id ? "..." : "Invite"}
                     </button>
                   </div>
                 ))

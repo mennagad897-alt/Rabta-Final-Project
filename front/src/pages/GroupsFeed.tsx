@@ -26,8 +26,10 @@ interface Community {
   owner?: string | { _id?: string };
   isPublic?: boolean;
   joinRequests?: JoinRequest[];
+  invitedUsers?: string[] | { _id?: string }[];
   chatId?: any;
   unreadCount?: number;
+  isInvited?: boolean;
 }
 
 interface MessageSender {
@@ -107,6 +109,18 @@ const isCommunityAdmin = (
   return (community.admins ?? []).some((a: string | { _id?: string }) => {
     const adminId = typeof a === "string" ? a : a?._id;
     return adminId != null && String(adminId) === String(userId);
+  });
+};
+
+const isCommunityInvited = (
+  community: Community,
+  userId: string | undefined,
+): boolean => {
+  if (!userId) return false;
+  if (community.isInvited) return true;
+  return (community.invitedUsers ?? []).some((u: string | { _id?: string }) => {
+    const id = typeof u === "string" ? u : u?._id;
+    return id != null && String(id) === String(userId);
   });
 };
 
@@ -282,6 +296,8 @@ export const GroupsFeed = () => {
 
   useEffect(() => {
     if (!activeChatId) return;
+    const community = communitiesRef.current.find((c) => c._id === activeGroupId);
+    if (community && isCommunityInvited(community, currentUserId)) return;
 
     const fetchMessages = async () => {
       const targetChatId = activeChatId;
@@ -351,7 +367,7 @@ export const GroupsFeed = () => {
     };
 
     fetchMessages();
-  }, [activeChatId, currentUserId]);
+  }, [activeGroupId, activeChatId, currentUserId]);
   
   const filters = ["All", "Programming", "UI/UX", "Data", "Cyber", "Cloud"];
 
@@ -496,6 +512,52 @@ export const GroupsFeed = () => {
         const message = (error as { response?: { data?: { message?: string } } })
           ?.response?.data?.message;
         toast.error(message || "Failed to update join request");
+      }
+    },
+    [],
+  );
+
+  const handleAcceptCommunityInvite = useCallback(
+    async (communityId: string) => {
+      try {
+        const { data } = await axiosInstance.post(
+          `/groups/${communityId}/invite/accept`,
+        );
+        const updated = data.data?.community;
+        if (updated) {
+          setCommunities((prev) =>
+            prev.map((c) =>
+              c._id === communityId
+                ? { ...updated, unreadCount: 0, isInvited: false }
+                : c,
+            ),
+          );
+        } else {
+          await loadCommunities({ silent: true });
+        }
+        socket?.emit("join-room", communityId);
+        toast.success("Invitation accepted!");
+      } catch (error: unknown) {
+        const message = (error as { response?: { data?: { message?: string } } })
+          ?.response?.data?.message;
+        toast.error(message || "Failed to accept invitation");
+      }
+    },
+    [loadCommunities, socket],
+  );
+
+  const handleDeclineCommunityInvite = useCallback(
+    async (communityId: string) => {
+      try {
+        await axiosInstance.post(`/groups/${communityId}/invite/decline`);
+        setShowGroupDetailsPanel(false);
+        setActiveGroupId(null);
+        setCommunities((prev) => prev.filter((c) => c._id !== communityId));
+        toast.success("Invitation declined");
+      } catch (error: unknown) {
+        const message = (error as { response?: { data?: { message?: string } } })
+          ?.response?.data?.message;
+        toast.error(message || "Failed to decline invitation");
       }
     },
     [],
@@ -656,7 +718,7 @@ export const GroupsFeed = () => {
 
     const handleAddedToCommunity = (payload?: { community?: Community }) => {
       if (payload?.community) {
-        const item = { ...payload.community, unreadCount: 0 };
+        const item = { ...payload.community, unreadCount: 0, isInvited: false };
         setCommunities((prev) =>
           sortCommunitiesByRecent(
             prev.filter((c) => c._id !== item._id).concat(item),
@@ -667,11 +729,24 @@ export const GroupsFeed = () => {
       }
     };
 
+    const handleInvitedToCommunity = (payload?: { community?: Community }) => {
+      if (payload?.community) {
+        const item = { ...payload.community, unreadCount: 0, isInvited: true };
+        setCommunities((prev) =>
+          sortCommunitiesByRecent(
+            prev.filter((c) => c._id !== item._id).concat(item),
+          ),
+        );
+      }
+    };
+
     socket.on("new-community-message", handleNewCommunityMessage);
     socket.on("added-to-community", handleAddedToCommunity);
+    socket.on("invited-to-community", handleInvitedToCommunity);
     return () => {
       socket.off("new-community-message", handleNewCommunityMessage);
       socket.off("added-to-community", handleAddedToCommunity);
+      socket.off("invited-to-community", handleInvitedToCommunity);
     };
   }, [socket, currentUserId]);
 
@@ -819,6 +894,11 @@ export const GroupsFeed = () => {
                     <h3 className={`text-sm truncate ${community.unreadCount ? 'font-bold text-[#171717] dark:text-[#F5F5F5]' : 'font-semibold text-[#171717] dark:text-[#F5F5F5]'}`}>
                       {community.name}
                     </h3>
+                    {isCommunityInvited(community, currentUserId) && (
+                      <span className="text-[10px] font-bold text-[#7C3AED] bg-[#7C3AED]/10 px-1.5 py-0.5 rounded-full shrink-0">
+                        New Invite
+                      </span>
+                    )}
                   </div>
                   <div className={`text-xs truncate ${community.unreadCount ? 'font-bold text-[#171717] dark:text-[#F5F5F5]' : 'text-gray-500 dark:text-gray-400'}`}>
                     {(() => {
@@ -879,6 +959,63 @@ export const GroupsFeed = () => {
           const isMember = activeCommunity
             ? isCommunityMember(activeCommunity, currentUserId)
             : false;
+          const isInvited = activeCommunity
+            ? isCommunityInvited(activeCommunity, currentUserId)
+            : false;
+
+          if (isInvited) {
+            return (
+              <div className="flex flex-1 min-h-0 min-w-0">
+                <ChatWindow
+                  chatId={activeChatId || resolveCommunityChatId(activeCommunity!) || ""}
+                  chatName={activeCommunity?.name || "Group"}
+                  isOnline={true}
+                  isGroup={true}
+                  messages={[]}
+                  setMessages={setMessages}
+                  groupMembers={activeCommunity?.members}
+                  isChatListOpen={isSideBarOpen}
+                  onOpenChatList={() => setIsSideBarOpen(true)}
+                  onCloseChat={() => setActiveGroupId(null)}
+                  onOpenGroupDetails={() => setShowGroupDetailsPanel(true)}
+                  isGroupInviteView
+                  onAcceptGroupInvitation={() =>
+                    void handleAcceptCommunityInvite(activeCommunity!._id)
+                  }
+                  onDeclineGroupInvitation={() =>
+                    void handleDeclineCommunityInvite(activeCommunity!._id)
+                  }
+                />
+                {showGroupDetailsPanel && activeCommunity && (
+                  <aside className="w-[340px] shrink-0 h-full border-l border-gray-200 dark:border-gray-800 bg-white dark:bg-[#262626] flex flex-col z-10">
+                    <GroupDetails
+                      chatId={activeChatId || resolveCommunityChatId(activeCommunity) || ""}
+                      chatName={activeCommunity.name}
+                      description={activeCommunity.description}
+                      isPrivateGroup={activeCommunity.isPublic === false}
+                      groupMembers={activeCommunity.members}
+                      groupAdmins={[]}
+                      canAddMembers={false}
+                      isInvitedView
+                      communityId={activeCommunity._id}
+                      onAcceptInvitation={() =>
+                        void handleAcceptCommunityInvite(activeCommunity._id)
+                      }
+                      onDeclineInvitation={() =>
+                        void handleDeclineCommunityInvite(activeCommunity._id)
+                      }
+                      onClose={() => setShowGroupDetailsPanel(false)}
+                      onLeaveGroup={() => {}}
+                      onSearchClick={() => setShowGroupDetailsPanel(false)}
+                      onEditGroup={() => {}}
+                      isMuted={false}
+                      onToggleMute={() => {}}
+                    />
+                  </aside>
+                )}
+              </div>
+            );
+          }
 
           if (!isMember) {
             return (

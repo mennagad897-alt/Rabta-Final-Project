@@ -362,6 +362,37 @@ export const getMyContacts = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+// Recent contacts from 1-to-1 chat history
+export const getRecentContacts = catchAsync(async (req: Request, res: Response) => {
+  const user = req.user as IUser;
+  const userId = user._id.toString();
+  const myBlockedUsers = user.blockedUsers || [];
+
+  const chats = await Chat.find({
+    isGroup: false,
+    users: userId,
+    $or: [{ hiddenBy: { $exists: false } }, { hiddenBy: { $ne: userId } }],
+  }).select('users');
+
+  const contactIds = new Set<string>();
+  chats.forEach((chat) => {
+    chat.users.forEach((id) => {
+      const otherId = id.toString();
+      if (otherId !== userId) contactIds.add(otherId);
+    });
+  });
+
+  const contacts = await User.find({
+    _id: { $in: Array.from(contactIds), $nin: myBlockedUsers },
+    blockedUsers: { $ne: user._id },
+  }).select('fullName avatar phoneNumber jobTitle status role');
+
+  res.status(200).json({
+    status: 'success',
+    data: { contacts },
+  });
+});
+
 // 12. Find User By Phone (1-to-1 strict search)
 export const findByPhone = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
   const { phone } = req.query;

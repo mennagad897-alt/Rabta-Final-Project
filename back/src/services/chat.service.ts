@@ -188,6 +188,10 @@ export const createMessage = async (data: {
   const chat = await Chat.findById(data.chatId);
   if (!chat) throw new AppError("Chat not found", 404);
 
+  if (!chat.isGroup && chat.status === "pending") {
+    throw new AppError("This chat request has not been accepted yet", 403);
+  }
+
   // Ø§Ù„ØªØ£ÙƒØ¯ Ø¥Ù† Ø§Ù„Ù…Ø±Ø³Ù„ Ø¹Ø¶Ùˆ ÙÙŠ Ø§Ù„Ø´Ø§Øª Ø¯Ù‡ (Ø­Ù…Ø§ÙŠØ© Ù…Ù‡Ù…Ø©)
   const isMember = chat.users.some(
     (userId) => userId.toString() === data.senderId,
@@ -365,6 +369,8 @@ export const accessOrCreateChat = async (
     chat = await Chat.create({
       isGroup: false,
       users: [currentUserId, otherUserId],
+      status: "pending",
+      initiatedBy: currentUserId,
     });
     chat = await Chat.findById(chat._id).populate(
       "users",
@@ -386,6 +392,39 @@ export const accessOrCreateChat = async (
   }
 
   return chat;
+};
+
+export const respondToChatRequest = async (
+  chatId: string,
+  userId: string,
+  action: "accept" | "reject",
+) => {
+  const chat = await Chat.findById(chatId);
+  if (!chat) throw new AppError("Chat not found", 404);
+  if (chat.isGroup) throw new AppError("Not a direct chat request", 400);
+  if (chat.status !== "pending") {
+    throw new AppError("This chat request has already been processed", 400);
+  }
+
+  const initiatorId = chat.initiatedBy?.toString();
+  const isInitiator = initiatorId === userId;
+  const isParticipant = chat.users.some((u) => u.toString() === userId);
+  if (!isParticipant) throw new AppError("You are not part of this chat", 403);
+
+  if (action === "accept") {
+    if (isInitiator) {
+      throw new AppError("Only the recipient can accept this request", 403);
+    }
+    chat.status = "accepted";
+    await chat.save();
+    return await Chat.findById(chat._id)
+      .populate("users", "fullName avatar status showOnlineStatus")
+      .populate("latestMessage");
+  }
+
+  await Message.deleteMany({ chatId: chat._id });
+  await Chat.findByIdAndDelete(chatId);
+  return null;
 };
 
 // ==========================================

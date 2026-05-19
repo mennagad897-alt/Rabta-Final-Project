@@ -26,6 +26,7 @@ export interface ICommunity extends Document {
   owner: mongoose.Types.ObjectId;
   admins: mongoose.Types.ObjectId[];
   members: mongoose.Types.ObjectId[];
+  invitedUsers?: mongoose.Types.ObjectId[];
   chatId?: mongoose.Types.ObjectId;
   tags?: string[];
   category?: string;
@@ -54,6 +55,7 @@ const CommunitySchema: Schema = new Schema(
     owner: { type: Schema.Types.ObjectId, ref: "User", required: true },
     admins: [{ type: Schema.Types.ObjectId, ref: "User" }],
     members: [{ type: Schema.Types.ObjectId, ref: "User" }],
+    invitedUsers: [{ type: Schema.Types.ObjectId, ref: "User" }],
     chatId: { type: Schema.Types.ObjectId, ref: "Chat" },
     tags: [{ type: String, trim: true, lowercase: true }],
     // [FIX #8] category مفيش عليها unique constraint خالص — أكتر من community تقدر تشترك في نفس الـ category
