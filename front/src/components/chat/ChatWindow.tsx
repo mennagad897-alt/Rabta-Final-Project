@@ -242,6 +242,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const [blockedByMe, setBlockedByMe] = useState(false);
   const [blockedMe, setBlockedMe] = useState(false);
   const [chatSearchQuery, setChatSearchQuery] = useState('');
+  const [contactProfile, setContactProfile] = useState<{ avatar?: string; about?: string } | null>(null);
   const navigate = useNavigate();
   const { socket } = useChat();
   const { callUser, callGroup } = useCall();
@@ -304,6 +305,20 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       cancelled = true;
     };
   }, [receiverId, isGroup, chatId]);
+
+  // Fetch contact profile for avatar + bio in the side panel
+  useEffect(() => {
+    if (isGroup || !receiverId) { setContactProfile(null); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await axiosInstance.get(`/users/${receiverId}`);
+        const u = res.data?.data?.user as { avatar?: string; about?: string } | undefined;
+        if (!cancelled) setContactProfile(u || null);
+      } catch { if (!cancelled) setContactProfile(null); }
+    })();
+    return () => { cancelled = true; };
+  }, [receiverId, isGroup]);
 
   useEffect(() => {
     if (isChatSearchOpen) {
@@ -1731,9 +1746,17 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
               <div className="flex-1 overflow-y-auto hide-scrollbar p-5 space-y-6">
                 <div className="flex flex-col items-center text-center">
                   <div className="relative mb-3">
-                    <div className="w-24 h-24 rounded-full bg-[#7C3AED]/15 text-[#7C3AED] flex items-center justify-center text-3xl font-bold border-4 border-white dark:border-[#262626]">
-                      {chatName.charAt(0).toUpperCase()}
-                    </div>
+                    {contactProfile?.avatar ? (
+                      <img
+                        src={resolveChatMediaUrl(contactProfile.avatar)}
+                        alt=""
+                        className="w-24 h-24 rounded-full object-cover border-4 border-white dark:border-[#262626] shadow-md"
+                      />
+                    ) : (
+                      <div className="w-24 h-24 rounded-full bg-[#7C3AED]/15 text-[#7C3AED] flex items-center justify-center text-3xl font-bold border-4 border-white dark:border-[#262626]">
+                        {chatName.charAt(0).toUpperCase()}
+                      </div>
+                    )}
                     {isOnline && (
                       <span className="absolute bottom-1 right-1 w-4 h-4 bg-emerald-500 border-4 border-white dark:border-[#262626] rounded-full" />
                     )}
@@ -1741,37 +1764,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                   <h3 className="text-lg font-bold text-[#171717] dark:text-[#F5F5F5]">{chatName}</h3>
                   <p className="text-sm text-[#7C3AED] dark:text-[#8B5CF6] font-semibold mt-0.5">Contact</p>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{isOnline ? 'Online' : 'Offline'}</p>
-                  <p className="text-sm text-gray-600 dark:text-gray-300 mt-3 leading-relaxed text-left w-full">
-                    Hey there! I am using Rabta.
+                  <p className="text-sm text-gray-600 dark:text-gray-300 mt-3 leading-relaxed text-center">
+                    {contactProfile?.about || 'Hey there! I am using Rabta.'}
                   </p>
-                </div>
-
-                <div className="flex justify-between items-center w-full px-2">
-                  <div
-                    className="flex flex-col items-center gap-1.5 cursor-pointer hover:opacity-80 transition-opacity"
-                    onClick={() => {
-                      setIsMuted(!isMuted);
-                      toast.success(isMuted ? "Notifications unmuted" : "Notifications muted");
-                    }}
-                  >
-                    <div className={`w-12 h-12 rounded-full bg-[#FAFAFA] dark:bg-[#171717] border border-gray-100 dark:border-gray-800 flex items-center justify-center ${isMuted ? 'text-[#7C3AED]' : 'text-gray-500 dark:text-gray-400'}`}>
-                      <span className="material-icons-round">{isMuted ? 'notifications_off' : 'notifications'}</span>
-                    </div>
-                    <span className="text-xs text-gray-500 font-medium">{isMuted ? 'Unmute' : 'Mute'}</span>
-                  </div>
-
-                  <div
-                    className="flex flex-col items-center gap-1.5 cursor-pointer hover:opacity-80 transition-opacity"
-                    onClick={() => {
-                      setShowDetails(false);
-                      onChatSearchOpenChange?.(true);
-                    }}
-                  >
-                    <div className="w-12 h-12 rounded-full bg-[#FAFAFA] dark:bg-[#171717] border border-gray-100 dark:border-gray-800 flex items-center justify-center text-gray-500 dark:text-gray-400">
-                      <span className="material-icons-round">search</span>
-                    </div>
-                    <span className="text-xs text-gray-500 font-medium">Search</span>
-                  </div>
                 </div>
 
                 <DirectChatSharedMedia chatId={chatId} />
@@ -1829,9 +1824,17 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                 <div className="flex flex-col space-y-6 pt-2">
                   <div className="flex flex-col items-center text-center">
                     <div className="relative mb-3">
-                      <div className="w-24 h-24 rounded-full bg-[#7C3AED]/15 text-[#7C3AED] flex items-center justify-center text-3xl font-bold border-4 border-white dark:border-[#262626]">
-                        {chatName.charAt(0).toUpperCase()}
-                      </div>
+                      {contactProfile?.avatar ? (
+                        <img
+                          src={resolveChatMediaUrl(contactProfile.avatar)}
+                          alt=""
+                          className="w-24 h-24 rounded-full object-cover border-4 border-white dark:border-[#262626] shadow-md"
+                        />
+                      ) : (
+                        <div className="w-24 h-24 rounded-full bg-[#7C3AED]/15 text-[#7C3AED] flex items-center justify-center text-3xl font-bold border-4 border-white dark:border-[#262626]">
+                          {chatName.charAt(0).toUpperCase()}
+                        </div>
+                      )}
                       {isOnline && (
                         <span className="absolute bottom-1 right-1 w-4 h-4 bg-emerald-500 border-4 border-white dark:border-[#262626] rounded-full" />
                       )}
@@ -1839,37 +1842,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                     <h3 className="text-lg font-bold text-[#171717] dark:text-[#F5F5F5]">{chatName}</h3>
                     <p className="text-sm text-[#7C3AED] dark:text-[#8B5CF6] font-semibold mt-0.5">Contact</p>
                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{isOnline ? 'Online' : 'Offline'}</p>
-                    <p className="text-sm text-gray-600 dark:text-gray-300 mt-3 leading-relaxed text-left w-full">
-                      Hey there! I am using Rabta.
+                    <p className="text-sm text-gray-600 dark:text-gray-300 mt-3 leading-relaxed text-center">
+                      {contactProfile?.about || 'Hey there! I am using Rabta.'}
                     </p>
-                  </div>
-
-                  <div className="flex justify-between items-center w-full px-2">
-                    <div
-                      className="flex flex-col items-center gap-1.5 cursor-pointer hover:opacity-80 transition-opacity"
-                      onClick={() => {
-                        setIsMuted(!isMuted);
-                        toast.success(isMuted ? "Notifications unmuted" : "Notifications muted");
-                      }}
-                    >
-                      <div className={`w-12 h-12 rounded-full bg-[#FAFAFA] dark:bg-[#171717] border border-gray-100 dark:border-gray-800 flex items-center justify-center ${isMuted ? 'text-[#7C3AED]' : 'text-gray-500 dark:text-gray-400'}`}>
-                        <span className="material-icons-round">{isMuted ? 'notifications_off' : 'notifications'}</span>
-                      </div>
-                      <span className="text-xs text-gray-500 font-medium">{isMuted ? 'Unmute' : 'Mute'}</span>
-                    </div>
-
-                    <div
-                      className="flex flex-col items-center gap-1.5 cursor-pointer hover:opacity-80 transition-opacity"
-                      onClick={() => {
-                        setActiveSidePanel('search');
-                        onChatSearchOpenChange?.(true);
-                      }}
-                    >
-                      <div className="w-12 h-12 rounded-full bg-[#FAFAFA] dark:bg-[#171717] border border-gray-100 dark:border-gray-800 flex items-center justify-center text-gray-500 dark:text-gray-400">
-                        <span className="material-icons-round">search</span>
-                      </div>
-                      <span className="text-xs text-gray-500 font-medium">Search</span>
-                    </div>
                   </div>
 
                   <DirectChatSharedMedia chatId={chatId} />
