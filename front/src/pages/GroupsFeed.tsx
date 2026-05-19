@@ -8,6 +8,13 @@ import { SharedMediaSidePanel } from '../components/chat/SharedMediaSidePanel';
 import { GroupDetails } from '../components/chat/GroupDetails';
 import { useChat } from '../context/ChatContext';
 
+interface JoinRequest {
+  _id?: string;
+  userId: string | { _id?: string; fullName?: string; avatar?: string };
+  status?: "pending" | "accepted" | "rejected";
+  requestedAt?: string;
+}
+
 interface Community {
   _id: string;
   name: string;
@@ -16,9 +23,13 @@ interface Community {
   tags: string[];
   members: string[] | any[];
   admins?: string[];
+  owner?: string | { _id?: string };
   isPublic?: boolean;
+  joinRequests?: JoinRequest[];
+  invitedUsers?: string[] | { _id?: string }[];
   chatId?: any;
   unreadCount?: number;
+  isInvited?: boolean;
 }
 
 interface MessageSender {
@@ -83,6 +94,63 @@ const isCommunityMember = (
     const memberId = typeof m === 'string' ? m : m?._id;
     return memberId != null && String(memberId) === String(userId);
   });
+};
+
+const isCommunityAdmin = (
+  community: Community,
+  userId: string | undefined,
+): boolean => {
+  if (!userId) return false;
+  const ownerId =
+    typeof community.owner === "string"
+      ? community.owner
+      : community.owner?._id;
+  if (ownerId && String(ownerId) === String(userId)) return true;
+  return (community.admins ?? []).some((a: string | { _id?: string }) => {
+    const adminId = typeof a === "string" ? a : a?._id;
+    return adminId != null && String(adminId) === String(userId);
+  });
+};
+
+const isCommunityInvited = (
+  community: Community,
+  userId: string | undefined,
+): boolean => {
+  if (!userId) return false;
+  if (community.isInvited) return true;
+  return (community.invitedUsers ?? []).some((u: string | { _id?: string }) => {
+    const id = typeof u === "string" ? u : u?._id;
+    return id != null && String(id) === String(userId);
+  });
+};
+
+const hasPendingJoinRequest = (
+  community: Community,
+  userId: string | undefined,
+): boolean => {
+  if (!userId) return false;
+  return (community.joinRequests ?? []).some((r) => {
+    const requestUserId =
+      typeof r.userId === "string" ? r.userId : r.userId?._id;
+    return (
+      requestUserId != null &&
+      String(requestUserId) === String(userId) &&
+      (r.status === "pending" || !r.status)
+    );
+  });
+};
+
+const mergeCommunityIntoList = (
+  prev: Community[],
+  community: Community,
+): Community[] => {
+  const exists = prev.some((c) => c._id === community._id);
+  if (exists) {
+    return prev.map((c) =>
+      c._id === community._id ? { ...c, ...community } : c,
+    );
+  }
+  return sortCommunitiesByRecent([...prev, community]);
 };
 
 const mergeCommunitiesLists = (prev: Community[], loaded: Community[]): Community[] => {
@@ -228,6 +296,8 @@ export const GroupsFeed = () => {
 
   useEffect(() => {
     if (!activeChatId) return;
+    const community = communitiesRef.current.find((c) => c._id === activeGroupId);
+    if (community && isCommunityInvited(community, currentUserId)) return;
 
     const fetchMessages = async () => {
       const targetChatId = activeChatId;
@@ -297,7 +367,7 @@ export const GroupsFeed = () => {
     };
 
     fetchMessages();
-  }, [activeChatId, currentUserId]);
+  }, [activeGroupId, activeChatId, currentUserId]);
   
   const filters = ["All", "Programming", "UI/UX", "Data", "Cyber", "Cloud"];
 
@@ -326,15 +396,57 @@ export const GroupsFeed = () => {
     loadCommunitiesRef.current = loadCommunities;
   }, [loadCommunities]);
 
+  const openGroupPreview = useCallback((community: Community) => {
+    setCommunities((prev) => mergeCommunityIntoList(prev, community));
+    setActiveGroupId(community._id);
+  }, []);
+
   const handleJoinGroup = useCallback(
-    async (communityId: string, communityName?: string) => {
+    async (community: Community) => {
+      const communityId = community._id;
+      const communityName = community.name;
+      const isPrivate = community.isPublic === false;
+
       try {
-        await axiosInstance.post(`/groups/${communityId}/join`);
+        const { data } = await axiosInstance.post(`/groups/${communityId}/join`);
+        if (data.data?.requestSent) {
+          setCommunities((prev) =>
+            prev.map((c) =>
+              c._id === communityId
+                ? {
+                    ...c,
+                    joinRequests: [
+                      ...(c.joinRequests ?? []).filter((r) => {
+                        const uid =
+                          typeof r.userId === "string"
+                            ? r.userId
+                            : r.userId?._id;
+                        return String(uid) !== String(currentUserId);
+                      }),
+                      {
+                        userId: currentUserId,
+                        status: "pending" as const,
+                        requestedAt: new Date().toISOString(),
+                      },
+                    ],
+                  }
+                : c,
+            ),
+          );
+          toast.success("Join request sent!");
+          return;
+        }
       } catch (error: unknown) {
         const status = (error as { response?: { status?: number } })?.response
           ?.status;
+        const message = (error as { response?: { data?: { message?: string } } })
+          ?.response?.data?.message;
+        if (status === 400 && message?.toLowerCase().includes("pending")) {
+          toast.error(message);
+          return;
+        }
         if (status !== 400) {
-          toast.error("Failed to join group");
+          toast.error(isPrivate ? "Failed to send join request" : "Failed to join group");
           return;
         }
       }
@@ -350,6 +462,123 @@ export const GroupsFeed = () => {
       setActiveGroupId(communityId);
       socket?.emit("join-room", communityId);
       toast.success(`Joined ${communityName || "the group"}!`);
+    },
+    [loadCommunities, socket, currentUserId],
+  );
+
+  const handleLeaveGroup = useCallback(
+    async (communityId: string) => {
+      try {
+        await axiosInstance.post(`/groups/${communityId}/leave`);
+        setShowGroupDetailsPanel(false);
+        setActiveGroupId(null);
+        socket?.emit("leave-room", communityId);
+        setCommunities((prev) => prev.filter((c) => c._id !== communityId));
+        await loadCommunities({ silent: true });
+        toast.success("You left the group");
+      } catch (error: unknown) {
+        const message = (error as { response?: { data?: { message?: string } } })
+          ?.response?.data?.message;
+        toast.error(message || "Failed to leave group");
+      }
+    },
+    [loadCommunities, socket],
+  );
+
+  const handleRespondToJoinRequest = useCallback(
+    async (communityId: string, userId: string, action: "accept" | "reject") => {
+      try {
+        const { data } = await axiosInstance.put(
+          `/groups/${communityId}/requests/${userId}`,
+          { action },
+        );
+        setCommunities((prev) =>
+          prev.map((c) => {
+            if (c._id !== communityId) return c;
+            const nextRequests = (c.joinRequests ?? []).filter((r) => {
+              const uid = typeof r.userId === "string" ? r.userId : r.userId?._id;
+              return String(uid) !== String(userId);
+            });
+            if (action === "accept" && data.data?.community) {
+              return { ...data.data.community, unreadCount: c.unreadCount ?? 0 };
+            }
+            return { ...c, joinRequests: nextRequests };
+          }),
+        );
+        toast.success(
+          action === "accept" ? "Request accepted" : "Request rejected",
+        );
+      } catch (error: unknown) {
+        const message = (error as { response?: { data?: { message?: string } } })
+          ?.response?.data?.message;
+        toast.error(message || "Failed to update join request");
+      }
+    },
+    [],
+  );
+
+  const handleAcceptCommunityInvite = useCallback(
+    async (communityId: string) => {
+      try {
+        const { data } = await axiosInstance.post(
+          `/groups/${communityId}/invite/accept`,
+        );
+        const updated = data.data?.community;
+        if (updated) {
+          setCommunities((prev) =>
+            prev.map((c) =>
+              c._id === communityId
+                ? { ...updated, unreadCount: 0, isInvited: false }
+                : c,
+            ),
+          );
+        } else {
+          await loadCommunities({ silent: true });
+        }
+        socket?.emit("join-room", communityId);
+        toast.success("Invitation accepted!");
+      } catch (error: unknown) {
+        const message = (error as { response?: { data?: { message?: string } } })
+          ?.response?.data?.message;
+        toast.error(message || "Failed to accept invitation");
+      }
+    },
+    [loadCommunities, socket],
+  );
+
+  const handleDeclineCommunityInvite = useCallback(
+    async (communityId: string) => {
+      try {
+        await axiosInstance.post(`/groups/${communityId}/invite/decline`);
+        setShowGroupDetailsPanel(false);
+        setActiveGroupId(null);
+        setCommunities((prev) => prev.filter((c) => c._id !== communityId));
+        toast.success("Invitation declined");
+      } catch (error: unknown) {
+        const message = (error as { response?: { data?: { message?: string } } })
+          ?.response?.data?.message;
+        toast.error(message || "Failed to decline invitation");
+      }
+    },
+    [],
+  );
+
+  const handleDeleteGroup = useCallback(
+    async (communityId: string) => {
+      try {
+        await axiosInstance.delete(`/groups/${communityId}`);
+        setShowGroupDetailsPanel(false);
+        setActiveGroupId(null);
+        socket?.emit("leave-room", communityId);
+        setCommunities((prev) => prev.filter((c) => c._id !== communityId));
+        await loadCommunities({ silent: true });
+        toast.success("Group deleted successfully");
+      } catch (error: unknown) {
+        const message = (error as { response?: { data?: { message?: string } } })
+          ?.response?.data?.message;
+        toast.error(message || "Failed to delete group");
+        throw error;
+      }
     },
     [loadCommunities, socket],
   );
@@ -489,7 +718,7 @@ export const GroupsFeed = () => {
 
     const handleAddedToCommunity = (payload?: { community?: Community }) => {
       if (payload?.community) {
-        const item = { ...payload.community, unreadCount: 0 };
+        const item = { ...payload.community, unreadCount: 0, isInvited: false };
         setCommunities((prev) =>
           sortCommunitiesByRecent(
             prev.filter((c) => c._id !== item._id).concat(item),
@@ -500,11 +729,24 @@ export const GroupsFeed = () => {
       }
     };
 
+    const handleInvitedToCommunity = (payload?: { community?: Community }) => {
+      if (payload?.community) {
+        const item = { ...payload.community, unreadCount: 0, isInvited: true };
+        setCommunities((prev) =>
+          sortCommunitiesByRecent(
+            prev.filter((c) => c._id !== item._id).concat(item),
+          ),
+        );
+      }
+    };
+
     socket.on("new-community-message", handleNewCommunityMessage);
     socket.on("added-to-community", handleAddedToCommunity);
+    socket.on("invited-to-community", handleInvitedToCommunity);
     return () => {
       socket.off("new-community-message", handleNewCommunityMessage);
       socket.off("added-to-community", handleAddedToCommunity);
+      socket.off("invited-to-community", handleInvitedToCommunity);
     };
   }, [socket, currentUserId]);
 
@@ -652,6 +894,11 @@ export const GroupsFeed = () => {
                     <h3 className={`text-sm truncate ${community.unreadCount ? 'font-bold text-[#171717] dark:text-[#F5F5F5]' : 'font-semibold text-[#171717] dark:text-[#F5F5F5]'}`}>
                       {community.name}
                     </h3>
+                    {isCommunityInvited(community, currentUserId) && (
+                      <span className="text-[10px] font-bold text-[#7C3AED] bg-[#7C3AED]/10 px-1.5 py-0.5 rounded-full shrink-0">
+                        New Invite
+                      </span>
+                    )}
                   </div>
                   <div className={`text-xs truncate ${community.unreadCount ? 'font-bold text-[#171717] dark:text-[#F5F5F5]' : 'text-gray-500 dark:text-gray-400'}`}>
                     {(() => {
@@ -712,6 +959,63 @@ export const GroupsFeed = () => {
           const isMember = activeCommunity
             ? isCommunityMember(activeCommunity, currentUserId)
             : false;
+          const isInvited = activeCommunity
+            ? isCommunityInvited(activeCommunity, currentUserId)
+            : false;
+
+          if (isInvited) {
+            return (
+              <div className="flex flex-1 min-h-0 min-w-0">
+                <ChatWindow
+                  chatId={activeChatId || resolveCommunityChatId(activeCommunity!) || ""}
+                  chatName={activeCommunity?.name || "Group"}
+                  isOnline={true}
+                  isGroup={true}
+                  messages={[]}
+                  setMessages={setMessages}
+                  groupMembers={activeCommunity?.members}
+                  isChatListOpen={isSideBarOpen}
+                  onOpenChatList={() => setIsSideBarOpen(true)}
+                  onCloseChat={() => setActiveGroupId(null)}
+                  onOpenGroupDetails={() => setShowGroupDetailsPanel(true)}
+                  isGroupInviteView
+                  onAcceptGroupInvitation={() =>
+                    void handleAcceptCommunityInvite(activeCommunity!._id)
+                  }
+                  onDeclineGroupInvitation={() =>
+                    void handleDeclineCommunityInvite(activeCommunity!._id)
+                  }
+                />
+                {showGroupDetailsPanel && activeCommunity && (
+                  <aside className="w-[340px] shrink-0 h-full border-l border-gray-200 dark:border-gray-800 bg-white dark:bg-[#262626] flex flex-col z-10">
+                    <GroupDetails
+                      chatId={activeChatId || resolveCommunityChatId(activeCommunity) || ""}
+                      chatName={activeCommunity.name}
+                      description={activeCommunity.description}
+                      isPrivateGroup={activeCommunity.isPublic === false}
+                      groupMembers={activeCommunity.members}
+                      groupAdmins={[]}
+                      canAddMembers={false}
+                      isInvitedView
+                      communityId={activeCommunity._id}
+                      onAcceptInvitation={() =>
+                        void handleAcceptCommunityInvite(activeCommunity._id)
+                      }
+                      onDeclineInvitation={() =>
+                        void handleDeclineCommunityInvite(activeCommunity._id)
+                      }
+                      onClose={() => setShowGroupDetailsPanel(false)}
+                      onLeaveGroup={() => {}}
+                      onSearchClick={() => setShowGroupDetailsPanel(false)}
+                      onEditGroup={() => {}}
+                      isMuted={false}
+                      onToggleMute={() => {}}
+                    />
+                  </aside>
+                )}
+              </div>
+            );
+          }
 
           if (!isMember) {
             return (
@@ -728,17 +1032,26 @@ export const GroupsFeed = () => {
                     <span>{activeCommunity?.members?.length || 0} members</span>
                   </div>
 
-                  <button 
-                    onClick={() =>
-                      void handleJoinGroup(
-                        activeGroupId,
-                        activeCommunity?.name,
-                      )
-                    }
-                    className="w-full bg-[#7C3AED] hover:bg-[#6D28D9] text-white py-3 rounded-xl font-bold transition-colors"
-                  >
-                    Join Group
-                  </button>
+                  {(() => {
+                    const isPrivate = activeCommunity?.isPublic === false;
+                    const pending = hasPendingJoinRequest(
+                      activeCommunity!,
+                      currentUserId,
+                    );
+                    const joinLabel = isPrivate ? "Request to Join" : "Join Group";
+                    return (
+                      <button
+                        type="button"
+                        disabled={pending}
+                        onClick={() =>
+                          void handleJoinGroup(activeCommunity!)
+                        }
+                        className="w-full bg-[#7C3AED] hover:bg-[#6D28D9] disabled:opacity-60 disabled:cursor-not-allowed text-white py-3 rounded-xl font-bold transition-colors"
+                      >
+                        {pending ? "Pending Request" : joinLabel}
+                      </button>
+                    );
+                  })()}
                 </div>
               </main>
             );
@@ -747,6 +1060,14 @@ export const GroupsFeed = () => {
           const groupAdminIds = (activeCommunity?.admins || []).map(
             (a: string | { _id?: string }) =>
               typeof a === "string" ? a : a._id || "",
+          );
+          const ownerId =
+            typeof activeCommunity?.owner === "string"
+              ? activeCommunity.owner
+              : activeCommunity?.owner?._id;
+          const isGroupAdmin = isCommunityAdmin(activeCommunity!, currentUserId);
+          const pendingJoinRequests = (activeCommunity?.joinRequests ?? []).filter(
+            (r) => r.status === "pending" || !r.status,
           );
 
           return (
@@ -775,16 +1096,31 @@ export const GroupsFeed = () => {
                 <GroupDetails
                   chatId={activeChatId || resolveCommunityChatId(activeCommunity) || ""}
                   chatName={activeCommunity.name}
+                  description={activeCommunity.description}
                   isPrivateGroup={activeCommunity.isPublic === false}
                   groupMembers={activeCommunity.members}
-                  groupAdmins={groupAdminIds}
-                  canAddMembers={
-                    !activeCommunity.isPublic ||
-                    groupAdminIds.includes(currentUserId)
+                  groupAdmins={
+                    ownerId && !groupAdminIds.includes(ownerId)
+                      ? [ownerId, ...groupAdminIds]
+                      : groupAdminIds
                   }
+                  canAddMembers={isGroupAdmin}
+                  isGroupAdmin={isGroupAdmin}
+                  joinRequests={pendingJoinRequests}
+                  communityId={activeCommunity._id}
+                  onRespondToJoinRequest={(userId: string, action: 'accept' | 'reject') =>
+                    handleRespondToJoinRequest(activeCommunity._id, userId, action)
+                  }
+                  onMembersUpdated={(members) =>
+                    setCommunities((prev) =>
+                      prev.map((c) =>
+                        c._id === activeCommunity._id ? { ...c, members } : c,
+                      ),
+                    )
+                  }
+                  onDeleteGroup={() => handleDeleteGroup(activeCommunity._id)}
                   onClose={() => setShowGroupDetailsPanel(false)}
-                  onAddMember={() => toast("Add member coming soon")}
-                  onLeaveGroup={() => toast("Leave group coming soon")}
+                  onLeaveGroup={() => void handleLeaveGroup(activeCommunity._id)}
                   onSearchClick={() => setShowGroupDetailsPanel(false)}
                   onEditGroup={() => toast("Edit group coming soon")}
                   isMuted={false}
@@ -834,7 +1170,7 @@ export const GroupsFeed = () => {
                     void runGlobalSearch();
                   }
                 }}
-                placeholder="Search public communities..."
+                placeholder="Search communities..."
                 className="flex-1 px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-[#FAFAFA] dark:bg-[#171717] text-sm outline-none focus:ring-2 focus:ring-[#7C3AED]/50"
               />
               <button
@@ -858,12 +1194,12 @@ export const GroupsFeed = () => {
                   <button
                     key={community._id}
                     type="button"
-                    onClick={async () => {
+                    onClick={() => {
                       setShowGlobalSearchModal(false);
                       if (isCommunityMember(community, currentUserId)) {
                         selectCommunity(community as Community);
                       } else {
-                        await handleJoinGroup(community._id, community.name);
+                        openGroupPreview(community as Community);
                       }
                     }}
                     className="w-full text-left p-3 rounded-xl border border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
