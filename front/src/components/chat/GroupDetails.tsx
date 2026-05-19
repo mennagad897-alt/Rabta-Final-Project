@@ -15,6 +15,9 @@ interface ContactOption {
   role?: string;
 }
 
+/** Global member search runs only on Enter; require phone-like length to limit load */
+const MIN_GLOBAL_SEARCH_LENGTH = 10;
+
 interface GroupDetailsProps {
   chatId: string;
   chatName: string;
@@ -77,7 +80,10 @@ export const GroupDetails: React.FC<GroupDetailsProps> = ({
   const [showAddMembersModal, setShowAddMembersModal] = useState(false);
   const [addMemberQuery, setAddMemberQuery] = useState("");
   const [recentContacts, setRecentContacts] = useState<ContactOption[]>([]);
-  const [searchResults, setSearchResults] = useState<ContactOption[]>([]);
+  /** null = show recent-contacts list; array = last global search result (may be empty) */
+  const [globalSearchResults, setGlobalSearchResults] = useState<
+    ContactOption[] | null
+  >(null);
   const [loadingContacts, setLoadingContacts] = useState(false);
   const [searchingUsers, setSearchingUsers] = useState(false);
   const [addingUserId, setAddingUserId] = useState<string | null>(null);
@@ -96,7 +102,7 @@ export const GroupDetails: React.FC<GroupDetailsProps> = ({
   useEffect(() => {
     if (!showAddMembersModal) {
       setAddMemberQuery("");
-      setSearchResults([]);
+      setGlobalSearchResults(null);
       return;
     }
 
@@ -113,7 +119,7 @@ export const GroupDetails: React.FC<GroupDetailsProps> = ({
               jobTitle?: string;
               role?: string;
             }) => ({
-              id: u._id,
+              id: String(u._id),
               name: u.fullName || "User",
               avatar: u.avatar,
               role: u.jobTitle || u.role,
@@ -132,50 +138,58 @@ export const GroupDetails: React.FC<GroupDetailsProps> = ({
     void fetchRecent();
   }, [showAddMembersModal, memberIds]);
 
-  useEffect(() => {
-    if (!showAddMembersModal) return;
+  const handleAddMemberQueryChange = (value: string) => {
+    setAddMemberQuery(value);
+    setGlobalSearchResults(null);
+  };
+
+  const runGlobalMemberSearch = async () => {
     const q = addMemberQuery.trim();
     if (!q) {
-      setSearchResults([]);
+      setGlobalSearchResults(null);
+      return;
+    }
+    if (q.length < MIN_GLOBAL_SEARCH_LENGTH) {
+      toast.error(
+        `Enter at least ${MIN_GLOBAL_SEARCH_LENGTH} characters (e.g. a full phone number), then press Enter`,
+      );
       return;
     }
 
-    const timer = window.setTimeout(async () => {
-      setSearchingUsers(true);
-      try {
-        const { data } = await axiosInstance.get("/users/search/all", {
-          params: { keyword: q, limit: 20 },
-        });
-        const users: ContactOption[] = (data.data?.users ?? data.data ?? [])
-          .map(
-            (u: {
-              _id: string;
-              fullName?: string;
-              avatar?: string;
-              jobTitle?: string;
-              role?: string;
-            }) => ({
-              id: u._id,
-              name: u.fullName || "User",
-              avatar: u.avatar,
-              role: u.jobTitle || u.role,
-            }),
-          )
-          .filter((c: ContactOption) => !memberIds.has(String(c.id)));
-        setSearchResults(users);
-      } catch {
-        setSearchResults([]);
-      } finally {
-        setSearchingUsers(false);
-      }
-    }, 350);
+    setSearchingUsers(true);
+    try {
+      const { data } = await axiosInstance.get("/users/search/all", {
+        params: { keyword: q, limit: 20 },
+      });
+      const raw = data.data?.users ?? data.data ?? [];
+      const list = Array.isArray(raw) ? raw : [];
+      const users: ContactOption[] = list
+        .map(
+          (u: {
+            _id: string;
+            fullName?: string;
+            avatar?: string;
+            jobTitle?: string;
+            role?: string;
+          }) => ({
+            id: String(u._id),
+            name: u.fullName || "User",
+            avatar: u.avatar,
+            role: u.jobTitle || u.role,
+          }),
+        )
+        .filter((c: ContactOption) => !memberIds.has(String(c.id)));
+      setGlobalSearchResults(users);
+    } catch {
+      toast.error("Search failed. Please try again.");
+      setGlobalSearchResults([]);
+    } finally {
+      setSearchingUsers(false);
+    }
+  };
 
-    return () => window.clearTimeout(timer);
-  }, [addMemberQuery, showAddMembersModal, memberIds]);
-
-  const displayContacts = addMemberQuery.trim()
-    ? searchResults
-    : recentContacts;
+  const displayContacts =
+    globalSearchResults !== null ? globalSearchResults : recentContacts;
 
   const handleAddMember = async (userId: string) => {
     if (!communityId) return;
@@ -190,7 +204,9 @@ export const GroupDetails: React.FC<GroupDetailsProps> = ({
       const updatedMembers = data.data?.community?.members ?? groupMembers;
       onMembersUpdated?.(updatedMembers);
       setRecentContacts((prev) => prev.filter((c) => c.id !== userId));
-      setSearchResults((prev) => prev.filter((c) => c.id !== userId));
+      setGlobalSearchResults((prev) =>
+        prev ? prev.filter((c) => c.id !== userId) : prev,
+      );
       toast.success("Invitation sent");
     } catch (error: unknown) {
       const message = (error as { response?: { data?: { message?: string } } })
@@ -574,8 +590,14 @@ export const GroupDetails: React.FC<GroupDetailsProps> = ({
             <input
               type="text"
               value={addMemberQuery}
-              onChange={(e) => setAddMemberQuery(e.target.value)}
-              placeholder="Search users globally..."
+              onChange={(e) => handleAddMemberQueryChange(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  void runGlobalMemberSearch();
+                }
+              }}
+              placeholder={`Type ${MIN_GLOBAL_SEARCH_LENGTH}+ chars (e.g. phone), then Enter to search globally…`}
               className="w-full px-4 py-2.5 mb-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-[#FAFAFA] dark:bg-[#171717] text-sm outline-none focus:ring-2 focus:ring-[#7C3AED]/50"
             />
             <div className="max-h-60 overflow-y-auto space-y-1">
@@ -585,7 +607,7 @@ export const GroupDetails: React.FC<GroupDetailsProps> = ({
                 </p>
               ) : displayContacts.length === 0 ? (
                 <p className="text-sm text-gray-500 text-center py-6">
-                  {addMemberQuery.trim()
+                  {globalSearchResults !== null
                     ? "No users found."
                     : "No recent contacts to invite."}
                 </p>

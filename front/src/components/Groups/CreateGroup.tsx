@@ -62,15 +62,14 @@ const CreateGroup: React.FC = () => {
   useEffect(() => {
     const fetchUsers = async () => {
       try {
-        const response = await axiosInstance.get('/users/my-contacts', {
-          params: { connectionsOnly: true },
-        });
-        const usersList = response.data.data.contacts.map((u: any) => ({
-          id: u._id,
-          name: u.fullName,
+        const response = await axiosInstance.get('/users/recent-contacts');
+        const raw = response.data.data?.contacts ?? [];
+        const usersList = raw.map((u: { _id: string; fullName?: string; jobTitle?: string; role?: string; avatar?: string }) => ({
+          id: String(u._id),
+          name: u.fullName || 'User',
           role: u.jobTitle || u.role,
           avatar: u.avatar,
-          initial: u.fullName ? u.fullName.charAt(0).toUpperCase() : '?',
+          initial: (u.fullName || 'U').charAt(0).toUpperCase(),
           color: 'bg-purple-100 text-purple-600'
         }));
         setConnections(usersList);
@@ -115,8 +114,8 @@ const CreateGroup: React.FC = () => {
     }
   }, [searchQuery, formData.privacy]);
 
-  const filteredConnections = connections.filter(user => 
-    user.name.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredConnections = connections.filter(user =>
+    (user.name || '').toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const displayList = [...filteredConnections];
