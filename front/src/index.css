@@ -1,0 +1,121 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+
+/* إخفاء السكرول بار مع الحفاظ على خاصية السحب */
+@layer utilities {
+    .hide-scrollbar::-webkit-scrollbar {
+        display: none;
+    }
+
+    .hide-scrollbar {
+        -ms-overflow-style: none;
+        /* IE and Edge */
+        scrollbar-width: none;
+        /* Firefox */
+    }
+}
+
+
+@layer utilities {
+
+    /* أنيميشن الطفو للوجو */
+    @keyframes float {
+
+        0%,
+        100% {
+            transform: translateY(0);
+        }
+
+        50% {
+            transform: translateY(-12px);
+        }
+    }
+
+    .animate-float {
+        animation: float 4s ease-in-out infinite;
+    }
+
+    /* أنيميشن الظهور من أسفل */
+    @keyframes fadeInUp {
+        0% {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+
+        100% {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .animate-fade-in-up {
+        animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    /* خاص ب صفحة الاسبلاش  */
+
+    /* أنيميشن تكبير اللوجو */
+    @keyframes scaleIn {
+        0% {
+            opacity: 0;
+            transform: scale(0.85);
+        }
+
+        100% {
+            opacity: 1;
+            transform: scale(1);
+        }
+    }
+
+    .animate-scale-in {
+        animation: scaleIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    /* أنيميشن شريط التحميل */
+    @keyframes loading {
+        0% {
+            transform: translateX(-100%);
+        }
+
+        100% {
+            transform: translateX(200%);
+        }
+    }
+
+    .animate-loading {
+        animation: loading 1.5s ease-in-out infinite;
+    }
+}
+
+/* =====================================================
+   FIX: Browser Autofill Dark Theme Override
+   Prevents Chrome/Edge from forcing white background
+   on autofilled inputs in dark mode
+   ===================================================== */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+    -webkit-box-shadow: 0 0 0 30px #1f1f1f inset !important;
+    -webkit-text-fill-color: #f5f5f5 !important;
+    transition: background-color 5000s ease-in-out 0s;
+    caret-color: #f5f5f5;
+}
+
+/* =====================================================
+   FIX: Hide native browser password reveal eye icon
+   (Edge ::-ms-reveal, Chrome ::-webkit-credentials)
+   so it doesn't overlap our custom toggle button
+   ===================================================== */
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear {
+    display: none;
+}
+
+input[type="password"]::-webkit-credentials-auto-fill-button {
+    visibility: hidden;
+    display: none !important;
+    pointer-events: none;
+}
