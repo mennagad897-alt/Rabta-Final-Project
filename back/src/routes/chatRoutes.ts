@@ -25,6 +25,7 @@ import {
 } from "../middlewares/upload.middleware";
 import * as chatAiController from "../controllers/chat.ai.controller";
 
+
 const router = Router();
 
 // ==========================================
@@ -48,6 +49,7 @@ router.post("/:id/send", sendMessage);
 router.post("/:id/audio", uploadAudio.single("audio"), sendAudioMessage);
 
 // رفع المرفقات (ملفات/صور) لشات معين
+router.put('/:id/request', respondToChatRequest);
 router.post(
   "/:id/upload",
   uploadAttachment.single("document"),
