@@ -174,21 +174,7 @@ export const Settings = () => {
               </span>
             </div>
 
-            <div 
-              className="flex items-center gap-4 p-4 hover:bg-gray-50 dark:hover:bg-white/2 cursor-pointer transition-colors"
-              onClick={() => handleToggle('notifications', 'aiJobMatches')}
-            >
-              <div className="w-10 h-10 rounded-xl bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center text-purple-600 dark:text-purple-400">
-                <span className="material-icons-round">bolt</span>
-              </div>
-              <div className="flex-1">
-                <h4 className="text-sm font-semibold text-[#171717] dark:text-[#F5F5F5]">Rabta AI Assistant</h4>
-                <p className="text-xs text-gray-400">Job matching, recommendations</p>
-              </div>
-              <div className={`w-10 h-5 rounded-full relative transition-all ${settings.notifications.aiJobMatches ? 'bg-[#7C3AED] dark:bg-[#8B5CF6]' : 'bg-gray-200 dark:bg-gray-700'}`}>
-                <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${settings.notifications.aiJobMatches ? 'translate-x-5' : 'translate-x-1'}`}></div>
-              </div>
-            </div>
+
           </div>
 
           {/* Logout Button */}

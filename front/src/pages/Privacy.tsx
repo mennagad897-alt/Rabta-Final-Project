@@ -2,42 +2,76 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import axiosInstance from '../api/axiosInstance';
+import { useAppSelector, useAppDispatch } from '../store/hooks';
+import { updateProfile } from '../store/slices/authSlice';
+import { useChat } from '../context/ChatContext';
 
 export const Privacy: React.FC = () => {
   const navigate = useNavigate();
+  const dispatch = useAppDispatch();
+  const { socket } = useChat();
+  const user = useAppSelector((state) => state.auth.user);
 
   const [isLoading, setIsLoading] = useState(true);
   const [privacySettings, setPrivacySettings] = useState({
     showOnlineStatus: true,
   });
 
-  // Fetch current settings on mount
+  // Initialise from Redux store (settings.privacy.showOnline) —
+  // fall back to the legacy showOnlineStatus field for existing users
   useEffect(() => {
-    axiosInstance.get('/notifications/privacy/settings')
-      .then(res => {
-        setPrivacySettings({
-          showOnlineStatus: res.data?.showOnlineStatus !== false,
+    if (user) {
+      const fromSettings = user.settings?.privacy?.showOnline;
+      const fromLegacy = user.showOnlineStatus;
+      const resolved =
+        fromSettings !== undefined ? fromSettings : fromLegacy !== false;
+      setPrivacySettings({ showOnlineStatus: resolved });
+      setIsLoading(false);
+    } else {
+      // Fallback: fetch from API if user is not in Redux yet
+      axiosInstance
+        .get('/notifications/privacy/settings')
+        .then((res) => {
+          setPrivacySettings({
+            showOnlineStatus: res.data?.showOnlineStatus !== false,
+          });
+        })
+        .catch(() => {
+          toast.error('Failed to load privacy settings');
+        })
+        .finally(() => {
+          setIsLoading(false);
         });
-      })
-      .catch(() => {
-        toast.error('Failed to load privacy settings');
-      })
-      .finally(() => {
-        setIsLoading(false);
-      });
-  }, []);
+    }
+  }, [user]);
 
   const toggleSetting = async (key: keyof typeof privacySettings) => {
     const newValue = !privacySettings[key];
+
     // Optimistic update
-    setPrivacySettings(prev => ({ ...prev, [key]: newValue }));
+    setPrivacySettings((prev) => ({ ...prev, [key]: newValue }));
 
     try {
-      await axiosInstance.patch('/notifications/privacy/settings', { [key]: newValue });
+      // 1. Persist to backend via the new settings endpoint
+      const res = await axiosInstance.patch('/users/settings', {
+        settings: { privacy: { showOnline: newValue } },
+      });
+
+      // 2. Update Redux store with the fresh user object returned by the server
+      const updatedUser = res.data?.data?.user;
+      if (updatedUser) {
+        dispatch(updateProfile(updatedUser));
+      }
+
+      // 3. Emit socket event so the server can re-broadcast online users immediately
+      if (socket) {
+        socket.emit('update-online-visibility', { visible: newValue });
+      }
+
       toast.success('Privacy setting updated');
     } catch {
       // Rollback on failure
-      setPrivacySettings(prev => ({ ...prev, [key]: !newValue }));
+      setPrivacySettings((prev) => ({ ...prev, [key]: !newValue }));
       toast.error('Failed to update privacy setting');
     }
   };

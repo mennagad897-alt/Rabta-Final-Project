@@ -162,7 +162,13 @@ io.on('connection', (socket) => {
     try {
       const { User } = require('./models/user');
       const activeIds = Array.from(activeUsers.keys());
-      const users = await User.find({ _id: { $in: activeIds }, $or: [{ showOnlineStatus: true }, { showOnlineStatus: { $exists: false } }] }).select('_id');
+      const users = await User.find({
+        _id: { $in: activeIds },
+        $or: [
+          { 'settings.privacy.showOnline': true },
+          { 'settings.privacy.showOnline': { $exists: false } }
+        ]
+      }).select('_id');
       const visibleOnlineUsers = users.map((u: any) => u._id.toString());
       io.emit('online-users', visibleOnlineUsers);
     } catch (err) {
@@ -753,6 +759,21 @@ io.on('connection', (socket) => {
   socket.on('leave-group-room', (data: { groupId: string }) => {
     socket.leave(data.groupId);
     socket.to(data.groupId).emit('user-left-group', socket.id);
+  });
+
+  // ==========================================
+  // 👁️ تحديث مرئية الأونلاين (Online Visibility Toggle)
+  // ==========================================
+  socket.on('update-online-visibility', async (data: { visible: boolean }) => {
+    try {
+      await User.findByIdAndUpdate(authenticatedUserId, {
+        'settings.privacy.showOnline': data.visible
+      });
+      broadcastActiveUsers();
+      console.log(`👁️ User [${authenticatedUserId}] set online visibility to: ${data.visible}`);
+    } catch (err) {
+      console.error('Error updating online visibility:', err);
+    }
   });
 
   socket.on('disconnect', () => {
