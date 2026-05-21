@@ -1594,7 +1594,24 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                   Pinned Message
                 </span>
                 <span className="text-[#171717] dark:text-[#F5F5F5] text-sm truncate font-medium">
-                  {messages.find((m) => m.isPinned)?.content || "Media Message"}
+                  {messages.find((m) => m.isPinned)?.type === "audio" ? (
+                    <span className="flex items-center gap-1">
+                      <span className="material-icons-round text-[11px]">
+                        mic
+                      </span>{" "}
+                      Voice message
+                    </span>
+                  ) : messages.find((m) => m.isPinned)?.type ===
+                    "call_summary" ? (
+                    <span className="flex items-center gap-1">
+                      <span className="material-icons-round text-[11px]">
+                        call
+                      </span>{" "}
+                      {messages.find((m) => m.isPinned)?.content}
+                    </span>
+                  ) : (
+                    messages.find((m) => m.isPinned)?.content || "Media Message"
+                  )}
                 </span>
               </div>
             </div>
@@ -2314,8 +2331,24 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                       );
                     }
 
-                    if (isAudio) return "≡ƒÄñ Voice Message";
-
+                    if (isAudio)
+                      return (
+                        <span className="flex items-center gap-1">
+                          <span className="material-icons-round text-[11px]">
+                            mic
+                          </span>{" "}
+                          Voice Message
+                        </span>
+                      );
+                    if (replyingTo.type === "call_summary")
+                      return (
+                        <span className="flex items-center gap-1">
+                          <span className="material-icons-round text-[11px]">
+                            call
+                          </span>{" "}
+                          {fileContent}
+                        </span>
+                      );
                     if (isDoc) {
                       const rawName =
                         replyingTo.fileName ||
@@ -3217,7 +3250,23 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                               {m.isMine ? " · You" : ""}
                             </span>
                             <span className="text-sm text-[#171717] dark:text-[#F5F5F5] line-clamp-3">
-                              {m.content || m.fileName || "Media"}
+                              {m.type === "audio" ? (
+                                <span className="flex items-center gap-1">
+                                  <span className="material-icons-round text-[11px]">
+                                    mic
+                                  </span>{" "}
+                                  Voice message
+                                </span>
+                              ) : m.type === "call_summary" ? (
+                                <span className="flex items-center gap-1">
+                                  <span className="material-icons-round text-[11px]">
+                                    call
+                                  </span>{" "}
+                                  {m.content}
+                                </span>
+                              ) : (
+                                m.content || m.fileName || "Media"
+                              )}
                             </span>
                           </button>
                         </li>
