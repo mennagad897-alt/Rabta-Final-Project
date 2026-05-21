@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axiosInstance from '../../api/axiosInstance';
+import toast from 'react-hot-toast';
 
 const AppliedProjects: React.FC = () => {
   const [appliedJobs, setAppliedJobs] = useState<any[]>([]);
@@ -49,7 +50,7 @@ const AppliedProjects: React.FC = () => {
                   <span>{new Date(job.appliedAt || job.date).toLocaleDateString()}</span>
                 </div>
               </div>
-              
+
               <div className={`px-4 py-1.5 rounded-full text-sm font-bold border flex items-center gap-2
                 ${job.status === 'Interview' ? 'bg-green-50 text-green-600 border-green-200 dark:bg-green-900/20 dark:border-green-800' : ''}
                 ${job.status === 'In Review' ? 'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-900/20 dark:border-blue-800' : ''}

@@ -36,7 +36,7 @@ interface ProjectData {
 // ==========================================
 export const ProjectDetails: React.FC = () => {
   const navigate = useNavigate();
-  const { projectId: _projectId } = useParams();
+  const { projectId } = useParams();
 
   // TODO (Backend): جلب تفاصيل المشروع
   // useEffect(() => {
@@ -89,13 +89,12 @@ export const ProjectDetails: React.FC = () => {
               {/* Status Badges */}
               <div className="mb-6">
                 <div className="flex flex-wrap gap-3 mb-5">
-                  <span className={`text-xs px-3 py-1.5 rounded-lg font-bold uppercase tracking-wider shadow-sm border ${
-                    project.status === 'Open'
+                  <span className={`text-xs px-3 py-1.5 rounded-lg font-bold uppercase tracking-wider shadow-sm border ${project.status === 'Open'
                       ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 border-green-200 dark:border-green-800'
                       : project.status === 'In Progress'
-                      ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400 border-yellow-200 dark:border-yellow-800'
-                      : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400 border-gray-200 dark:border-gray-700'
-                  }`}>{project.status}</span>
+                        ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400 border-yellow-200 dark:border-yellow-800'
+                        : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400 border-gray-200 dark:border-gray-700'
+                    }`}>{project.status}</span>
                   <span className="bg-[#8B5CF6]/10 text-[#8B5CF6] border border-[#8B5CF6]/20 text-xs px-3 py-1.5 rounded-lg font-bold shadow-sm">{project.category}</span>
                   <span className="bg-[#1F1F1F]/5 dark:bg-[#F5F5F5]/10 text-[#1F1F1F] dark:text-[#F5F5F5] border border-[#1F1F1F]/10 dark:border-[#F5F5F5]/10 text-xs px-3 py-1.5 rounded-lg font-bold shadow-sm">{project.locationType}</span>
                 </div>

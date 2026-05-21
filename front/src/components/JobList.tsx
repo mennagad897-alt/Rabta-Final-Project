@@ -10,7 +10,7 @@ import { fetchJobs, resetFilters } from '../store/slices/jobsSlice';
 import { updateProfile } from '../store/slices/authSlice';
 import axiosInstance from '../api/axiosInstance';
 import toast from 'react-hot-toast';
-import { Link } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 
 /**
  * Job Card Component
@@ -111,11 +111,10 @@ export const JobCard: React.FC<{ job: Job, isSavedPage?: boolean }> = ({ job, is
               onClick={handleSaveJob}
               disabled={isSaving}
               title={isSavedPage ? 'Remove from Saved' : (isSaved ? 'Unsave Job' : 'Save Job')}
-              className={`p-2 rounded-lg transition-colors flex items-center justify-center disabled:opacity-50 ${
-                isSavedPage 
+              className={`p-2 rounded-lg transition-colors flex items-center justify-center disabled:opacity-50 ${isSavedPage
                   ? 'bg-red-50 hover:bg-red-100 text-red-500 dark:bg-red-900/20 dark:hover:bg-red-900/40 dark:text-red-400'
                   : (isSaved ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400' : 'bg-gray-100 dark:bg-[#1f1f1f] text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-[#2a2a2a]')
-              }`}
+                }`}
             >
               {isSavedPage ? (
                 <>
@@ -127,7 +126,7 @@ export const JobCard: React.FC<{ job: Job, isSavedPage?: boolean }> = ({ job, is
               )}
             </button>
           )}
-          <Link 
+          <Link
             to={`/jobs/${job._id || job.id}`}
             onClick={(e) => {
               e.stopPropagation();

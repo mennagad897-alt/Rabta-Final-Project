@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -25,8 +25,8 @@ const EmployerRegister: React.FC = () => {
   const token = searchParams.get('token');
   const navigate = useNavigate();
   const dispatch = useDispatch();
-  
-  const [companyInfo, setCompanyInfo] = useState<{name: string, email: string} | null>(null);
+
+  const [companyInfo, setCompanyInfo] = useState<{ name: string, email: string } | null>(null);
   const [validating, setValidating] = useState(true);
 
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<RegisterFormData>({
@@ -65,9 +65,9 @@ const EmployerRegister: React.FC = () => {
         password: data.password
       });
 
-      dispatch(setCredentials({ 
-        user: response.data.data.user, 
-        token: response.data.token 
+      dispatch(setCredentials({
+        user: response.data.data.user,
+        token: response.data.token
       }));
 
       toast.success("Registration successful!");

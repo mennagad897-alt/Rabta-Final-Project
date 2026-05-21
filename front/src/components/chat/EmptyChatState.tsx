@@ -1,3 +1,4 @@
+import React from 'react';
 
 // بنستقبل دالة (onNewMessage) عشان لما ندوس على الزرار يفتح الـ Modal في الصفحة الرئيسية
 export const EmptyChatState = ({ onNewMessage }: { onNewMessage: () => void }) => {
@@ -11,7 +12,7 @@ export const EmptyChatState = ({ onNewMessage }: { onNewMessage: () => void }) =
         <p className="text-sm text-gray-500 dark:text-gray-400 mb-8 leading-relaxed">
           Select a chat from the list to start messaging, or start a new conversation.
         </p>
-        <button 
+        <button
           onClick={onNewMessage}
           className="px-6 py-2.5 bg-[#7C3AED] dark:bg-[#8B5CF6] text-white rounded-xl font-medium shadow-md hover:opacity-90 transition-all flex items-center gap-2"
         >

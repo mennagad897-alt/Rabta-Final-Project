@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import type { RootState } from '../../store/store';
@@ -9,6 +9,7 @@ const EmployerProfile: React.FC = () => {
   const user = useSelector((state: RootState) => state.auth.user);
   const dispatch = useDispatch();
   const navigate = useNavigate();
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const loadProfile = async () => {
@@ -17,6 +18,8 @@ const EmployerProfile: React.FC = () => {
         dispatch(updateProfile(freshUser));
       } catch (error) {
         console.error('Failed to fetch fresh profile data', error);
+      } finally {
+        setLoading(false);
       }
     };
     loadProfile();
@@ -26,10 +29,10 @@ const EmployerProfile: React.FC = () => {
     <div className="min-h-screen bg-[#FAFAFA] dark:bg-[#171717] text-[#171717] dark:text-[#F5F5F5] p-4 md:p-10">
       <main className="max-w-6xl mx-auto">
         <div className="grid lg:grid-cols-3 gap-6 w-full">
-          
+
           {/* Left Column */}
           <div className="lg:col-span-1 flex flex-col gap-6">
-            
+
             {/* Card 1: User Info */}
             <div className="bg-[#FFFFFF] dark:bg-[#1E1E22] rounded-xl p-6 shadow-lg border border-gray-100 dark:border-zinc-800 text-center">
               <div className="w-32 h-32 bg-[#7C3AED] rounded-full flex items-center justify-center text-white text-4xl font-black shadow-lg mx-auto mb-6 overflow-hidden">
@@ -51,13 +54,13 @@ const EmployerProfile: React.FC = () => {
                 <span>{user?.location || 'Location not specified'}</span>
               </div>
               <p className="text-sm opacity-80 mb-6 italic">"{user?.bioHeadline || 'No short bio added.'}"</p>
-              
+
               <div className="flex justify-center gap-4 mb-6">
                 {user?.links?.map((link: any, index: number) => (
-                  <a 
-                    key={index} 
-                    href={link.url} 
-                    target="_blank" 
+                  <a
+                    key={index}
+                    href={link.url}
+                    target="_blank"
                     rel="noopener noreferrer"
                     className="w-10 h-10 rounded-full bg-gray-50 dark:bg-[#2A2A2E] flex items-center justify-center text-gray-500 hover:text-[#7C3AED] hover:bg-[#7C3AED]/10 transition-all border border-gray-100 dark:border-zinc-700"
                     title={link.platform}
@@ -66,17 +69,17 @@ const EmployerProfile: React.FC = () => {
                   </a>
                 ))}
               </div>
-              
+
               <div className="flex flex-col gap-3">
-                <button 
+                <button
                   onClick={() => navigate('/edit-profile')}
                   className="w-full bg-[#7C3AED] hover:bg-[#6D28D9] text-white py-3 rounded-xl font-bold transition-all active:scale-95 flex items-center justify-center gap-2"
                 >
                   <span className="material-icons-round text-sm">edit</span>
                   Edit Profile
                 </button>
-                
-                <button 
+
+                <button
                   onClick={() => navigate('/employer-dashboard')}
                   className="w-full border-2 border-[#7C3AED] text-[#7C3AED] dark:text-[#8B5CF6] dark:border-[#8B5CF6] hover:bg-[#7C3AED]/5 py-3 rounded-xl font-bold transition-all flex items-center justify-center gap-2"
                 >
@@ -101,7 +104,7 @@ const EmployerProfile: React.FC = () => {
 
           {/* Right Column */}
           <div className="lg:col-span-2 flex flex-col gap-6">
-            
+
             {/* Card 3: About Me */}
             <div className="bg-[#FFFFFF] dark:bg-[#1E1E22] rounded-xl p-6 shadow-lg border border-gray-100 dark:border-zinc-800 transition-colors duration-300">
               <h3 className="text-2xl font-bold mb-3">About Company</h3>
@@ -117,7 +120,7 @@ const EmployerProfile: React.FC = () => {
                 <h3 className="text-2xl font-bold mb-3">Projects</h3>
                 <div className="w-12 h-1 bg-[#7C3AED] dark:bg-[#8B5CF6] rounded-full"></div>
               </div>
-              
+
               {user?.projects && user.projects.length > 0 ? (
                 user.projects.map((project: any, index: number) => (
                   <article key={index} className="bg-[#FFFFFF] dark:bg-[#1E1E22] rounded-xl p-6 shadow-lg border border-gray-100 dark:border-zinc-800 flex flex-col gap-4">
@@ -128,17 +131,17 @@ const EmployerProfile: React.FC = () => {
                       </p>
                     </div>
                     <div className="flex gap-3 mt-2">
-                        {project.projectLink && (
-                          <a href={project.projectLink} target="_blank" rel="noopener noreferrer" className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 shadow-sm">
-                            Live Demo <span className="material-icons-round text-[16px]">open_in_new</span>
-                          </a>
-                        )}
-                        {project.githubLink && (
-                          <a href={project.githubLink} target="_blank" rel="noopener noreferrer" className="border border-zinc-600 hover:bg-zinc-800 text-[#171717] hover:text-white dark:text-[#F5F5F5] px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
-                            <i className="fa-brands fa-github text-[16px]"></i> GitHub Repo
-                          </a>
-                        )}
-                      </div>
+                      {project.projectLink && (
+                        <a href={project.projectLink} target="_blank" rel="noopener noreferrer" className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 shadow-sm">
+                          Live Demo <span className="material-icons-round text-[16px]">open_in_new</span>
+                        </a>
+                      )}
+                      {project.githubLink && (
+                        <a href={project.githubLink} target="_blank" rel="noopener noreferrer" className="border border-zinc-600 hover:bg-zinc-800 text-[#171717] hover:text-white dark:text-[#F5F5F5] px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
+                          <i className="fa-brands fa-github text-[16px]"></i> GitHub Repo
+                        </a>
+                      )}
+                    </div>
                   </article>
                 ))
               ) : (

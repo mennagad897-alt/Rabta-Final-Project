@@ -36,7 +36,7 @@ interface Post {
 // ==========================================
 export const PostDetails: React.FC = () => {
   const navigate = useNavigate();
-  const { postId: _postId } = useParams();
+  const { postId } = useParams();
 
   // States — جاهزة للربط بالباك-إند
   const [post] = useState<Post | null>(null);
@@ -87,7 +87,7 @@ export const PostDetails: React.FC = () => {
   return (
     <main className="flex-1 overflow-y-auto relative custom-scrollbar bg-[#FAFAFA] dark:bg-[#171717]">
       <div className="max-w-3xl mx-auto px-6 py-12 flex flex-col gap-8">
-        
+
         {/* Back Button */}
         <button
           onClick={() => navigate(-1)}

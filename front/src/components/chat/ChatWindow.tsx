@@ -70,7 +70,7 @@ interface ChatWindowProps {
   groupAdmins?: string[];
   isPrivateGroup?: boolean;
   chats?: any[]; // Passed down to power the Forward Message Modal
-  /** Lifted from HomeFeed — WhatsApp-style search sidebar coordination */
+  /** Lifted from HomeFeed ΓÇö WhatsApp-style search sidebar coordination */
   isChatSearchOpen?: boolean;
   onChatSearchOpenChange?: (open: boolean) => void;
   /** Open contact profile in parent side panel (keeps chat context). */
@@ -114,14 +114,14 @@ type SearchUser = {
   avatar?: string;
 };
 
-export const ChatWindow: React.FC<ChatWindowProps> = ({ 
-  chatId, 
-  receiverId, 
-  chatName, 
-  isOnline, 
+export const ChatWindow: React.FC<ChatWindowProps> = ({
+  chatId,
+  receiverId,
+  chatName,
+  isOnline,
   showOnlineStatus = true,
   isGroup = false,
-  messages, 
+  messages,
   setMessages,
   isChatListOpen = true,
   onOpenChatList,
@@ -184,8 +184,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         timeout: 60000,
       });
       const dataStr = res.data?.data || '';
-      
-      if (typeof dataStr === 'string' && (dataStr.includes("لا توجد رسائل كافية") || dataStr.includes("لا توجد رسائل كافية لتلخيصها"))) {
+
+      if (typeof dataStr === 'string' && (dataStr.includes("┘ä╪º ╪¬┘ê╪¼╪» ╪▒╪│╪º╪ª┘ä ┘â╪º┘ü┘è╪⌐") || dataStr.includes("┘ä╪º ╪¬┘ê╪¼╪» ╪▒╪│╪º╪ª┘ä ┘â╪º┘ü┘è╪⌐ ┘ä╪¬┘ä╪«┘è╪╡┘ç╪º"))) {
         setSummaryError("Cannot summarize: The messages might have been deleted or there are not enough messages in this chat.");
       } else {
         setSummaryResult(dataStr);
@@ -217,20 +217,20 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
       // Check if fallback response detected
       const isFallback = [
-        "عذراً، لا أمتلك",
-        "لا أمتلك معلومات كافية",
+        "╪╣╪░╪▒╪º┘ï╪î ┘ä╪º ╪ú┘à╪¬┘ä┘â",
+        "┘ä╪º ╪ú┘à╪¬┘ä┘â ┘à╪╣┘ä┘ê┘à╪º╪¬ ┘â╪º┘ü┘è╪⌐",
         "No relevant messages found",
         "don't have information",
         "cannot find this information"
       ].some(phrase => dataStr.toLowerCase().includes(phrase.toLowerCase()));
-      
+
       if (isFallback) {
         setSearchFallback(true);
       }
     } catch (err: any) {
       console.error(err);
       const errMsg = err.response?.data?.message || err.message || "Search failed.";
-      setSearchResult(`⚠️ ${errMsg}`);
+      setSearchResult(`ΓÜá∩╕Å ${errMsg}`);
     } finally {
       setSearching(false);
     }
@@ -242,7 +242,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const [activeSidePanel, setActiveSidePanel] = useState<'details' | 'search' | null>(null);
   const [showDetails, setShowDetails] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
-  
+
   const [showGroupPostModal, setShowGroupPostModal] = useState(false);
   const [showEditGroupModal, setShowEditGroupModal] = useState(false);
   const [showAddMemberModal, setShowAddMemberModal] = useState(false);
@@ -269,7 +269,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const [showHeaderMenu, setShowHeaderMenu] = useState(false);
   const [blockedByMe, setBlockedByMe] = useState(false);
   const [blockedMe, setBlockedMe] = useState(false);
-  
+
   // Smart Replies & Inline Translation States
   const [smartReplies, setSmartReplies] = useState<string[]>([]);
   const [loadingReplies, setLoadingReplies] = useState(false);
@@ -351,7 +351,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     const onBlocked = (payload?: { message?: string }) => {
       toast.error(payload?.message || 'This action is not allowed.');
     };
-    
+
     const onBlockStatusChanged = (payload: { blockerId: string, blocked: boolean }) => {
       // Only update state if the person who blocked/unblocked us is the current chat's receiver
       if (payload.blockerId === receiverId) {
@@ -558,7 +558,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     const handleMessagesRead = ({ chatId, readBy }: { chatId: string; readBy?: string }) => {
       if (!setMessages) return;
       if (String(chatId) !== String(activeChatId)) return;
-      // Ignore when we marked incoming messages read — only the other party reading our sends updates ticks
+      // Ignore when we marked incoming messages read ΓÇö only the other party reading our sends updates ticks
       if (readBy && String(readBy) === String(currentUser._id)) return;
       setMessages((prev) => prev.map((m) => (
         m.isMine ? { ...m, status: 'read', isPending: false } : m
@@ -594,7 +594,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     if (!hasUnreadFromOther) return;
     socket.emit('markAsRead', { chatId: activeChatId, userId: currentUser._id });
   }, [socket, setMessages, activeChatId, currentUser._id]);
-  
+
   const handleRecordingComplete = (blob: Blob, durationSeconds: number) => {
     setVoiceBlob(blob);
     setVoiceDuration(durationSeconds);
@@ -614,7 +614,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       setVoiceBlob(null);
       setVoiceUrl(null);
       setIsRecordingVoice(false);
-      
+
       const formData = new FormData();
       formData.append('audio', audioBlob, 'voice-message.webm');
       formData.append('messageType', 'audio');
@@ -629,7 +629,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           headers: { 'Content-Type': 'multipart/form-data' }
         });
         toast.success("Voice message sent", { id: 'voice' });
-        
+
         const saved = response.data.data.message;
         const formatted: MessageType = {
           id: saved._id,
@@ -640,11 +640,11 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           isMine: true,
           status: saved.status || 'sent'
         };
-        
+
         if (setMessages) {
           setMessages(prev => [...prev, formatted]);
         }
-        
+
         if (socket) {
           socket.emit('send_message', { chatId, ...saved });
         }
@@ -721,7 +721,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
   const submitEditMessage = async () => {
     if (!editingText.trim() || !editingMessageId) return;
-    
+
     try {
       await axiosInstance.put(`/messages/${editingMessageId}/edit`, { content: editingText.trim() });
       if (setMessages) {
@@ -795,13 +795,13 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         isForwarded: true,
         audioUrl: message.type === 'audio' ? message.fileUrl : undefined,
         duration: message.duration,
-        attachments: message.fileUrl && message.type !== 'audio' 
-          ? [{ fileUrl: message.fileUrl, fileType: message.type, fileSize: message.fileSize ? parseFloat(message.fileSize) : 0 }] 
+        attachments: message.fileUrl && message.type !== 'audio'
+          ? [{ fileUrl: message.fileUrl, fileType: message.type, fileSize: message.fileSize ? parseFloat(message.fileSize) : 0 }]
           : []
       };
-      
+
       const response = await axiosInstance.post(`/chats/${targetChatId}/send`, payload);
-      
+
       // If the target chat is currently open, instantly show the new message
       if (targetChatId === chatId && setMessages) {
         const newMsgData = response.data?.data?.message || response.data?.message || response.data;
@@ -819,7 +819,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         };
         setMessages(prev => [...prev, newMsg]);
       }
-      
+
       toast.success('Message forwarded');
     } catch (error: any) {
       console.error('Error forwarding message:', error.response?.data || error.message);
@@ -972,7 +972,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       toast.success("File sent", { id: 'upload' });
-      
+
       const saved = response.data.data.message;
       const formatted: MessageType = {
         id: saved._id,
@@ -986,7 +986,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         status: saved.status || 'sent',
         replyTo: saved.replyTo
       };
-      
+
       if (setMessages) {
         setMessages(prev => [...prev, formatted]);
       }
@@ -1038,7 +1038,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   return (
     <div className="flex-1 flex min-w-0 h-full">
       <main className="flex-1 flex flex-col bg-[#FAFAFA] dark:bg-[#171717] min-h-0 min-w-0 transition-colors duration-300 relative">
-        <header 
+        <header
           onClick={(e) => {
             if (!(e.target as HTMLElement).closest('button')) {
               if (isGroup && onOpenGroupDetails) {
@@ -1061,51 +1061,51 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                 <span className="material-icons text-[22px]">arrow_back</span>
               </button>
             )}
-          <div className="flex flex-col min-w-0">
-            <h2 className="text-[#171717] dark:text-[#F5F5F5] font-bold text-base truncate">{chatName || 'Unknown Chat'}</h2>
-            {isGroup ? (
-              <span className="text-gray-500 dark:text-gray-400 text-xs truncate">
-                {formatGroupMemberLabel(groupMembers)}
-              </span>
-            ) : (
-              (isOnline && showOnlineStatus) && <span className="text-[#7C3AED] dark:text-[#8B5CF6] text-xs font-medium">Online</span>
-            )}
-          </div>
+            <div className="flex flex-col min-w-0">
+              <h2 className="text-[#171717] dark:text-[#F5F5F5] font-bold text-base truncate">{chatName || 'Unknown Chat'}</h2>
+              {isGroup ? (
+                <span className="text-gray-500 dark:text-gray-400 text-xs truncate">
+                  {formatGroupMemberLabel(groupMembers)}
+                </span>
+              ) : (
+                (isOnline && showOnlineStatus) && <span className="text-[#7C3AED] dark:text-[#8B5CF6] text-xs font-medium">Online</span>
+              )}
+            </div>
           </div>
           <div className="flex items-center gap-4 text-gray-400 dark:text-gray-500 shrink-0">
             <div className="flex items-center bg-gray-100 dark:bg-gray-800 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
-              <button 
+              <button
                 type="button"
-                onClick={(e) => { 
-                  e.stopPropagation(); 
+                onClick={(e) => {
+                  e.stopPropagation();
                   if (!isGroup && blockedByMe) {
                     toast.error("You have blocked this user. Unblock them to start a call.");
                     return;
                   }
-                  handleCall('video'); 
+                  handleCall('video');
                 }}
                 className={`px-2.5 py-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-[#7C3AED] transition-colors ${!isGroup && blockedByMe ? 'opacity-40' : ''}`}
               >
                 <span className="material-icons-round text-[20px]">videocam</span>
               </button>
               <div className="w-px h-5 bg-gray-200 dark:bg-gray-700"></div>
-              <button 
+              <button
                 type="button"
-                onClick={(e) => { 
-                  e.stopPropagation(); 
+                onClick={(e) => {
+                  e.stopPropagation();
                   if (!isGroup && blockedByMe) {
                     toast.error("You have blocked this user. Unblock them to start a call.");
                     return;
                   }
-                  handleCall('voice'); 
+                  handleCall('voice');
                 }}
                 className={`px-1 py-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-[#7C3AED] transition-colors ${!isGroup && blockedByMe ? 'opacity-40' : ''}`}
               >
                 <span className="material-icons-round text-[18px]">call</span>
               </button>
             </div>
-            
-            {/* 3-Dots Header Menu — high z-index so message rows never paint over */}
+
+            {/* 3-Dots Header Menu ΓÇö high z-index so message rows never paint over */}
             <div className="relative z-[110] header-menu-container">
               <button
                 onClick={(e) => { e.stopPropagation(); setShowHeaderMenu(!showHeaderMenu); }}
@@ -1117,10 +1117,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                   <circle cx="12" cy="19" r="1.5" />
                 </svg>
               </button>
-              
+
               {showHeaderMenu && (
                 <div className="absolute right-0 top-full mt-2 w-56 rounded-xl bg-gray-800 shadow-lg ring-1 ring-black/20 py-2 z-[120]">
-                  <button 
+                  <button
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
@@ -1144,8 +1144,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                     </svg>
                     {isGroup ? 'Group Details' : 'View Profile'}
                   </button>
-                  
-                  <button 
+
+                  <button
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
@@ -1162,8 +1162,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                     </svg>
                     Search
                   </button>
-                  
-                  <button 
+
+                  <button
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
@@ -1185,8 +1185,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                     </svg>
                     Media, Links, and Docs
                   </button>
-                  
-                  <button 
+
+                  <button
                     onClick={(e) => {
                       e.stopPropagation();
                       setShowHeaderMenu(false);
@@ -1212,7 +1212,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                     )}
                     {isMuted ? 'Unmute Notifications' : 'Mute Notifications'}
                   </button>
-                  
+
                   {onCloseChat && (
                     <button
                       type="button"
@@ -1229,8 +1229,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                   )}
 
                   <div className="h-px bg-gray-100 dark:bg-gray-700/50 my-1"></div>
-                  
-                  <button 
+
+                  <button
                     onClick={(e) => {
                       e.stopPropagation();
                       setShowHeaderMenu(false);
@@ -1247,9 +1247,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                     </svg>
                     Clear Chat
                   </button>
-                  
+
                   {!isGroup && (
-                    <button 
+                    <button
                       onClick={(e) => {
                         e.stopPropagation();
                         setShowHeaderMenu(false);
@@ -1281,12 +1281,12 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                 </span>
               </div>
             </div>
-            <button 
+            <button
               onClick={(e) => {
                 e.stopPropagation();
                 const pinnedMsg = messages.find(m => m.isPinned);
                 if (pinnedMsg) handlePin(pinnedMsg.id);
-              }} 
+              }}
               className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors shrink-0 p-1"
             >
               <span className="material-icons-round text-[18px]">close</span>
@@ -1309,20 +1309,19 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                 )}
                 {isGroup && !msg.isDeletedForEveryone && (
                   <span
-                    className={`text-xs font-semibold mb-0.5 px-0.5 ${
-                      msg.isMine
+                    className={`text-xs font-semibold mb-0.5 px-0.5 ${msg.isMine
                         ? 'text-[#7C3AED] dark:text-[#8B5CF6] self-end'
                         : 'text-gray-500 dark:text-gray-400 self-start'
-                    }`}
+                      }`}
                   >
                     {msg.isMine ? 'You' : (msg.senderName || 'Member')}
                   </span>
                 )}
                 {msg.isDeletedForEveryone ? (
-                   <div className="bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 italic rounded-xl p-3 text-sm flex items-center gap-2">
-                     <span className="material-icons-round text-sm">block</span>
-                     This message was deleted
-                   </div>
+                  <div className="bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 italic rounded-xl p-3 text-sm flex items-center gap-2">
+                    <span className="material-icons-round text-sm">block</span>
+                    This message was deleted
+                  </div>
                 ) : (
                   <>
                     {msg.isForwarded && (
@@ -1333,38 +1332,126 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                     {msg.type === 'text' ? (
                       <div className={`relative ${msg.isMine ? 'bg-[#7C3AED] text-white rounded-tr-none' : 'bg-white dark:bg-[#262626] text-[#171717] dark:text-[#F5F5F5] border border-gray-200 dark:border-gray-800 rounded-tl-none'} rounded-xl p-3 pr-10 shadow-sm ${msg.isPending ? 'opacity-70' : ''}`}>
                         {editingMessageId === msg.id ? (
-                      <div className="flex flex-col gap-2">
-                        <input 
-                          type="text" 
-                          value={editingText} 
-                          onChange={e => setEditingText(e.target.value)}
-                          className="text-[#171717] px-2 py-1 rounded text-sm min-w-[200px]"
-                          autoFocus
-                          onKeyDown={e => {
-                            if (e.key === 'Enter') submitEditMessage();
-                            if (e.key === 'Escape') setEditingMessageId(null);
-                          }}
-                        />
-                        <div className="flex justify-end gap-2 text-xs">
-                          <button onClick={() => setEditingMessageId(null)} className="text-gray-200 hover:text-white">Cancel</button>
-                          <button onClick={submitEditMessage} className="font-bold hover:text-green-300">Save</button>
+                          <div className="flex flex-col gap-2">
+                            <input
+                              type="text"
+                              value={editingText}
+                              onChange={e => setEditingText(e.target.value)}
+                              className="text-[#171717] px-2 py-1 rounded text-sm min-w-[200px]"
+                              autoFocus
+                              onKeyDown={e => {
+                                if (e.key === 'Enter') submitEditMessage();
+                                if (e.key === 'Escape') setEditingMessageId(null);
+                              }}
+                            />
+                            <div className="flex justify-end gap-2 text-xs">
+                              <button onClick={() => setEditingMessageId(null)} className="text-gray-200 hover:text-white">Cancel</button>
+                              <button onClick={submitEditMessage} className="font-bold hover:text-green-300">Save</button>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            {msg.replyTo && (
+                              <div
+                                onClick={() => { const el = document.getElementById(`msg-${msg.replyTo._id || msg.replyTo.id}`); el?.scrollIntoView({ behavior: 'smooth', block: 'center' }); el?.classList.add('bg-gray-200', 'dark:bg-gray-800'); setTimeout(() => el?.classList.remove('bg-gray-200', 'dark:bg-gray-800'), 1500); }}
+                                className={`mb-2 pl-3 border-l-4 rounded-r bg-black/5 dark:bg-black/20 p-2 cursor-pointer transition-colors hover:bg-black/10 dark:hover:bg-black/30 ${msg.isMine ? 'border-white/50 text-white/90' : 'border-[#7C3AED] text-[#171717] dark:text-[#F5F5F5]'} text-xs overflow-hidden max-w-full`}
+                              >
+                                <div className={`font-bold mb-0.5 ${msg.isMine ? 'text-white' : 'text-[#7C3AED] dark:text-[#8B5CF6]'}`}>{msg.replyTo.senderId?.fullName || 'User'}</div>
+                                <div className="opacity-80">
+                                  {(() => {
+                                    const fileContent = typeof msg.replyTo.content === 'string' ? msg.replyTo.content : '';
+                                    const isImage = msg.replyTo.messageType === 'image' || msg.replyTo.attachments?.[0]?.fileType?.startsWith('image/') || fileContent.match(/\.(jpeg|jpg|gif|png|webp)$/i);
+                                    const isAudio = msg.replyTo.messageType === 'audio' || fileContent.match(/\.(webm|mp3|wav|ogg)$/i);
+                                    const isDoc = msg.replyTo.messageType === 'file' || msg.replyTo.messageType === 'document' || fileContent.match(/\.(pdf|doc|docx|txt|zip|rar)$/i);
+
+                                    if (isImage) {
+                                      const rawUrl = msg.replyTo.attachments?.[0]?.fileUrl || (fileContent.match(/\.(jpeg|jpg|gif|png|webp)$/i) ? fileContent : null);
+                                      const fullUrl = resolveChatMediaUrl(rawUrl || undefined);
+                                      return (
+                                        <div className="flex items-center gap-2 mt-1">
+                                          {fullUrl && (
+                                            <div className="w-10 h-10 rounded shrink-0 overflow-hidden bg-black/10 dark:bg-white/10">
+                                              <img src={fullUrl} alt="thumb" className="w-full h-full object-cover" />
+                                            </div>
+                                          )}
+                                        </div>
+                                      );
+                                    }
+
+                                    if (isAudio) return <span className="truncate block">≡ƒÄñ Voice Message</span>;
+
+                                    if (isDoc) {
+                                      return (
+                                        <span className="inline-flex items-center gap-1 align-middle truncate max-w-full">
+                                          <span>≡ƒôä Document</span>
+                                        </span>
+                                      );
+                                    }
+
+                                    return <span className="truncate block">{fileContent || 'Media Message'}</span>;
+                                  })()}
+                                </div>
+                              </div>
+                            )}
+                            {translatingMessageId === msg.id ? (
+                              <div className="flex items-center gap-2 text-xs py-1 opacity-75">
+                                <svg className="animate-spin h-3.5 w-3.5 text-current" fill="none" viewBox="0 0 24 24">
+                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                </svg>
+                                <span className="italic">Translating...</span>
+                              </div>
+                            ) : translatedMessages[msg.id] ? (
+                              <div className="space-y-1">
+                                <p className="text-xs opacity-75 flex items-center gap-1 font-medium">
+                                  <span className="material-icons-round text-[10px]">g_translate</span> Translated
+                                </p>
+                                <p className="text-sm leading-relaxed">{translatedMessages[msg.id].translatedText}</p>
+                                <button
+                                  onClick={() => {
+                                    setTranslatedMessages(prev => {
+                                      const copy = { ...prev };
+                                      delete copy[msg.id];
+                                      return copy;
+                                    });
+                                  }}
+                                  className="text-[10px] underline block hover:opacity-80 transition-opacity mt-1"
+                                >
+                                  Show Original / ╪╣╪▒╪╢ ╪º┘ä╪ú╪╡┘ä┘è
+                                </button>
+                              </div>
+                            ) : (
+                              <p className="text-sm leading-relaxed">{msg.content}</p>
+                            )}
+                          </>
+                        )}
+                        <div className={`flex justify-end items-center gap-1 mt-1 ${msg.isMine ? 'text-white/80' : 'text-gray-400'}`}>
+                          <span className="text-[10px]">{msg.time}</span>
+                          {msg.isEdited && <span className="text-[10px] italic">Edited</span>}
+                          {msg.isMine && (
+                            <span className={`material-icons text-[12px] ${msg.status === 'read' ? 'text-blue-300' : ''}`}>
+                              {msg.isPending || msg.status === 'sending'
+                                ? 'schedule'
+                                : (msg.status === 'sent' ? 'done' : 'done_all')}
+                            </span>
+                          )}
                         </div>
                       </div>
                     ) : (
-                      <>
+                      <div className="relative bg-white dark:bg-[#262626] border border-gray-200 dark:border-gray-800 rounded-xl rounded-tl-none p-2 pr-10 shadow-sm">
                         {msg.replyTo && (
-                          <div 
+                          <div
                             onClick={() => { const el = document.getElementById(`msg-${msg.replyTo._id || msg.replyTo.id}`); el?.scrollIntoView({ behavior: 'smooth', block: 'center' }); el?.classList.add('bg-gray-200', 'dark:bg-gray-800'); setTimeout(() => el?.classList.remove('bg-gray-200', 'dark:bg-gray-800'), 1500); }}
-                            className={`mb-2 pl-3 border-l-4 rounded-r bg-black/5 dark:bg-black/20 p-2 cursor-pointer transition-colors hover:bg-black/10 dark:hover:bg-black/30 ${msg.isMine ? 'border-white/50 text-white/90' : 'border-[#7C3AED] text-[#171717] dark:text-[#F5F5F5]'} text-xs overflow-hidden max-w-full`}
+                            className={`mb-2 pl-3 border-l-4 rounded-r bg-black/5 dark:bg-black/20 p-2 cursor-pointer transition-colors hover:bg-black/10 dark:hover:bg-black/30 border-[#7C3AED] text-[#171717] dark:text-[#F5F5F5] text-xs overflow-hidden max-w-full`}
                           >
-                            <div className={`font-bold mb-0.5 ${msg.isMine ? 'text-white' : 'text-[#7C3AED] dark:text-[#8B5CF6]'}`}>{msg.replyTo.senderId?.fullName || 'User'}</div>
+                            <div className={`font-bold mb-0.5 text-[#7C3AED] dark:text-[#8B5CF6]`}>{msg.replyTo.senderId?.fullName || 'User'}</div>
                             <div className="opacity-80">
                               {(() => {
                                 const fileContent = typeof msg.replyTo.content === 'string' ? msg.replyTo.content : '';
                                 const isImage = msg.replyTo.messageType === 'image' || msg.replyTo.attachments?.[0]?.fileType?.startsWith('image/') || fileContent.match(/\.(jpeg|jpg|gif|png|webp)$/i);
                                 const isAudio = msg.replyTo.messageType === 'audio' || fileContent.match(/\.(webm|mp3|wav|ogg)$/i);
                                 const isDoc = msg.replyTo.messageType === 'file' || msg.replyTo.messageType === 'document' || fileContent.match(/\.(pdf|doc|docx|txt|zip|rar)$/i);
-                                
+
                                 if (isImage) {
                                   const rawUrl = msg.replyTo.attachments?.[0]?.fileUrl || (fileContent.match(/\.(jpeg|jpg|gif|png|webp)$/i) ? fileContent : null);
                                   const fullUrl = resolveChatMediaUrl(rawUrl || undefined);
@@ -1378,167 +1465,78 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                                     </div>
                                   );
                                 }
-                                
-                                if (isAudio) return <span className="truncate block">🎤 Voice Message</span>;
-                                
+
+                                if (isAudio) return <span className="truncate block">≡ƒÄñ Voice Message</span>;
+
                                 if (isDoc) {
                                   return (
                                     <span className="inline-flex items-center gap-1 align-middle truncate max-w-full">
-                                      <span>📄 Document</span>
+                                      <span>≡ƒôä Document</span>
                                     </span>
                                   );
                                 }
-                                
+
                                 return <span className="truncate block">{fileContent || 'Media Message'}</span>;
                               })()}
                             </div>
                           </div>
                         )}
-                        {translatingMessageId === msg.id ? (
-                          <div className="flex items-center gap-2 text-xs py-1 opacity-75">
-                            <svg className="animate-spin h-3.5 w-3.5 text-current" fill="none" viewBox="0 0 24 24">
-                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                            </svg>
-                            <span className="italic">Translating...</span>
-                          </div>
-                        ) : translatedMessages[msg.id] ? (
-                          <div className="space-y-1">
-                            <p className="text-xs opacity-75 flex items-center gap-1 font-medium">
-                              <span className="material-icons-round text-[10px]">g_translate</span> Translated
-                            </p>
-                            <p className="text-sm leading-relaxed">{translatedMessages[msg.id].translatedText}</p>
-                            <button
-                              onClick={() => {
-                                setTranslatedMessages(prev => {
-                                  const copy = { ...prev };
-                                  delete copy[msg.id];
-                                  return copy;
-                                });
-                              }}
-                              className="text-[10px] underline block hover:opacity-80 transition-opacity mt-1"
-                            >
-                              Show Original / عرض الأصلي
-                            </button>
+                        {msg.type === 'audio' ? (
+                          <div className="flex flex-col">
+                            <audio controls controlsList="nodownload noplaybackrate" src={resolveChatMediaUrl(msg?.content || msg?.fileUrl || undefined)} className="max-w-[200px] h-10 mb-1 [&::-webkit-media-controls-enclosure]:rounded-md [&::-webkit-media-controls-panel]:bg-gray-100 dark:[&::-webkit-media-controls-panel]:bg-gray-800 [&::-webkit-media-controls-overflow-button]:hidden" />
+                            {msg.duration !== undefined && <span className="text-[10px] text-gray-400 text-right">{Math.floor(msg.duration / 60)}:{(msg.duration % 60).toString().padStart(2, '0')}</span>}
                           </div>
                         ) : (
-                          <p className="text-sm leading-relaxed">{msg.content}</p>
-                        )}
-                      </>
-                    )}
-                    <div className={`flex justify-end items-center gap-1 mt-1 ${msg.isMine ? 'text-white/80' : 'text-gray-400'}`}>
-                      <span className="text-[10px]">{msg.time}</span>
-                      {msg.isEdited && <span className="text-[10px] italic">Edited</span>}
-                      {msg.isMine && (
-                        <span className={`material-icons text-[12px] ${msg.status === 'read' ? 'text-blue-300' : ''}`}>
-                          {msg.isPending || msg.status === 'sending'
-                            ? 'schedule'
-                            : (msg.status === 'sent' ? 'done' : 'done_all')}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="relative bg-white dark:bg-[#262626] border border-gray-200 dark:border-gray-800 rounded-xl rounded-tl-none p-2 pr-10 shadow-sm">
-                    {msg.replyTo && (
-                      <div 
-                        onClick={() => { const el = document.getElementById(`msg-${msg.replyTo._id || msg.replyTo.id}`); el?.scrollIntoView({ behavior: 'smooth', block: 'center' }); el?.classList.add('bg-gray-200', 'dark:bg-gray-800'); setTimeout(() => el?.classList.remove('bg-gray-200', 'dark:bg-gray-800'), 1500); }}
-                        className={`mb-2 pl-3 border-l-4 rounded-r bg-black/5 dark:bg-black/20 p-2 cursor-pointer transition-colors hover:bg-black/10 dark:hover:bg-black/30 border-[#7C3AED] text-[#171717] dark:text-[#F5F5F5] text-xs overflow-hidden max-w-full`}
-                      >
-                        <div className={`font-bold mb-0.5 text-[#7C3AED] dark:text-[#8B5CF6]`}>{msg.replyTo.senderId?.fullName || 'User'}</div>
-                        <div className="opacity-80">
-                          {(() => {
-                            const fileContent = typeof msg.replyTo.content === 'string' ? msg.replyTo.content : '';
-                            const isImage = msg.replyTo.messageType === 'image' || msg.replyTo.attachments?.[0]?.fileType?.startsWith('image/') || fileContent.match(/\.(jpeg|jpg|gif|png|webp)$/i);
-                            const isAudio = msg.replyTo.messageType === 'audio' || fileContent.match(/\.(webm|mp3|wav|ogg)$/i);
-                            const isDoc = msg.replyTo.messageType === 'file' || msg.replyTo.messageType === 'document' || fileContent.match(/\.(pdf|doc|docx|txt|zip|rar)$/i);
-                            
-                            if (isImage) {
-                              const rawUrl = msg.replyTo.attachments?.[0]?.fileUrl || (fileContent.match(/\.(jpeg|jpg|gif|png|webp)$/i) ? fileContent : null);
-                              const fullUrl = resolveChatMediaUrl(rawUrl || undefined);
-                              return (
-                                <div className="flex items-center gap-2 mt-1">
-                                  {fullUrl && (
-                                    <div className="w-10 h-10 rounded shrink-0 overflow-hidden bg-black/10 dark:bg-white/10">
-                                      <img src={fullUrl} alt="thumb" className="w-full h-full object-cover" />
+                          (() => {
+                            const fileUrl = msg?.fileUrl || msg?.content;
+                            const fullUrl = resolveChatMediaUrl(fileUrl || undefined) || '#';
+                            const isImage = msg?.type === 'image' || msg?.fileName?.match(/\.(jpeg|jpg|gif|png|webp)$/i) || fileUrl?.match(/\.(jpeg|jpg|gif|png|webp)$/i);
+
+                            return (
+                              <div
+                                onClick={() => {
+                                  if (isImage) {
+                                    setViewingFile({ url: fullUrl, type: 'image' });
+                                  } else {
+                                    const downloadUrl = getDownloadUrl(fullUrl);
+                                    const link = document.createElement('a');
+                                    link.href = downloadUrl;
+                                    link.setAttribute('download', msg?.fileName || 'Attachment');
+                                    document.body.appendChild(link);
+                                    link.click();
+                                    document.body.removeChild(link);
+                                  }
+                                }}
+                                className="block rounded-lg overflow-hidden mb-2 hover:opacity-90 transition-opacity cursor-pointer"
+                              >
+                                {isImage ? (
+                                  <img src={fullUrl} alt={msg?.fileName || 'Attachment'} className="max-w-xs max-h-64 object-cover rounded-lg" />
+                                ) : (
+                                  <div className="bg-[#FAFAFA] dark:bg-[#171717] p-4 flex items-center gap-3 border border-gray-200 dark:border-gray-800">
+                                    <div className="w-10 h-10 bg-white dark:bg-[#262626] rounded flex items-center justify-center border border-gray-200 dark:border-gray-800">
+                                      <span className="material-icons text-[#7C3AED]">description</span>
                                     </div>
-                                  )}
-                                </div>
-                              );
-                            }
-                            
-                            if (isAudio) return <span className="truncate block">🎤 Voice Message</span>;
-                            
-                            if (isDoc) {
-                              return (
-                                <span className="inline-flex items-center gap-1 align-middle truncate max-w-full">
-                                  <span>📄 Document</span>
-                                </span>
-                              );
-                            }
-                            
-                            return <span className="truncate block">{fileContent || 'Media Message'}</span>;
-                          })()}
-                        </div>
-                      </div>
-                    )}
-                    {msg.type === 'audio' ? (
-                      <div className="flex flex-col">
-                        <audio controls controlsList="nodownload noplaybackrate" src={resolveChatMediaUrl(msg?.content || msg?.fileUrl || undefined)} className="max-w-[200px] h-10 mb-1 [&::-webkit-media-controls-enclosure]:rounded-md [&::-webkit-media-controls-panel]:bg-gray-100 dark:[&::-webkit-media-controls-panel]:bg-gray-800 [&::-webkit-media-controls-overflow-button]:hidden" />
-                        {msg.duration !== undefined && <span className="text-[10px] text-gray-400 text-right">{Math.floor(msg.duration / 60)}:{(msg.duration % 60).toString().padStart(2, '0')}</span>}
-                      </div>
-                    ) : (
-                      (() => {
-                        const fileUrl = msg?.fileUrl || msg?.content;
-                        const fullUrl = resolveChatMediaUrl(fileUrl || undefined) || '#';
-                        const isImage = msg?.fileName?.match(/\.(jpeg|jpg|gif|png|webp)$/i) || fileUrl?.match(/\.(jpeg|jpg|gif|png|webp)$/i);
-                        
-                        return (
-                          <div 
-                            onClick={() => {
-                              if (isImage) {
-                                setViewingFile({ url: fullUrl, type: 'image' });
-                              } else {
-                                const downloadUrl = getDownloadUrl(fullUrl);
-                                const link = document.createElement('a');
-                                link.href = downloadUrl;
-                                link.setAttribute('download', msg?.fileName || 'Attachment');
-                                document.body.appendChild(link);
-                                link.click();
-                                document.body.removeChild(link);
-                              }
-                            }}
-                            className="block rounded-lg overflow-hidden mb-2 hover:opacity-90 transition-opacity cursor-pointer"
-                          >
-                            {isImage ? (
-                              <img src={fullUrl} alt={msg?.fileName || 'Attachment'} className="max-w-xs max-h-64 object-cover rounded-lg" />
-                            ) : (
-                              <div className="bg-[#FAFAFA] dark:bg-[#171717] p-4 flex items-center gap-3 border border-gray-200 dark:border-gray-800">
-                                <div className="w-10 h-10 bg-white dark:bg-[#262626] rounded flex items-center justify-center border border-gray-200 dark:border-gray-800">
-                                  <span className="material-icons text-[#7C3AED]">description</span>
-                                </div>
-                                <div className="flex flex-col">
-                                  <span className="text-[#171717] dark:text-[#F5F5F5] text-sm font-medium">{msg?.fileName || 'Attachment'}</span>
-                                  {msg?.fileSize && <span className="text-gray-400 text-[10px]">{msg?.fileSize}</span>}
-                                </div>
+                                    <div className="flex flex-col">
+                                      <span className="text-[#171717] dark:text-[#F5F5F5] text-sm font-medium">{msg?.fileName || 'Attachment'}</span>
+                                      {msg?.fileSize && <span className="text-gray-400 text-[10px]">{msg?.fileSize}</span>}
+                                    </div>
+                                  </div>
+                                )}
                               </div>
-                            )}
-                          </div>
-                        );
-                      })()
+                            );
+                          })()
+                        )}
+                        <span className="block text-right text-[10px] text-gray-400">{msg?.time}</span>
+                      </div>
                     )}
-                    <span className="block text-right text-[10px] text-gray-400">{msg?.time}</span>
-                  </div>
+                  </>
                 )}
-              </>
-            )}
 
                 {/* Message Context Menu */}
                 {!msg.isDeletedForEveryone && (
                   <div
-                    className={`message-context-menu absolute top-1.5 right-1.5 transition-opacity duration-150 ${
-                      activeMessageMenu === msg.id ? 'z-[9999] opacity-100' : 'z-10 opacity-0 group-hover:opacity-100'
-                    }`}
+                    className={`message-context-menu absolute top-1.5 right-1.5 transition-opacity duration-150 ${activeMessageMenu === msg.id ? 'z-[9999] opacity-100' : 'z-10 opacity-0 group-hover:opacity-100'
+                      }`}
                   >
                     <button
                       type="button"
@@ -1552,15 +1550,14 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                     </button>
                     {activeMessageMenu === msg.id && (
                       <div
-                        className={`w-48 overflow-hidden shadow-lg bg-white dark:bg-[#262626] rounded-md border border-gray-200 dark:border-gray-800 ${
-                          msg.isMine
+                        className={`w-48 overflow-hidden shadow-lg bg-white dark:bg-[#262626] rounded-md border border-gray-200 dark:border-gray-800 ${msg.isMine
                             ? dropdownDirection === 'up'
                               ? 'absolute right-0 bottom-full mb-1 z-[9999]'
                               : 'absolute right-0 top-full mt-1 z-[9999]'
                             : dropdownDirection === 'up'
                               ? 'absolute left-0 bottom-full mb-1 z-[9999]'
                               : 'absolute left-0 top-full mt-1 z-[9999]'
-                        }`}
+                          }`}
                       >
                         <button onClick={() => handleReply(msg)} className="w-full text-left px-4 py-2 hover:bg-gray-50 dark:hover:bg-[#171717] text-[#171717] dark:text-[#F5F5F5] flex items-center gap-2">
                           <span className="material-icons-round text-[18px]">reply</span> Reply
@@ -1588,7 +1585,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                         )}
                         <div className="relative">
                           <div className="px-4 py-2 flex items-center gap-2 border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-[#171717] cursor-pointer">
-                            <span 
+                            <span
                               className="material-icons-round text-[18px] text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -1605,9 +1602,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                           </div>
                           {showReactionPicker && (
                             <div
-                              className={`absolute z-[10000] shadow-2xl rounded-2xl overflow-hidden ${
-                                msg.isMine ? 'right-0' : 'left-0'
-                              } ${dropdownDirection === 'up' ? 'top-full mt-2' : 'bottom-full mb-2'}`}
+                              className={`absolute z-[10000] shadow-2xl rounded-2xl overflow-hidden ${msg.isMine ? 'right-0' : 'left-0'
+                                } ${dropdownDirection === 'up' ? 'top-full mt-2' : 'bottom-full mb-2'}`}
                               onClick={e => e.stopPropagation()}
                             >
                               <EmojiPicker onEmojiClick={(emojiData) => {
@@ -1618,21 +1614,21 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                           )}
                         </div>
                         {msg.isMine && msg.type === 'text' && (
-                          <button 
+                          <button
                             onClick={() => { setEditingMessageId(msg.id); setEditingText(msg.content || ''); setActiveMessageMenu(null); }}
                             className="w-full text-left px-4 py-2 hover:bg-gray-50 dark:hover:bg-[#171717] text-[#171717] dark:text-[#F5F5F5] flex items-center gap-2"
                           >
                             <span className="material-icons-round text-[18px]">edit</span> Edit
                           </button>
                         )}
-                        <button 
+                        <button
                           onClick={() => deleteMessage(msg.id, 'me')}
                           className="w-full text-left px-4 py-2 hover:bg-gray-50 dark:hover:bg-[#171717] text-[#171717] dark:text-[#F5F5F5] flex items-center gap-2"
                         >
                           <span className="material-icons-round text-[18px]">delete</span> Delete for me
                         </button>
                         {msg.isMine && (
-                          <button 
+                          <button
                             onClick={() => deleteMessage(msg.id, 'everyone')}
                             className="w-full text-left px-4 py-2 hover:bg-red-50 dark:hover:bg-red-500/10 text-red-500 flex items-center gap-2"
                           >
@@ -1643,7 +1639,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                     )}
                   </div>
                 )}
-                
+
                 {msg.reactions && msg.reactions.length > 0 && (
                   <div className={`flex flex-wrap gap-1 mt-1 ${msg.isMine ? 'justify-end' : 'justify-start'}`}>
                     {Array.from(new Set(msg.reactions.map(r => r.emoji))).map(emoji => {
@@ -1669,7 +1665,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
               <EmojiPicker onEmojiClick={onEmojiClick} />
             </div>
           )}
-          
+
           {replyingTo && (
             <div className="max-w-4xl mx-auto mb-2 bg-[#FAFAFA] dark:bg-[#171717] border-l-4 border-[#7C3AED] rounded-r-xl p-3 flex justify-between items-center text-sm shadow-sm">
               <div className="flex flex-col min-w-0">
@@ -1684,24 +1680,24 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                     if (isImage) {
                       return (
                         <span className="inline-flex items-center gap-1.5 align-middle">
-                          <span>📷</span>
+                          <span>≡ƒô╖</span>
                           <span>Photo</span>
                         </span>
                       );
                     }
-                    
-                    if (isAudio) return '🎤 Voice Message';
-                    
+
+                    if (isAudio) return '≡ƒÄñ Voice Message';
+
                     if (isDoc) {
                       const rawName = replyingTo.fileName || fileContent.split('/').pop() || 'File';
                       return (
                         <span className="inline-flex items-center gap-1 align-middle truncate max-w-full">
-                          <span>📄 Document</span>
+                          <span>≡ƒôä Document</span>
                           <span className="opacity-70 truncate">- {rawName}</span>
                         </span>
                       );
                     }
-                    
+
                     return fileContent || 'Media Message';
                   })()}
                 </span>
@@ -1776,374 +1772,372 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             </div>
           ) : (
             <>
-          {/* Smart Replies Pills */}
-          {(loadingReplies || smartReplies.length > 0) && (
-            <div className="max-w-4xl mx-auto mb-3 bg-[#FAFAFA]/85 dark:bg-[#171717]/85 backdrop-blur-md border border-gray-200/80 dark:border-gray-800/80 rounded-2xl p-3 flex flex-col gap-2 shadow-sm relative z-10 animate-in fade-in slide-in-from-bottom-2 duration-200">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-bold text-[#7C3AED] dark:text-[#a78bfa] uppercase tracking-wider flex items-center gap-1">
-                  <span>💡</span> Smart Replies / اقتراحات الرد
-                </span>
-                <button 
-                  onClick={() => setSmartReplies([])}
-                  className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors p-1"
-                >
-                  <span className="material-icons-round text-sm">close</span>
-                </button>
-              </div>
-              {loadingReplies ? (
-                <div className="flex items-center gap-2 py-1 text-xs text-gray-500">
-                  <svg className="animate-spin h-3.5 w-3.5 text-[#7C3AED]" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                  </svg>
-                  <span>Generating suggestions...</span>
-                </div>
-              ) : (
-                <div className="flex flex-wrap gap-2 pt-1">
-                  {smartReplies.map((reply, i) => (
+              {/* Smart Replies Pills */}
+              {(loadingReplies || smartReplies.length > 0) && (
+                <div className="max-w-4xl mx-auto mb-3 bg-[#FAFAFA]/85 dark:bg-[#171717]/85 backdrop-blur-md border border-gray-200/80 dark:border-gray-800/80 rounded-2xl p-3 flex flex-col gap-2 shadow-sm relative z-10 animate-in fade-in slide-in-from-bottom-2 duration-200">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold text-[#7C3AED] dark:text-[#a78bfa] uppercase tracking-wider flex items-center gap-1">
+                      <span>≡ƒÆí</span> Smart Replies / ╪º┘é╪¬╪▒╪º╪¡╪º╪¬ ╪º┘ä╪▒╪»
+                    </span>
                     <button
-                      key={i}
-                      onClick={() => {
-                        handleSendSmartReplyText(reply);
-                        setSmartReplies([]);
-                      }}
-                      className="px-3 py-1.5 bg-[#7C3AED]/10 hover:bg-[#7C3AED]/20 text-[#7C3AED] dark:bg-[#7C3AED]/20 dark:hover:bg-[#7C3AED]/35 dark:text-purple-300 rounded-xl text-xs font-semibold border border-[#7C3AED]/20 hover:border-[#7C3AED]/30 transition-all active:scale-[0.97]"
+                      onClick={() => setSmartReplies([])}
+                      className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors p-1"
                     >
-                      {reply}
+                      <span className="material-icons-round text-sm">close</span>
                     </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {attachedFile && (
-            <div className="max-w-4xl mx-auto mb-2 bg-[#FAFAFA] dark:bg-[#171717] border border-gray-200 dark:border-gray-800 rounded-xl p-3 flex justify-between items-center text-sm shadow-sm">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-10 h-10 bg-white dark:bg-[#262626] rounded flex items-center justify-center border border-gray-200 dark:border-gray-800 shrink-0">
-                  <span className="material-icons text-[#7C3AED]">
-                    {attachedFile.type.startsWith('image/') ? 'image' : attachedFile.type.startsWith('video/') ? 'videocam' : 'description'}
-                  </span>
-                </div>
-                <div className="flex flex-col min-w-0">
-                  <span className="text-[#171717] dark:text-[#F5F5F5] font-medium truncate">{attachedFile.name}</span>
-                  <span className="text-gray-400 text-xs">{(attachedFile.size / 1024 / 1024).toFixed(2)} MB</span>
-                </div>
-              </div>
-              <button type="button" onClick={() => setAttachedFile(null)} className="text-gray-400 hover:text-red-500 p-1 bg-white dark:bg-black rounded-full shadow-sm border border-gray-100 dark:border-gray-800">
-                <span className="material-icons-round text-sm">close</span>
-              </button>
-            </div>
-          )}
-
-          <div className="max-w-4xl mx-auto flex items-end gap-4">
-            <input type="file" ref={docInputRef} accept=".pdf,.doc,.docx,.txt" onChange={handleFileSelect} className="hidden" />
-            <input type="file" ref={mediaInputRef} accept="image/*,video/*" onChange={handleFileSelect} className="hidden" />
-            
-            <div className="relative attachment-menu-container">
-              <button 
-                onClick={() => setShowAttachmentMenu(!showAttachmentMenu)}
-                className={`mb-2 transition-colors shrink-0 ${showAttachmentMenu ? 'text-[#7C3AED]' : 'text-gray-400 hover:text-[#7C3AED]'}`}
-              >
-                <span className="material-icons">attach_file</span>
-              </button>
-              
-              {showAttachmentMenu && (
-                <div className="absolute bottom-full left-0 mb-2 w-48 bg-white dark:bg-[#262626] rounded-xl shadow-xl border border-gray-100 dark:border-gray-800 py-2 z-50">
-                  <button onClick={() => docInputRef.current?.click()} className="w-full px-4 py-2 text-left hover:bg-gray-50 dark:hover:bg-[#171717] text-[#171717] dark:text-[#F5F5F5] flex items-center gap-3 transition-colors">
-                    <span className="material-icons text-[#7C3AED]">description</span>
-                    Document
-                  </button>
-                  <button onClick={() => mediaInputRef.current?.click()} className="w-full px-4 py-2 text-left hover:bg-gray-50 dark:hover:bg-[#171717] text-[#171717] dark:text-[#F5F5F5] flex items-center gap-3 transition-colors">
-                    <span className="material-icons text-[#EC4899]">image</span>
-                    Photo & Video
-                  </button>
-                  <button onClick={() => { setShowAttachmentMenu(false); setShowCameraModal(true); }} className="w-full px-4 py-2 text-left hover:bg-gray-50 dark:hover:bg-[#171717] text-[#171717] dark:text-[#F5F5F5] flex items-center gap-3 transition-colors">
-                    <span className="material-icons text-[#10B981]">photo_camera</span>
-                    Camera
-                  </button>
-                </div>
-              )}
-            </div>
-            <div className="flex-1 bg-[#FAFAFA] dark:bg-[#171717] rounded-xl border border-gray-200 dark:border-gray-700 flex items-center px-4 py-1.5 focus-within:border-[#7C3AED] transition-colors min-w-0 relative">
-              {isRecordingVoice ? (
-                <VoiceRecorder 
-                  onRecordingComplete={handleRecordingComplete} 
-                  onCancel={() => setIsRecordingVoice(false)} 
-                />
-              ) : voiceUrl ? (
-                <div className="flex items-center w-full gap-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg px-2 py-1">
-                  <button onClick={() => { setVoiceBlob(null); setVoiceUrl(null); }} className="text-gray-400 hover:text-red-500 transition-colors p-1" title="Discard">
-                    <span className="material-icons-round">delete</span>
-                  </button>
-                  <audio controls src={voiceUrl} className="h-8 flex-1" />
-                </div>
-              ) : (
-                <>
-                  {showAiPopup && (
-                    <div className="absolute bottom-[calc(100%+12px)] left-4 right-4 md:left-auto md:right-0 w-[calc(100%-2rem)] md:w-[440px] bg-white/95 dark:bg-[#131316]/98 backdrop-blur-xl rounded-2xl shadow-[0_20px_50px_rgba(124,58,237,0.18)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.5)] border border-gray-100 dark:border-white/[0.08] overflow-hidden flex flex-col z-50 animate-in fade-in zoom-in-95 duration-200">
-                      {/* Gradient Header Banner */}
-                      <div className="bg-gradient-to-r from-[#7C3AED] via-[#8B5CF6] to-[#6366F1] p-4 text-white flex justify-between items-center relative overflow-hidden shadow-[0_4px_20px_rgba(124,58,237,0.25)] shrink-0">
-                        {/* Mesh Overlay */}
-                        <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.15),transparent_60%)] pointer-events-none" />
-                        
-                        <div className="flex items-center gap-2.5 relative z-10">
-                          <div className="w-8 h-8 rounded-xl bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/20">
-                            <span className="material-icons-round text-lg animate-pulse text-yellow-300">bolt</span>
-                          </div>
-                          <div className="flex flex-col text-left">
-                            <span className="font-bold text-sm tracking-wide">Chat AI Assistant</span>
-                            <span className="text-[10px] text-white/70 font-medium">Powered by Rabta AI</span>
-                          </div>
-                        </div>
-                        <button 
-                          onClick={() => setShowAiPopup(false)} 
-                          className="hover:bg-white/20 p-1.5 rounded-xl transition-all relative z-10 active:scale-90"
+                  </div>
+                  {loadingReplies ? (
+                    <div className="flex items-center gap-2 py-1 text-xs text-gray-500">
+                      <svg className="animate-spin h-3.5 w-3.5 text-[#7C3AED]" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      </svg>
+                      <span>Generating suggestions...</span>
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      {smartReplies.map((reply, i) => (
+                        <button
+                          key={i}
+                          onClick={() => {
+                            handleSendSmartReplyText(reply);
+                            setSmartReplies([]);
+                          }}
+                          className="px-3 py-1.5 bg-[#7C3AED]/10 hover:bg-[#7C3AED]/20 text-[#7C3AED] dark:bg-[#7C3AED]/20 dark:hover:bg-[#7C3AED]/35 dark:text-purple-300 rounded-xl text-xs font-semibold border border-[#7C3AED]/20 hover:border-[#7C3AED]/30 transition-all active:scale-[0.97]"
                         >
-                          <span className="material-icons-round text-sm">close</span>
+                          {reply}
                         </button>
-                      </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
 
-                      <div className="p-5 space-y-4 max-h-[500px] overflow-y-auto hide-scrollbar">
-                        {/* Scope Disclaimer */}
-                        <div className="bg-[#7C3AED]/5 dark:bg-[#7C3AED]/10 text-purple-700 dark:text-purple-300 p-3.5 rounded-2xl text-xs leading-relaxed flex gap-3 border border-purple-500/10 dark:border-[#7C3AED]/20 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)]">
-                          <span className="material-icons-round text-base text-[#7C3AED] dark:text-[#a78bfa] shrink-0 mt-0.5">smart_toy</span>
-                          <p className="text-left font-medium">
-                            I only summarize this conversation and search within its messages. For general questions, please use the <strong className="text-[#7C3AED] dark:text-[#a78bfa]">Global AI Guide</strong> in the sidebar.
-                          </p>
-                        </div>
+              {attachedFile && (
+                <div className="max-w-4xl mx-auto mb-2 bg-[#FAFAFA] dark:bg-[#171717] border border-gray-200 dark:border-gray-800 rounded-xl p-3 flex justify-between items-center text-sm shadow-sm">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-10 h-10 bg-white dark:bg-[#262626] rounded flex items-center justify-center border border-gray-200 dark:border-gray-800 shrink-0">
+                      <span className="material-icons text-[#7C3AED]">
+                        {attachedFile.type.startsWith('image/') ? 'image' : attachedFile.type.startsWith('video/') ? 'videocam' : 'description'}
+                      </span>
+                    </div>
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-[#171717] dark:text-[#F5F5F5] font-medium truncate">{attachedFile.name}</span>
+                      <span className="text-gray-400 text-xs">{(attachedFile.size / 1024 / 1024).toFixed(2)} MB</span>
+                    </div>
+                  </div>
+                  <button type="button" onClick={() => setAttachedFile(null)} className="text-gray-400 hover:text-red-500 p-1 bg-white dark:bg-black rounded-full shadow-sm border border-gray-100 dark:border-gray-800">
+                    <span className="material-icons-round text-sm">close</span>
+                  </button>
+                </div>
+              )}
 
-                        {/* Segmented Tabs Bar */}
-                        <div className="flex border border-gray-200/50 dark:border-white/[0.05] p-1 bg-gray-100/50 dark:bg-black/30 rounded-xl relative">
-                          <button
-                            onClick={() => setAiTab('summarize')}
-                            className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all duration-300 flex items-center justify-center gap-1.5 ${
-                              aiTab === 'summarize'
-                                ? 'bg-white dark:bg-[#26262b] text-[#7C3AED] dark:text-[#a78bfa] shadow-[0_4px_12px_rgba(0,0,0,0.06)] border border-gray-100 dark:border-white/[0.05]'
-                                : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-200'
-                            }`}
-                          >
-                            <span className="material-icons-round text-[14px]">summarize</span>
-                            Summarize Chat
-                          </button>
-                          <button
-                            onClick={() => setAiTab('search')}
-                            className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all duration-300 flex items-center justify-center gap-1.5 ${
-                              aiTab === 'search'
-                                ? 'bg-white dark:bg-[#26262b] text-[#7C3AED] dark:text-[#a78bfa] shadow-[0_4px_12px_rgba(0,0,0,0.06)] border border-gray-100 dark:border-white/[0.05]'
-                                : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-200'
-                            }`}
-                          >
-                            <span className="material-icons-round text-[14px]">saved_search</span>
-                            Smart Search 
-                          </button>
-                        </div>
+              <div className="max-w-4xl mx-auto flex items-end gap-4">
+                <input type="file" ref={docInputRef} accept=".pdf,.doc,.docx,.txt" onChange={handleFileSelect} className="hidden" />
+                <input type="file" ref={mediaInputRef} accept="image/*,video/*" onChange={handleFileSelect} className="hidden" />
 
-                        {/* Tab Content 1: Summarize */}
-                        {aiTab === 'summarize' && (
-                          <div className="space-y-4">
-                            <div className="flex items-center gap-3">
-                              <label className="text-xs font-bold text-gray-500 dark:text-gray-400 whitespace-nowrap">
-                                Summarize last:
-                              </label>
-                              <select
-                                value={summaryLimit}
-                                onChange={(e) => setSummaryLimit(e.target.value)}
-                                className="flex-1 bg-white/50 dark:bg-black/35 border border-gray-200 dark:border-white/10 rounded-xl px-3 py-2 text-xs text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-[#7C3AED]/25 transition-all font-medium cursor-pointer"
-                              >
-                                <option value={5}>5 Messages</option>
-                                <option value={10}>10 Messages</option>
-                                <option value={20}>20 Messages</option>
-                                <option value={50}>50 Messages</option>
-                                <option value="All">All Messages</option>
-                              </select>
+                <div className="relative attachment-menu-container">
+                  <button
+                    onClick={() => setShowAttachmentMenu(!showAttachmentMenu)}
+                    className={`mb-2 transition-colors shrink-0 ${showAttachmentMenu ? 'text-[#7C3AED]' : 'text-gray-400 hover:text-[#7C3AED]'}`}
+                  >
+                    <span className="material-icons">attach_file</span>
+                  </button>
+
+                  {showAttachmentMenu && (
+                    <div className="absolute bottom-full left-0 mb-2 w-48 bg-white dark:bg-[#262626] rounded-xl shadow-xl border border-gray-100 dark:border-gray-800 py-2 z-50">
+                      <button onClick={() => docInputRef.current?.click()} className="w-full px-4 py-2 text-left hover:bg-gray-50 dark:hover:bg-[#171717] text-[#171717] dark:text-[#F5F5F5] flex items-center gap-3 transition-colors">
+                        <span className="material-icons text-[#7C3AED]">description</span>
+                        Document
+                      </button>
+                      <button onClick={() => mediaInputRef.current?.click()} className="w-full px-4 py-2 text-left hover:bg-gray-50 dark:hover:bg-[#171717] text-[#171717] dark:text-[#F5F5F5] flex items-center gap-3 transition-colors">
+                        <span className="material-icons text-[#EC4899]">image</span>
+                        Photo & Video
+                      </button>
+                      <button onClick={() => { setShowAttachmentMenu(false); setShowCameraModal(true); }} className="w-full px-4 py-2 text-left hover:bg-gray-50 dark:hover:bg-[#171717] text-[#171717] dark:text-[#F5F5F5] flex items-center gap-3 transition-colors">
+                        <span className="material-icons text-[#10B981]">photo_camera</span>
+                        Camera
+                      </button>
+                    </div>
+                  )}
+                </div>
+                <div className="flex-1 bg-[#FAFAFA] dark:bg-[#171717] rounded-xl border border-gray-200 dark:border-gray-700 flex items-center px-4 py-1.5 focus-within:border-[#7C3AED] transition-colors min-w-0 relative">
+                  {isRecordingVoice ? (
+                    <VoiceRecorder
+                      onRecordingComplete={handleRecordingComplete}
+                      onCancel={() => setIsRecordingVoice(false)}
+                    />
+                  ) : voiceUrl ? (
+                    <div className="flex items-center w-full gap-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg px-2 py-1">
+                      <button onClick={() => { setVoiceBlob(null); setVoiceUrl(null); }} className="text-gray-400 hover:text-red-500 transition-colors p-1" title="Discard">
+                        <span className="material-icons-round">delete</span>
+                      </button>
+                      <audio controls src={voiceUrl} className="h-8 flex-1" />
+                    </div>
+                  ) : (
+                    <>
+                      {showAiPopup && (
+                        <div className="absolute bottom-[calc(100%+12px)] left-4 right-4 md:left-auto md:right-0 w-[calc(100%-2rem)] md:w-[440px] bg-white/95 dark:bg-[#131316]/98 backdrop-blur-xl rounded-2xl shadow-[0_20px_50px_rgba(124,58,237,0.18)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.5)] border border-gray-100 dark:border-white/[0.08] overflow-hidden flex flex-col z-50 animate-in fade-in zoom-in-95 duration-200">
+                          {/* Gradient Header Banner */}
+                          <div className="bg-gradient-to-r from-[#7C3AED] via-[#8B5CF6] to-[#6366F1] p-4 text-white flex justify-between items-center relative overflow-hidden shadow-[0_4px_20px_rgba(124,58,237,0.25)] shrink-0">
+                            {/* Mesh Overlay */}
+                            <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.15),transparent_60%)] pointer-events-none" />
+
+                            <div className="flex items-center gap-2.5 relative z-10">
+                              <div className="w-8 h-8 rounded-xl bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/20">
+                                <span className="material-icons-round text-lg animate-pulse text-yellow-300">bolt</span>
+                              </div>
+                              <div className="flex flex-col text-left">
+                                <span className="font-bold text-sm tracking-wide">Chat AI Assistant</span>
+                                <span className="text-[10px] text-white/70 font-medium">Powered by Rabta AI</span>
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => setShowAiPopup(false)}
+                              className="hover:bg-white/20 p-1.5 rounded-xl transition-all relative z-10 active:scale-90"
+                            >
+                              <span className="material-icons-round text-sm">close</span>
+                            </button>
+                          </div>
+
+                          <div className="p-5 space-y-4 max-h-[500px] overflow-y-auto hide-scrollbar">
+                            {/* Scope Disclaimer */}
+                            <div className="bg-[#7C3AED]/5 dark:bg-[#7C3AED]/10 text-purple-700 dark:text-purple-300 p-3.5 rounded-2xl text-xs leading-relaxed flex gap-3 border border-purple-500/10 dark:border-[#7C3AED]/20 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)]">
+                              <span className="material-icons-round text-base text-[#7C3AED] dark:text-[#a78bfa] shrink-0 mt-0.5">smart_toy</span>
+                              <p className="text-left font-medium">
+                                I only summarize this conversation and search within its messages. For general questions, please use the <strong className="text-[#7C3AED] dark:text-[#a78bfa]">Global AI Guide</strong> in the sidebar.
+                              </p>
+                            </div>
+
+                            {/* Segmented Tabs Bar */}
+                            <div className="flex border border-gray-200/50 dark:border-white/[0.05] p-1 bg-gray-100/50 dark:bg-black/30 rounded-xl relative">
                               <button
-                                onClick={handleSummarizeChat}
-                                disabled={summarizing}
-                                className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white px-5 py-2 rounded-xl text-xs font-bold transition-all disabled:opacity-50 flex items-center gap-1.5 shrink-0 shadow-[0_4px_12px_rgba(124,58,237,0.2)] active:scale-95"
+                                onClick={() => setAiTab('summarize')}
+                                className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all duration-300 flex items-center justify-center gap-1.5 ${aiTab === 'summarize'
+                                    ? 'bg-white dark:bg-[#26262b] text-[#7C3AED] dark:text-[#a78bfa] shadow-[0_4px_12px_rgba(0,0,0,0.06)] border border-gray-100 dark:border-white/[0.05]'
+                                    : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-200'
+                                  }`}
                               >
-                                {summarizing && (
-                                  <svg className="animate-spin h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24">
-                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                                  </svg>
-                                )}
-                                Summarize
+                                <span className="material-icons-round text-[14px]">summarize</span>
+                                Summarize Chat
+                              </button>
+                              <button
+                                onClick={() => setAiTab('search')}
+                                className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all duration-300 flex items-center justify-center gap-1.5 ${aiTab === 'search'
+                                    ? 'bg-white dark:bg-[#26262b] text-[#7C3AED] dark:text-[#a78bfa] shadow-[0_4px_12px_rgba(0,0,0,0.06)] border border-gray-100 dark:border-white/[0.05]'
+                                    : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-200'
+                                  }`}
+                              >
+                                <span className="material-icons-round text-[14px]">saved_search</span>
+                                Smart Search
                               </button>
                             </div>
 
-                            {/* Summary Error Warning */}
-                            {summaryError && (
-                              <div className="bg-amber-500/10 text-amber-800 dark:text-amber-300 p-3.5 rounded-2xl text-xs flex gap-3 border border-amber-500/20 text-left">
-                                <span className="material-icons-round text-base text-amber-500 shrink-0">warning</span>
-                                <div>
-                                  <h4 className="font-bold mb-0.5">Cannot Summarize</h4>
-                                  <p className="font-medium leading-relaxed text-amber-700/90 dark:text-amber-300/90">{summaryError}</p>
-                                </div>
-                              </div>
-                            )}
-
-                            {/* Summary Result Box */}
-                            {summaryResult && (
-                              <div className="bg-white/45 dark:bg-black/20 rounded-2xl p-4 border border-gray-100 dark:border-white/[0.04] relative group text-start shadow-[inset_0_1px_3px_rgba(0,0,0,0.01)]">
-                                <div className="flex justify-between items-center mb-2.5 border-b border-gray-200/40 dark:border-white/[0.06] pb-2">
-                                  <span className="text-[10px] font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wider">Conversation Summary</span>
-                                  <button
-                                    onClick={() => handleCopy(summaryResult)}
-                                    className="text-gray-400 hover:text-[#7C3AED] dark:hover:text-purple-400 p-1.5 hover:bg-gray-100 dark:hover:bg-white/5 rounded-lg transition-all"
-                                    title="Copy Summary"
+                            {/* Tab Content 1: Summarize */}
+                            {aiTab === 'summarize' && (
+                              <div className="space-y-4">
+                                <div className="flex items-center gap-3">
+                                  <label className="text-xs font-bold text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                                    Summarize last:
+                                  </label>
+                                  <select
+                                    value={summaryLimit}
+                                    onChange={(e) => setSummaryLimit(e.target.value)}
+                                    className="flex-1 bg-white/50 dark:bg-black/35 border border-gray-200 dark:border-white/10 rounded-xl px-3 py-2 text-xs text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-[#7C3AED]/25 transition-all font-medium cursor-pointer"
                                   >
-                                    <span className="material-icons-round text-sm">content_copy</span>
+                                    <option value={5}>5 Messages</option>
+                                    <option value={10}>10 Messages</option>
+                                    <option value={20}>20 Messages</option>
+                                    <option value={50}>50 Messages</option>
+                                    <option value="All">All Messages</option>
+                                  </select>
+                                  <button
+                                    onClick={handleSummarizeChat}
+                                    disabled={summarizing}
+                                    className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white px-5 py-2 rounded-xl text-xs font-bold transition-all disabled:opacity-50 flex items-center gap-1.5 shrink-0 shadow-[0_4px_12px_rgba(124,58,237,0.2)] active:scale-95"
+                                  >
+                                    {summarizing && (
+                                      <svg className="animate-spin h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                      </svg>
+                                    )}
+                                    Summarize
                                   </button>
                                 </div>
-                                <div dir="auto" className="text-xs text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap max-h-48 overflow-y-auto scrollbar-thin pr-1">
-                                  {summaryResult}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        )}
 
-                        {/* Tab Content 2: Smart Search */}
-                        {aiTab === 'search' && (
-                          <div className="space-y-4">
-                            <form
-                              onSubmit={(e) => {
-                                e.preventDefault();
-                                handleSmartSearch();
-                              }}
-                              className="flex gap-2.5"
-                            >
-                              <input
-                                type="text"
-                                placeholder="Search past messages, details or files..."
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                className="flex-1 bg-white/50 dark:bg-black/35 border border-gray-200 dark:border-white/10 rounded-xl px-4 py-2 text-xs text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-[#7C3AED]/25 transition-all placeholder-gray-400 dark:placeholder-gray-500 font-medium"
-                              />
-                              <button
-                                type="submit"
-                                disabled={searching || !searchQuery.trim()}
-                                className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white px-5 py-2 rounded-xl text-xs font-bold transition-all disabled:opacity-50 flex items-center gap-1.5 shrink-0 shadow-[0_4px_12px_rgba(124,58,237,0.2)] active:scale-95"
-                              >
-                                {searching && (
-                                  <svg className="animate-spin h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24">
-                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                                  </svg>
+                                {/* Summary Error Warning */}
+                                {summaryError && (
+                                  <div className="bg-amber-500/10 text-amber-800 dark:text-amber-300 p-3.5 rounded-2xl text-xs flex gap-3 border border-amber-500/20 text-left">
+                                    <span className="material-icons-round text-base text-amber-500 shrink-0">warning</span>
+                                    <div>
+                                      <h4 className="font-bold mb-0.5">Cannot Summarize</h4>
+                                      <p className="font-medium leading-relaxed text-amber-700/90 dark:text-amber-300/90">{summaryError}</p>
+                                    </div>
+                                  </div>
                                 )}
-                                Search
-                              </button>
-                            </form>
 
-                            {/* Search Result Box */}
-                            {searchResult && (
-                              <div className="space-y-3.5 text-start animate-in fade-in slide-in-from-top-3 duration-255">
-                                <div className="bg-white/45 dark:bg-black/20 rounded-2xl p-4 border border-gray-100 dark:border-white/[0.04] shadow-[inset_0_1px_3px_rgba(0,0,0,0.01)]">
-                                  <div className="flex justify-between items-center mb-2.5 border-b border-gray-200/40 dark:border-white/[0.06] pb-2">
-                                    <span className="text-[10px] font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wider">Search Answer</span>
-                                    <button
-                                      onClick={() => handleCopy(searchResult)}
-                                      className="text-gray-400 hover:text-[#7C3AED] dark:hover:text-purple-400 p-1.5 hover:bg-gray-100 dark:hover:bg-white/5 rounded-lg transition-all"
-                                      title="Copy Answer"
-                                    >
-                                      <span className="material-icons-round text-sm">content_copy</span>
-                                    </button>
+                                {/* Summary Result Box */}
+                                {summaryResult && (
+                                  <div className="bg-white/45 dark:bg-black/20 rounded-2xl p-4 border border-gray-100 dark:border-white/[0.04] relative group text-start shadow-[inset_0_1px_3px_rgba(0,0,0,0.01)]">
+                                    <div className="flex justify-between items-center mb-2.5 border-b border-gray-200/40 dark:border-white/[0.06] pb-2">
+                                      <span className="text-[10px] font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wider">Conversation Summary</span>
+                                      <button
+                                        onClick={() => handleCopy(summaryResult)}
+                                        className="text-gray-400 hover:text-[#7C3AED] dark:hover:text-purple-400 p-1.5 hover:bg-gray-100 dark:hover:bg-white/5 rounded-lg transition-all"
+                                        title="Copy Summary"
+                                      >
+                                        <span className="material-icons-round text-sm">content_copy</span>
+                                      </button>
+                                    </div>
+                                    <div dir="auto" className="text-xs text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap max-h-48 overflow-y-auto scrollbar-thin pr-1">
+                                      {summaryResult}
+                                    </div>
                                   </div>
-                                  <div dir="auto" className="text-xs text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap max-h-48 overflow-y-auto scrollbar-thin pr-1">
-                                    {searchResult}
-                                  </div>
-                                </div>
-
-                                {/* Redirect to Global AI Guide Button */}
-                                {searchFallback && (
-                                  <button
-                                    onClick={() => {
-                                      setShowAiPopup(false);
-                                      window.dispatchEvent(new CustomEvent('open-global-ai'));
-                                    }}
-                                    className="w-full flex items-center justify-center gap-2 p-3 bg-indigo-500/10 hover:bg-indigo-500/20 text-[#7C3AED] dark:text-[#a78bfa] rounded-xl text-xs font-bold border border-indigo-500/20 dark:border-indigo-500/30 transition-all active:scale-[0.98] shadow-sm"
-                                  >
-                                    <span className="material-icons-round text-sm">assistant</span>
-                                    Ask the Global AI Guide instead
-                                  </button>
                                 )}
                               </div>
                             )}
+
+                            {/* Tab Content 2: Smart Search */}
+                            {aiTab === 'search' && (
+                              <div className="space-y-4">
+                                <form
+                                  onSubmit={(e) => {
+                                    e.preventDefault();
+                                    handleSmartSearch();
+                                  }}
+                                  className="flex gap-2.5"
+                                >
+                                  <input
+                                    type="text"
+                                    placeholder="Search past messages, details or files..."
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    className="flex-1 bg-white/50 dark:bg-black/35 border border-gray-200 dark:border-white/10 rounded-xl px-4 py-2 text-xs text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-[#7C3AED]/25 transition-all placeholder-gray-400 dark:placeholder-gray-500 font-medium"
+                                  />
+                                  <button
+                                    type="submit"
+                                    disabled={searching || !searchQuery.trim()}
+                                    className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white px-5 py-2 rounded-xl text-xs font-bold transition-all disabled:opacity-50 flex items-center gap-1.5 shrink-0 shadow-[0_4px_12px_rgba(124,58,237,0.2)] active:scale-95"
+                                  >
+                                    {searching && (
+                                      <svg className="animate-spin h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                      </svg>
+                                    )}
+                                    Search
+                                  </button>
+                                </form>
+
+                                {/* Search Result Box */}
+                                {searchResult && (
+                                  <div className="space-y-3.5 text-start animate-in fade-in slide-in-from-top-3 duration-255">
+                                    <div className="bg-white/45 dark:bg-black/20 rounded-2xl p-4 border border-gray-100 dark:border-white/[0.04] shadow-[inset_0_1px_3px_rgba(0,0,0,0.01)]">
+                                      <div className="flex justify-between items-center mb-2.5 border-b border-gray-200/40 dark:border-white/[0.06] pb-2">
+                                        <span className="text-[10px] font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wider">Search Answer</span>
+                                        <button
+                                          onClick={() => handleCopy(searchResult)}
+                                          className="text-gray-400 hover:text-[#7C3AED] dark:hover:text-purple-400 p-1.5 hover:bg-gray-100 dark:hover:bg-white/5 rounded-lg transition-all"
+                                          title="Copy Answer"
+                                        >
+                                          <span className="material-icons-round text-sm">content_copy</span>
+                                        </button>
+                                      </div>
+                                      <div dir="auto" className="text-xs text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap max-h-48 overflow-y-auto scrollbar-thin pr-1">
+                                        {searchResult}
+                                      </div>
+                                    </div>
+
+                                    {/* Redirect to Global AI Guide Button */}
+                                    {searchFallback && (
+                                      <button
+                                        onClick={() => {
+                                          setShowAiPopup(false);
+                                          window.dispatchEvent(new CustomEvent('open-global-ai'));
+                                        }}
+                                        className="w-full flex items-center justify-center gap-2 p-3 bg-indigo-500/10 hover:bg-indigo-500/20 text-[#7C3AED] dark:text-[#a78bfa] rounded-xl text-xs font-bold border border-indigo-500/20 dark:border-indigo-500/30 transition-all active:scale-[0.98] shadow-sm"
+                                      >
+                                        <span className="material-icons-round text-sm">assistant</span>
+                                        Ask the Global AI Guide instead
+                                      </button>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            )}
                           </div>
-                        )}
-                      </div>
-                    </div>
+                        </div>
+                      )}
+                      <textarea
+                        disabled={cannotReply}
+                        value={inputText}
+                        onChange={(e) => setInputText(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !e.shiftKey && !cannotReply) {
+                            e.preventDefault();
+                            handleSendMessage();
+                          }
+                        }}
+                        className={`w-full bg-transparent border-none focus:ring-0 text-sm py-2 resize-none text-[#171717] dark:text-[#F5F5F5] placeholder-gray-400 outline-none hide-scrollbar ${cannotReply ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        placeholder={
+                          cannotReply
+                            ? (blockedByMe ? 'You blocked this user.' : 'You cannot reply to this conversation.')
+                            : 'Write a message...'
+                        }
+                        rows={1}
+                      ></textarea>
+                      <button
+                        onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                        className={`ml-4 transition-colors shrink-0 ${showEmojiPicker ? 'text-[#7C3AED]' : 'text-gray-400 hover:text-[#7C3AED]'}`}
+                      >
+                        <span className="material-icons">sentiment_satisfied_alt</span>
+                      </button>
+                      <button
+                        onClick={() => setShowAiPopup(!showAiPopup)}
+                        className={`ml-4 transition-colors shrink-0 ${showAiPopup ? 'text-[#7C3AED]' : 'text-gray-400 hover:text-[#7C3AED]'}`}
+                      >
+                        <span className="material-icons-round">bolt</span>
+                      </button>
+                      <button
+                        onClick={() => setIsRecordingVoice(true)}
+                        className="ml-4 text-gray-400 hover:text-[#7C3AED] transition-colors shrink-0"
+                      >
+                        <span className="material-icons">mic</span>
+                      </button>
+                    </>
                   )}
-                  <textarea 
-                    disabled={cannotReply}
-                    value={inputText}
-                    onChange={(e) => setInputText(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey && !cannotReply) {
-                        e.preventDefault();
-                        handleSendMessage();
-                      }
-                    }}
-                    className={`w-full bg-transparent border-none focus:ring-0 text-sm py-2 resize-none text-[#171717] dark:text-[#F5F5F5] placeholder-gray-400 outline-none hide-scrollbar ${cannotReply ? 'opacity-50 cursor-not-allowed' : ''}`} 
-                    placeholder={
-                      cannotReply
-                        ? (blockedByMe ? 'You blocked this user.' : 'You cannot reply to this conversation.')
-                        : 'Write a message...'
-                    } 
-                    rows={1}
-                  ></textarea>
-                  <button 
-                    onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                    className={`ml-4 transition-colors shrink-0 ${showEmojiPicker ? 'text-[#7C3AED]' : 'text-gray-400 hover:text-[#7C3AED]'}`}
-                  >
-                    <span className="material-icons">sentiment_satisfied_alt</span>
-                  </button>
-                  <button 
-                    onClick={() => setShowAiPopup(!showAiPopup)} 
-                    className={`ml-4 transition-colors shrink-0 ${showAiPopup ? 'text-[#7C3AED]' : 'text-gray-400 hover:text-[#7C3AED]'}`}
-                  >
-                    <span className="material-icons-round">bolt</span>
-                  </button>
-                  <button 
-                    onClick={() => setIsRecordingVoice(true)}
-                    className="ml-4 text-gray-400 hover:text-[#7C3AED] transition-colors shrink-0"
-                  >
-                    <span className="material-icons">mic</span>
-                  </button>
-                </>
-              )}
-            </div>
-            
-            {isGroup && (
-              <button 
-                onClick={() => setShowCreatePost(true)}
-                className="bg-[#7C3AED]/10 text-[#7C3AED] w-10 h-10 rounded-xl flex items-center justify-center hover:bg-[#7C3AED]/20 transition-all shadow-sm shrink-0"
-                title="Create Post"
-              >
-                <span className="material-icons text-xl">add</span>
-              </button>
-            )}
+                </div>
 
-            <button 
-              type="button"
-              onClick={handleSendMessage}
-              disabled={cannotReply}
-              className={`bg-[#7C3AED] text-white w-10 h-10 rounded-xl flex items-center justify-center hover:opacity-90 shadow-md shrink-0 ${cannotReply ? 'opacity-40 pointer-events-none' : ''}`}
-            >
-              <span className="material-icons text-xl">send</span>
-            </button>
-          </div>
+                {isGroup && (
+                  <button
+                    onClick={() => setShowCreatePost(true)}
+                    className="bg-[#7C3AED]/10 text-[#7C3AED] w-10 h-10 rounded-xl flex items-center justify-center hover:bg-[#7C3AED]/20 transition-all shadow-sm shrink-0"
+                    title="Create Post"
+                  >
+                    <span className="material-icons text-xl">add</span>
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={handleSendMessage}
+                  disabled={cannotReply}
+                  className={`bg-[#7C3AED] text-white w-10 h-10 rounded-xl flex items-center justify-center hover:opacity-90 shadow-md shrink-0 ${cannotReply ? 'opacity-40 pointer-events-none' : ''}`}
+                >
+                  <span className="material-icons text-xl">send</span>
+                </button>
+              </div>
             </>
           )}
         </footer>
       </main>
 
       {showCreatePost && (
-        <CreatePostModal 
-          isOpen={showCreatePost} 
-          onClose={() => setShowCreatePost(false)} 
-          groupId={chatId} 
+        <CreatePostModal
+          isOpen={showCreatePost}
+          onClose={() => setShowCreatePost(false)}
+          groupId={chatId}
           groupName={chatName}
           onPostSuccess={() => {
             setShowCreatePost(false);
@@ -2181,7 +2175,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                 </button>
                 <h3 className="font-bold text-[#171717] dark:text-[#F5F5F5]">Contact Info</h3>
               </div>
-              
+
               <div className="flex-1 overflow-y-auto hide-scrollbar p-6">
                 <div className="flex flex-col items-center mb-6">
                   <div className="relative mb-4">
@@ -2197,7 +2191,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                 </div>
 
                 <div className="flex justify-between items-center w-full px-2 mb-8">
-                  <div 
+                  <div
                     className="flex flex-col items-center gap-1.5 cursor-pointer hover:opacity-80 transition-opacity"
                     onClick={() => {
                       setIsMuted(!isMuted);
@@ -2209,9 +2203,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                     </div>
                     <span className="text-xs text-gray-500 font-medium">{isMuted ? 'Unmute' : 'Mute'}</span>
                   </div>
-                  
-                  <div 
-                    className="flex flex-col items-center gap-1.5 cursor-pointer hover:opacity-80 transition-opacity" 
+
+                  <div
+                    className="flex flex-col items-center gap-1.5 cursor-pointer hover:opacity-80 transition-opacity"
                     onClick={() => {
                       setShowDetails(false);
                       onChatSearchOpenChange?.(true);
@@ -2247,8 +2241,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             </h3>
             {activeSidePanel === 'details' ? (
               isGroup && (
-                <button 
-                  onClick={() => setShowEditGroupModal(true)} 
+                <button
+                  onClick={() => setShowEditGroupModal(true)}
                   className="text-[#7C3AED] hover:text-[#6D28D9] transition-colors"
                 >
                   <span className="material-icons-round text-xl">edit</span>
@@ -2258,7 +2252,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
               <div className="w-6"></div>
             )}
           </div>
-          
+
           <div className="flex-1 overflow-y-auto hide-scrollbar p-6">
             {activeSidePanel === 'details' ? (
               isGroup ? (
@@ -2281,83 +2275,83 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                   onToggleMute={() => setIsMuted(!isMuted)}
                 />
               ) : (
-              <div className="flex flex-col">
-                <div className="flex flex-col items-center mb-6">
-                  <div className="relative mb-4">
-                    <div className="w-28 h-28 rounded-full bg-linear-to-tr from-[#7C3AED] to-[#ec4899] text-white flex items-center justify-center text-4xl font-bold shadow-lg">
-                      {chatName.charAt(0)}
+                <div className="flex flex-col">
+                  <div className="flex flex-col items-center mb-6">
+                    <div className="relative mb-4">
+                      <div className="w-28 h-28 rounded-full bg-linear-to-tr from-[#7C3AED] to-[#ec4899] text-white flex items-center justify-center text-4xl font-bold shadow-lg">
+                        {chatName.charAt(0)}
+                      </div>
+                      <div className="absolute bottom-1 right-1 w-5 h-5 bg-[#10B981] border-4 border-white dark:border-[#262626] rounded-full"></div>
                     </div>
-                    <div className="absolute bottom-1 right-1 w-5 h-5 bg-[#10B981] border-4 border-white dark:border-[#262626] rounded-full"></div>
+                    <h3 className="font-bold text-xl text-[#171717] dark:text-[#F5F5F5] text-center mb-1">{chatName}</h3>
+                    <p className="text-sm text-gray-500 text-center">
+                      {isOnline ? 'Online' : 'Offline'}
+                    </p>
                   </div>
-                  <h3 className="font-bold text-xl text-[#171717] dark:text-[#F5F5F5] text-center mb-1">{chatName}</h3>
-                  <p className="text-sm text-gray-500 text-center">
-                    {isOnline ? 'Online' : 'Offline'}
-                  </p>
-                </div>
 
-                <div className="flex justify-between items-center w-full px-2 mb-8">
-                  
-                  <div 
-                    className="flex flex-col items-center gap-1.5 cursor-pointer hover:opacity-80 transition-opacity"
-                    onClick={() => {
-                      setIsMuted(!isMuted);
-                      toast.success(isMuted ? "Notifications unmuted" : "Notifications muted");
-                    }}
-                  >
-                    <div className={`w-12 h-12 rounded-full bg-[#FAFAFA] dark:bg-[#171717] border border-gray-100 dark:border-gray-800 flex items-center justify-center ${isMuted ? 'text-[#7C3AED]' : 'text-gray-500 dark:text-gray-400'}`}>
-                      <span className="material-icons-round">{isMuted ? 'notifications_off' : 'notifications'}</span>
+                  <div className="flex justify-between items-center w-full px-2 mb-8">
+
+                    <div
+                      className="flex flex-col items-center gap-1.5 cursor-pointer hover:opacity-80 transition-opacity"
+                      onClick={() => {
+                        setIsMuted(!isMuted);
+                        toast.success(isMuted ? "Notifications unmuted" : "Notifications muted");
+                      }}
+                    >
+                      <div className={`w-12 h-12 rounded-full bg-[#FAFAFA] dark:bg-[#171717] border border-gray-100 dark:border-gray-800 flex items-center justify-center ${isMuted ? 'text-[#7C3AED]' : 'text-gray-500 dark:text-gray-400'}`}>
+                        <span className="material-icons-round">{isMuted ? 'notifications_off' : 'notifications'}</span>
+                      </div>
+                      <span className="text-xs text-gray-500 font-medium">{isMuted ? 'Unmute' : 'Mute'}</span>
                     </div>
-                    <span className="text-xs text-gray-500 font-medium">{isMuted ? 'Unmute' : 'Mute'}</span>
-                  </div>
-                  
-                  <div 
-                    className="flex flex-col items-center gap-1.5 cursor-pointer hover:opacity-80 transition-opacity" 
-                    onClick={() => {
-                      setActiveSidePanel('search');
-                      onChatSearchOpenChange?.(true);
-                    }}
-                  >
-                    <div className="w-12 h-12 rounded-full bg-[#FAFAFA] dark:bg-[#171717] border border-gray-100 dark:border-gray-800 flex items-center justify-center text-gray-500 dark:text-gray-400">
-                      <span className="material-icons-round">search</span>
+
+                    <div
+                      className="flex flex-col items-center gap-1.5 cursor-pointer hover:opacity-80 transition-opacity"
+                      onClick={() => {
+                        setActiveSidePanel('search');
+                        onChatSearchOpenChange?.(true);
+                      }}
+                    >
+                      <div className="w-12 h-12 rounded-full bg-[#FAFAFA] dark:bg-[#171717] border border-gray-100 dark:border-gray-800 flex items-center justify-center text-gray-500 dark:text-gray-400">
+                        <span className="material-icons-round">search</span>
+                      </div>
+                      <span className="text-xs text-gray-500 font-medium">Search</span>
                     </div>
-                    <span className="text-xs text-gray-500 font-medium">Search</span>
                   </div>
-                </div>
 
-                <div className="w-full bg-[#FAFAFA] dark:bg-[#171717] rounded-2xl p-4 mb-4 border border-gray-100 dark:border-gray-800">
-                  <h4 className="text-xs font-bold text-[#7C3AED] uppercase tracking-wider mb-2">About</h4>
-                  <p className="text-sm text-[#171717] dark:text-[#F5F5F5] leading-relaxed">
-                    Hey there! I am using Rabta.
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-1 bg-[#FAFAFA] dark:bg-[#171717] p-1 rounded-xl mb-4 border border-gray-100 dark:border-gray-800">
-                  <button 
-                    type="button"
-                    className={`flex-1 py-1.5 text-sm font-medium rounded-lg transition-all bg-white dark:bg-[#262626] text-[#7C3AED] shadow-sm`}
-                  >
-                    Media
-                  </button>
-                </div>
-
-                <div className="w-full">
-                  <div className="grid grid-cols-3 gap-2">
-                    <div className="aspect-square bg-gray-200 dark:bg-gray-800 rounded-lg"></div>
-                    <div className="aspect-square bg-gray-200 dark:bg-gray-800 rounded-lg"></div>
-                    <div className="aspect-square bg-gray-200 dark:bg-gray-800 rounded-lg"></div>
-                    <div className="aspect-square bg-gray-200 dark:bg-gray-800 rounded-lg"></div>
+                  <div className="w-full bg-[#FAFAFA] dark:bg-[#171717] rounded-2xl p-4 mb-4 border border-gray-100 dark:border-gray-800">
+                    <h4 className="text-xs font-bold text-[#7C3AED] uppercase tracking-wider mb-2">About</h4>
+                    <p className="text-sm text-[#171717] dark:text-[#F5F5F5] leading-relaxed">
+                      Hey there! I am using Rabta.
+                    </p>
                   </div>
-                </div>
 
-              </div>
+                  <div className="flex items-center gap-1 bg-[#FAFAFA] dark:bg-[#171717] p-1 rounded-xl mb-4 border border-gray-100 dark:border-gray-800">
+                    <button
+                      type="button"
+                      className={`flex-1 py-1.5 text-sm font-medium rounded-lg transition-all bg-white dark:bg-[#262626] text-[#7C3AED] shadow-sm`}
+                    >
+                      Media
+                    </button>
+                  </div>
+
+                  <div className="w-full">
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="aspect-square bg-gray-200 dark:bg-gray-800 rounded-lg"></div>
+                      <div className="aspect-square bg-gray-200 dark:bg-gray-800 rounded-lg"></div>
+                      <div className="aspect-square bg-gray-200 dark:bg-gray-800 rounded-lg"></div>
+                      <div className="aspect-square bg-gray-200 dark:bg-gray-800 rounded-lg"></div>
+                    </div>
+                  </div>
+
+                </div>
               )
             ) : (
               <div className="flex flex-col gap-4">
                 <div className="relative">
                   <span className="material-icons-round absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">search</span>
-                  <input 
-                    type="text" 
-                    placeholder="Search in chat..." 
+                  <input
+                    type="text"
+                    placeholder="Search in chat..."
                     value={chatSearchQuery}
                     onChange={(e) => setChatSearchQuery(e.target.value)}
                     className="w-full bg-[#FAFAFA] dark:bg-[#171717] border border-gray-200 dark:border-gray-800 rounded-lg py-2 pl-10 pr-4 text-sm focus:outline-none focus:border-[#7C3AED] text-[#171717] dark:text-[#F5F5F5]"
@@ -2408,7 +2402,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
               </button>
             </div>
             <div className="p-6">
-              <textarea 
+              <textarea
                 className="w-full h-32 bg-[#FAFAFA] dark:bg-[#171717] border border-gray-200 dark:border-gray-800 rounded-xl p-4 text-[#171717] dark:text-[#F5F5F5] resize-none focus:outline-none focus:border-[#7C3AED] transition-colors"
                 placeholder="What's on your mind? Share with the group..."
               ></textarea>
@@ -2445,7 +2439,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             <div className="p-6">
               <label className="block text-sm font-medium text-gray-500 mb-2">Group Name</label>
               <input type="text" defaultValue={chatName} className="w-full bg-[#FAFAFA] dark:bg-[#171717] border border-gray-200 dark:border-gray-800 rounded-xl py-3 px-4 text-[#171717] dark:text-[#F5F5F5] focus:outline-none focus:border-[#7C3AED] mb-4" />
-              
+
               <label className="block text-sm font-medium text-gray-500 mb-2">Description</label>
               <textarea rows={3} defaultValue="Welcome to the group! We discuss frontend development, React, and modern UI/UX design patterns." className="w-full bg-[#FAFAFA] dark:bg-[#171717] border border-gray-200 dark:border-gray-800 rounded-xl py-3 px-4 text-[#171717] dark:text-[#F5F5F5] resize-none focus:outline-none focus:border-[#7C3AED]"></textarea>
             </div>
@@ -2466,15 +2460,15 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                 <span className="material-icons-round">close</span>
               </button>
             </div>
-            
+
             <div className="p-6 overflow-y-auto">
               <div className="relative mb-6">
                 <span className="material-icons-round absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">search</span>
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   value={userSearchQuery}
                   onChange={(e) => setUserSearchQuery(e.target.value)}
-                  placeholder="Search users by name or email..." 
+                  placeholder="Search users by name or email..."
                   className="w-full pl-10 pr-4 py-3 bg-[#FAFAFA] dark:bg-[#171717] border border-gray-200 dark:border-gray-800 rounded-xl text-sm outline-none focus:border-[#7C3AED] transition-colors text-[#171717] dark:text-[#F5F5F5]"
                   autoFocus
                 />
@@ -2497,7 +2491,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                           <span className="text-xs text-gray-500 truncate">{user.email || user.role}</span>
                         </div>
                       </div>
-                      <button 
+                      <button
                         onClick={() => handleAddUserToGroup(user._id)}
                         className="px-4 py-1.5 bg-[#7C3AED] hover:bg-[#6D28D9] text-white text-xs font-bold rounded-lg transition-colors"
                       >
@@ -2527,7 +2521,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
               <p className="text-sm text-gray-500 mb-6">Are you sure you want to leave this group? You won't receive any more messages from it.</p>
               <div className="flex gap-3">
                 <button onClick={() => setShowLeaveConfirmModal(false)} className="flex-1 py-3 text-gray-500 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 rounded-xl transition-colors font-medium">Cancel</button>
-                <button 
+                <button
                   onClick={async () => {
                     try {
                       await axiosInstance.put(`/chats/group/${chatId}/leave`);
@@ -2537,7 +2531,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                     } catch {
                       toast.error("Failed to leave group");
                     }
-                  }} 
+                  }}
                   className="flex-1 py-3 bg-red-500 hover:bg-red-600 text-white rounded-xl font-medium transition-colors"
                 >
                   Leave
@@ -2548,21 +2542,21 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         </div>
       )}
 
-      <CameraModal 
-        isOpen={showCameraModal} 
-        onClose={() => setShowCameraModal(false)} 
-        onCapture={(file) => uploadFileToServer(file)} 
+      <CameraModal
+        isOpen={showCameraModal}
+        onClose={() => setShowCameraModal(false)}
+        onCapture={(file) => uploadFileToServer(file)}
       />
 
       {viewingFile && (
         <div className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-4 animate-in fade-in">
-          <button 
+          <button
             onClick={() => setViewingFile(null)}
             className="absolute top-4 right-4 text-white hover:text-gray-300 transition-colors p-2 z-50"
           >
             <span className="material-icons-round text-3xl">close</span>
           </button>
-          
+
           {viewingFile.type === 'image' ? (
             <img src={viewingFile.url} alt="Attachment Fullscreen" className="max-h-full max-w-full object-contain rounded-lg" />
           ) : (

@@ -1,3 +1,4 @@
+import React from 'react';
 import { useCall } from '../../context/CallContext';
 
 export const IncomingCallModal = () => {

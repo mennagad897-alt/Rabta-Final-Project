@@ -29,6 +29,7 @@ export const getMessageHistory = catchAsync(
     // الـ limit بين 20 و 50 عشان نحمي السيرفر من الطلبات الكبيرة
     const limit = parseInt(req.query.limit as string) || 30;
     const before = req.query.before as string; // cursor-based pagination
+
     const ChatModel = require("../models/chat").default;
     const chatDoc = await ChatModel.findById(chatId).select(
       "isGroup status initiatedBy users",
@@ -44,6 +45,7 @@ export const getMessageHistory = catchAsync(
         data: { messages: [] },
       });
     }
+
     const messages = await chatService.getChatMessages(
       chatId as string,
       userId,
@@ -91,9 +93,6 @@ export const accessChat = catchAsync(
   },
 );
 
-// ==========================================
-// 📋 جلب كل محادثات اليوزر
-// ==========================================
 export const respondToChatRequest = catchAsync(
   async (req: Request, res: Response, next: NextFunction) => {
     const userId = (req.user as any)._id.toString();
@@ -134,6 +133,10 @@ export const respondToChatRequest = catchAsync(
     });
   },
 );
+
+// ==========================================
+// 📋 جلب كل محادثات اليوزر
+// ==========================================
 export const getMyChats = catchAsync(
   async (req: Request, res: Response, next: NextFunction) => {
     const userId = (req.user as any)._id.toString();
@@ -434,7 +437,17 @@ export const sendMessage = catchAsync(
 
     let savedMsg;
     try {
-      // createMessage persists to DB (await save) before returning
+      // 1. نعمل الـ Embedding الأول (لو في محتوى نصي)
+      let messageEmbedding: number[] = [];
+      if (content) {
+        try {
+          messageEmbedding = await embeddingsModel.embedQuery(content);
+          console.log("✅ Embedding success! Length:", messageEmbedding.length); // سطر التيست ده مهم جداً
+        } catch (error) {
+          console.error("❌ Error from OpenAI Embeddings:", error);
+        }
+      }
+      // 2. بعد ما الأرقام جهزت، نحفظ الرسالة في الداتابيز
       savedMsg = await chatService.createMessage({
         chatId: id,
         senderId,
@@ -446,6 +459,7 @@ export const sendMessage = catchAsync(
         duration,
         attachments,
         status: initialStatus,
+        embedding: messageEmbedding // دلوقتي الكود شايف الأرقام صح وهيبعتها
       });
     } catch (error) {
       console.error("Validation Error in sendMessage:", error);
@@ -468,51 +482,15 @@ export const sendMessage = catchAsync(
 
     await chatService.emitNewCommunityMessage(io, id, savedMsg as any);
 
-    if (io) {
-      const { User } = require("../models/user");
-      const fullChat = await Chat.findById(id).select("users isGroup groupName");
-      const receiverId = fullChat && !fullChat.isGroup
-        ? (fullChat.users || []).find((uid: any) => uid.toString() !== (req.user as any)._id.toString())?.toString()
-        : null;
-
-      // Direct chat notification
-      if (receiverId) {
-        const receiverUser = await User.findById(receiverId)
-          .select('notificationSettings').lean();
-        if (receiverUser?.notificationSettings?.chatMessages !== false) {
-          io.to(receiverId).emit('notification', {
-            type: 'chat',
-            message: `New message from ${(req.user as any).fullName || 'Someone'}`,
-            senderId: (req.user as any)._id.toString(),
-            chatId: id
-          });
-        }
-      }
-
-      // Group chat notification
-      if (fullChat?.isGroup) {
-        const groupMembers = (fullChat.users || []).filter(
-          (uid: any) => uid.toString() !== (req.user as any)._id.toString()
-        );
-        for (const memberId of groupMembers) {
-          const memberUser = await User.findById(memberId)
-            .select('notificationSettings').lean();
-          if (memberUser?.notificationSettings?.communityMentions !== false) {
-            io.to(memberId.toString()).emit('notification', {
-              type: 'group',
-              message: `New message in ${fullChat.groupName || 'a group'} from ${(req.user as any).fullName || 'Someone'}`,
-              senderId: (req.user as any)._id.toString(),
-              chatId: id
-            });
-          }
-        }
-      }
-    }
+    // ... الكود القديم بتاع الـ socket.io ...
+    await chatService.emitNewCommunityMessage(io, id, savedMsg as any);
 
     // 🔥 السطرين الجداد: تشغيل التغذية التلقائية في الخلفية للـ AI
     // بنجيب اسم اليوزر سواء كان متخزن في fullName أو name
     const senderName = (req.user as any).fullName || (req.user as any).name || "مستخدم في الشات";
     autoIngestSingleMessage(savedMsg, senderName);
+
+    // الرد الطبيعي لليوزر
     res.status(201).json({
       status: "success",
       data: { message: savedMsg },
@@ -555,7 +533,7 @@ export const sendAudioMessage = catchAsync(
     io.to(id).emit("receiveMessage", message);
     io.to(id).emit("receive-message", message);
 
-  await chatService.emitNewCommunityMessage(io, id, message as any);
+    await chatService.emitNewCommunityMessage(io, id, message as any);
 
     res.status(201).json({
       status: "success",
@@ -573,13 +551,12 @@ export const sendFileMessage = catchAsync(
       return next(new AppError("File attachment is required", 400));
     }
 
-    // Call our Cloudinary upload service to upload the buffer
+    // Upload to Cloudinary using buffer
     const uploadResult = await uploadBufferToCloudinary(
       req.file.buffer,
       req.file.originalname,
       req.file.mimetype
     );
-
     const fileUrl = uploadResult.secure_url;
 
     // Determine if it's an image, video, or generic document based on mimetype
@@ -615,7 +592,7 @@ export const sendFileMessage = catchAsync(
     io.to(id).emit("receiveMessage", message);
     io.to(id).emit("receive-message", message);
 
-  await chatService.emitNewCommunityMessage(io, id, message as any);
+    await chatService.emitNewCommunityMessage(io, id, message as any);
 
     res.status(201).json({
       status: "success",
@@ -633,16 +610,17 @@ export const markMessagesAsRead = catchAsync(async (req: Request, res: Response,
     {
       chatId: id,
       senderId: { $ne: currentUserId },
-      status: { $ne: 'read' },    },
-    { 
+      status: { $ne: 'read' },
+    },
+    {
       $set: { status: 'read' },
       $addToSet: { readBy: currentUserId },
     }
   );
 
-      const io = req.app.get("io");
-    // Emit the event to the chat room to update UI instantly
-    if (io && result.modifiedCount > 0) {
+  const io = req.app.get("io");
+  // Emit the event to the chat room to update UI instantly
+  if (io && result.modifiedCount > 0) {
     const chat = await Chat.findById(id).select('users');
     const readByStr = currentUserId.toString();
     // Notify message senders only (not the reader) so their ticks update
@@ -650,16 +628,17 @@ export const markMessagesAsRead = catchAsync(async (req: Request, res: Response,
       const uid = userId.toString();
       if (uid !== readByStr) {
         io.to(uid).emit("messages-read", {
-      chatId: id,
-      readBy: readByStr });
+          chatId: id,
+          readBy: readByStr
+        });
       }
     });
   }
-    res.status(200).json({
-      status: "success",
-      message: "Messages marked as read",
-    });
-  },
+  res.status(200).json({
+    status: "success",
+    message: "Messages marked as read",
+  });
+},
 );
 
 export const getSharedContent = catchAsync(
@@ -736,22 +715,22 @@ export const clearChatHistory = catchAsync(
       return next(new AppError("You are not a member of this chat", 403));
     }
 
-      await Chat.findByIdAndUpdate(
+    await Chat.findByIdAndUpdate(
       id,
       { $addToSet: { hiddenBy: userId } },
       { new: true },
     );
 
-      const io = req.app.get("io");
+    const io = req.app.get("io");
     if (io) {
       io.to(userId.toString()).emit("chatCleared", { chatId: id });
     }
 
-  res.status(200).json({
-    status: 'success',
-    message: 'Chat hidden from list successfully',
+    res.status(200).json({
+      status: 'success',
+      message: 'Chat hidden from list successfully',
+    });
   });
-});
 
 // ==========================================
 // 🔢 Unread message count for a chat

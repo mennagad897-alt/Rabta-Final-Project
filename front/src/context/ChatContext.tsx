@@ -58,6 +58,9 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
       console.log("🔴 Socket Disconnected");
       setIsConnected(false);
     });
+
+    let isPlayingSound = false;
+
     socketInstance.on('notification', (data: {
       type: string;
       message: string;
@@ -97,7 +100,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
           audio.volume = 0.5;
           audio.play().catch(() => {
             const playOnInteraction = () => {
-              audio.play().catch(() => {});
+              audio.play().catch(() => { });
               document.removeEventListener('click', playOnInteraction);
             };
             document.addEventListener('click', playOnInteraction);
@@ -110,7 +113,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
           }
           const audio = new Audio('/notification.mp3');
           audio.volume = 0.5;
-          audio.play().catch(() => {});
+          audio.play().catch(() => { });
         });
     });
 

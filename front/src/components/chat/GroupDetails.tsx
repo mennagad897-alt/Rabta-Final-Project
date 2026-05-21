@@ -52,6 +52,7 @@ export const GroupDetails: React.FC<GroupDetailsProps> = ({
   chatId,
   chatName,
   description,
+  isPrivateGroup,
   groupMembers,
   groupAdmins,
   canAddMembers,
@@ -347,7 +348,7 @@ export const GroupDetails: React.FC<GroupDetailsProps> = ({
                     >
                       <div className="w-9 h-9 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-xs font-bold text-gray-500 shrink-0 overflow-hidden">
                         {typeof request.userId === "object" &&
-                        request.userId?.avatar ? (
+                          request.userId?.avatar ? (
                           <img
                             src={request.userId.avatar}
                             alt=""
@@ -441,8 +442,8 @@ export const GroupDetails: React.FC<GroupDetailsProps> = ({
                       typeof member === "string" ? member : member._id;
                     const isMemberAdmin = memberId
                       ? (groupAdmins || []).some(
-                          (id) => String(id) === String(memberId),
-                        )
+                        (id) => String(id) === String(memberId),
+                      )
                       : false;
                     const displayName =
                       member.fullName ||
@@ -528,39 +529,39 @@ export const GroupDetails: React.FC<GroupDetailsProps> = ({
             </div>
           ) : (
             <>
-          <button
-            type="button"
-            onClick={onLeaveGroup}
-            className="mt-8 flex items-center justify-center gap-2 w-full py-3 bg-red-50 dark:bg-red-500/10 text-red-500 rounded-xl hover:bg-red-100 dark:hover:bg-red-500/20 transition-colors font-bold"
-          >
-            <span className="material-icons-round">exit_to_app</span>
-            Leave Group
-          </button>
+              <button
+                type="button"
+                onClick={onLeaveGroup}
+                className="mt-8 flex items-center justify-center gap-2 w-full py-3 bg-red-50 dark:bg-red-500/10 text-red-500 rounded-xl hover:bg-red-100 dark:hover:bg-red-500/20 transition-colors font-bold"
+              >
+                <span className="material-icons-round">exit_to_app</span>
+                Leave Group
+              </button>
 
-          {isGroupAdmin && onDeleteGroup && (
-            <button
-              type="button"
-              disabled={isDeleting}
-              onClick={async () => {
-                if (
-                  !window.confirm(
-                    "Delete this group permanently? This cannot be undone.",
-                  )
-                )
-                  return;
-                setIsDeleting(true);
-                try {
-                  await onDeleteGroup();
-                } finally {
-                  setIsDeleting(false);
-                }
-              }}
-              className="mt-3 flex items-center justify-center gap-2 w-full py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl transition-colors font-bold disabled:opacity-50"
-            >
-              <span className="material-icons-round">delete_forever</span>
-              {isDeleting ? "Deleting..." : "Delete Group"}
-            </button>
-          )}
+              {isGroupAdmin && onDeleteGroup && (
+                <button
+                  type="button"
+                  disabled={isDeleting}
+                  onClick={async () => {
+                    if (
+                      !window.confirm(
+                        "Delete this group permanently? This cannot be undone.",
+                      )
+                    )
+                      return;
+                    setIsDeleting(true);
+                    try {
+                      await onDeleteGroup();
+                    } finally {
+                      setIsDeleting(false);
+                    }
+                  }}
+                  className="mt-3 flex items-center justify-center gap-2 w-full py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl transition-colors font-bold disabled:opacity-50"
+                >
+                  <span className="material-icons-round">delete_forever</span>
+                  {isDeleting ? "Deleting..." : "Delete Group"}
+                </button>
+              )}
             </>
           )}
         </div>

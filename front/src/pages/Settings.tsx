@@ -1,8 +1,24 @@
+import { useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import type { RootState } from "../store/store";
 import { logout } from "../store/slices/authSlice";
 import toast from "react-hot-toast";
 import { useNavigate } from "react-router-dom";
+
+interface SettingsState {
+  notifications: {
+    chatMessages: boolean;
+    communityMentions: boolean;
+    aiJobMatches: boolean;
+    inAppSounds: boolean;
+  };
+  privacy: {
+    showOnlineStatus: boolean;
+    showJobTitle: boolean;
+    publicProfile: boolean;
+  };
+  [key: string]: Record<string, boolean>;
+}
 
 export const Settings = () => {
   const user = useSelector((state: RootState) => state.auth.user);
@@ -15,13 +31,38 @@ export const Settings = () => {
     if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
     return parts[0].slice(0, 2).toUpperCase();
   };
-  
+
+  const [settings, setSettings] = useState<SettingsState>(user?.settings || {
+    notifications: {
+      chatMessages: true,
+      communityMentions: true,
+      aiJobMatches: true,
+      inAppSounds: true
+    },
+    privacy: {
+      showOnlineStatus: true,
+      showJobTitle: true,
+      publicProfile: true
+    }
+  });
+
   const toggleTheme = () => {
     const html = document.documentElement;
     html.classList.toggle('dark');
     const isDark = html.classList.contains('dark');
     localStorage.setItem('theme', isDark ? 'dark' : 'light');
     toast.success(`Switched to ${isDark ? 'Dark' : 'Light'} Mode`);
+  };
+
+  const handleToggle = (section: string, field: string) => {
+    setSettings((prev: SettingsState) => ({
+      ...prev,
+      [section]: {
+        ...prev[section],
+        [field]: !prev[section][field]
+      }
+    }));
+    toast.success("Preference updated");
   };
 
   const handleLogout = () => {
@@ -32,23 +73,23 @@ export const Settings = () => {
 
   return (
     <div className="flex-1 flex flex-col relative bg-[#FAFAFA] dark:bg-[#171717] overflow-y-auto transition-colors duration-300">
-      
+
       <div className="max-w-2xl mx-auto w-full p-4 md:p-8 animate-in fade-in slide-in-from-bottom-4 duration-500 flex-1 flex flex-col">
-        
+
         <h1 className="text-2xl font-bold mb-6 px-2 text-[#171717] dark:text-[#F5F5F5]">Settings</h1>
 
         <div className="flex flex-col gap-6 w-full">
-          
+
           {/* Profile Section */}
-          <div 
-            onClick={() => navigate('/profile')} 
+          <div
+            onClick={() => navigate('/profile')}
             className="flex items-center gap-4 p-4 bg-white dark:bg-[#262626] rounded-2xl border border-gray-100 dark:border-white/5 cursor-pointer hover:bg-gray-50 dark:hover:bg-white/[0.02] transition-colors shadow-sm w-full"
           >
             <div className="relative shrink-0">
               {user?.avatar ? (
-                <img 
-                  src={user.avatar} 
-                  className="w-16 h-16 rounded-full border-2 border-[#7C3AED] dark:border-[#8B5CF6] p-0.5 object-cover" 
+                <img
+                  src={user.avatar}
+                  className="w-16 h-16 rounded-full border-2 border-[#7C3AED] dark:border-[#8B5CF6] p-0.5 object-cover"
                   alt="Profile"
                 />
               ) : (
@@ -61,7 +102,7 @@ export const Settings = () => {
             <div className="flex-1 min-w-0">
               <h2 className="text-lg font-bold text-[#171717] dark:text-[#F5F5F5] truncate">{user?.fullName || "Guest User"}</h2>
               <p className="text-sm text-gray-500 dark:text-gray-400 capitalize truncate">
-                {user?.jobTitle && user?.location 
+                {user?.jobTitle && user?.location
                   ? `${user.jobTitle} • ${user.location}`
                   : user?.jobTitle || user?.location || ""}
               </p>
@@ -70,14 +111,14 @@ export const Settings = () => {
               <span className="material-icons-round">chevron_right</span>
             </span>
           </div>
-          
+
           {/* Account Section */}
           <div className="bg-white dark:bg-[#262626] rounded-2xl overflow-hidden border border-gray-100 dark:border-white/5 shadow-sm">
             <div className="bg-gray-50 dark:bg-white/[0.02] border-b border-gray-100 dark:border-white/5 px-4 py-3 uppercase text-[10px] font-bold tracking-widest text-gray-500 dark:text-gray-400">
               Account
             </div>
-            
-            <div 
+
+            <div
               className="flex items-center gap-4 p-4 hover:bg-gray-50 dark:hover:bg-white/2 cursor-pointer transition-colors"
               onClick={() => navigate('/privacy')}
             >
@@ -100,8 +141,8 @@ export const Settings = () => {
               Preferences
             </div>
 
-            <div 
-              className="flex items-center gap-4 p-4 hover:bg-gray-50 dark:hover:bg-white/2 cursor-pointer transition-colors border-b border-gray-50 dark:border-white/5" 
+            <div
+              className="flex items-center gap-4 p-4 hover:bg-gray-50 dark:hover:bg-white/2 cursor-pointer transition-colors border-b border-gray-50 dark:border-white/5"
               onClick={toggleTheme}
             >
               <div className="w-10 h-10 rounded-xl bg-orange-100 dark:bg-indigo-900/30 flex items-center justify-center text-orange-500 dark:text-indigo-400 transition-colors">
@@ -117,7 +158,7 @@ export const Settings = () => {
               </div>
             </div>
 
-            <div 
+            <div
               className="flex items-center gap-4 p-4 hover:bg-gray-50 dark:hover:bg-white/2 cursor-pointer transition-colors border-b border-gray-50 dark:border-white/5"
               onClick={() => navigate('/notifications')}
             >
@@ -137,7 +178,7 @@ export const Settings = () => {
           </div>
 
           {/* Logout Button */}
-          <div 
+          <div
             className="flex items-center gap-4 p-4 mt-2 bg-red-50 dark:bg-red-900/10 rounded-2xl border border-red-100 dark:border-red-900/30 cursor-pointer hover:bg-red-100 dark:hover:bg-red-900/20 transition-colors shadow-sm w-full"
             onClick={handleLogout}
           >

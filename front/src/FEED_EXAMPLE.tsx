@@ -8,8 +8,8 @@
  */
 
 import React, { useEffect } from 'react';
-import { useAppDispatch, useAppSelector } from './store/hooks';
-import { setPosts, setLoading } from './store/slices/postsSlice';
+import { useAppDispatch, useAppSelector } from '../store/hooks';
+import { setPosts, setLoading } from '../store/slices/postsSlice';
 
 /**
  * مثال على Post Component
@@ -57,11 +57,11 @@ export const Feed: React.FC = () => {
   const dispatch = useAppDispatch();
 
   // ✅ الطريقة الصحيحة: استخدام useAppSelector للـ type-safe selectors
-  const posts = useAppSelector((state: any) => state.posts.items);
-  const loading = useAppSelector((state: any) => state.posts.loading);
-  const error = useAppSelector((state: any) => state.posts.error);
-  const authUser = useAppSelector((state: any) => state.auth.user);
-  const authToken = useAppSelector((state: any) => state.auth.token);
+  const posts = useAppSelector((state) => state.posts.items);
+  const loading = useAppSelector((state) => state.posts.loading);
+  const error = useAppSelector((state) => state.posts.error);
+  const authUser = useAppSelector((state) => state.auth.user);
+  const authToken = useAppSelector((state) => state.auth.token);
 
   // Fetch posts عند تحميل الـ component
   useEffect(() => {
@@ -148,7 +148,7 @@ export const Feed: React.FC = () => {
 
       {/* ✅ الـ KEY PART: تعيين البوستات من Redux */}
       <div className="space-y-4">
-        {posts.map((post: any) => (
+        {posts.map((post) => (
           <PostCard key={post.id} post={post} />
         ))}
       </div>
