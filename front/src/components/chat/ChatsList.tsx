@@ -1,5 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import { AiAssistant } from '../shared/AiAssistant';
 
 export interface ChatItem {
   _id: string;
@@ -17,9 +18,6 @@ export interface ChatItem {
   unreadCount?: number;
   lastMessageIsMine?: boolean;
   lastMessageStatus?: 'sending' | 'sent' | 'delivered' | 'read';
-  chatStatus?: 'pending' | 'accepted';
-  initiatedBy?: string;
-  isPendingRequest?: boolean;
 }
 
 interface ChatsListProps {
@@ -38,12 +36,10 @@ export const ChatsList: React.FC<ChatsListProps> = ({
   activeChatId, 
   onSelectChat, 
   isChatListOpen = true, 
-  onClose, 
   onAddContact,
   onToggleFocusMode,
   onDeleteChat
 }) => {
-  const navigate = useNavigate();
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState('');
   
@@ -139,7 +135,7 @@ export const ChatsList: React.FC<ChatsListProps> = ({
                   {chat.initials}
                 </div>
               )}
-              {chat.isOnline && (
+              {chat.isOnline && chat.showOnlineStatus !== false && (
                 <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white dark:border-[#262626] rounded-full" />
               )}
             </div>

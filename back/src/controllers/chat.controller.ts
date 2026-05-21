@@ -29,7 +29,6 @@ export const getMessageHistory = catchAsync(
     // الـ limit بين 20 و 50 عشان نحمي السيرفر من الطلبات الكبيرة
     const limit = parseInt(req.query.limit as string) || 30;
     const before = req.query.before as string; // cursor-based pagination
-
     const ChatModel = require("../models/chat").default;
     const chatDoc = await ChatModel.findById(chatId).select(
       "isGroup status initiatedBy users",
@@ -45,7 +44,6 @@ export const getMessageHistory = catchAsync(
         data: { messages: [] },
       });
     }
-
     const messages = await chatService.getChatMessages(
       chatId as string,
       userId,
@@ -93,6 +91,9 @@ export const accessChat = catchAsync(
   },
 );
 
+// ==========================================
+// 📋 جلب كل محادثات اليوزر
+// ==========================================
 export const respondToChatRequest = catchAsync(
   async (req: Request, res: Response, next: NextFunction) => {
     const userId = (req.user as any)._id.toString();
@@ -133,10 +134,6 @@ export const respondToChatRequest = catchAsync(
     });
   },
 );
-
-// ==========================================
-// 📋 جلب كل محادثات اليوزر
-// ==========================================
 export const getMyChats = catchAsync(
   async (req: Request, res: Response, next: NextFunction) => {
     const userId = (req.user as any)._id.toString();
@@ -435,19 +432,9 @@ export const sendMessage = catchAsync(
     const initialStatus: "sent" | "delivered" =
       recipientId && isUserOnline(recipientId) ? "delivered" : "sent";
 
-   let savedMsg;
+    let savedMsg;
     try {
-      // 1. نعمل الـ Embedding الأول (لو في محتوى نصي)
-      let messageEmbedding: number[] = [];
-    if (content) {
-        try {
-          messageEmbedding = await embeddingsModel.embedQuery(content);
-          console.log("✅ Embedding success! Length:", messageEmbedding.length); // سطر التيست ده مهم جداً
-        } catch (error) {
-          console.error("❌ Error from OpenAI Embeddings:", error);
-        }
-      }
-      // 2. بعد ما الأرقام جهزت، نحفظ الرسالة في الداتابيز
+      // createMessage persists to DB (await save) before returning
       savedMsg = await chatService.createMessage({
         chatId: id,
         senderId,
@@ -459,9 +446,8 @@ export const sendMessage = catchAsync(
         duration,
         attachments,
         status: initialStatus,
-        embedding: messageEmbedding // دلوقتي الكود شايف الأرقام صح وهيبعتها
       });
-     } catch (error) {
+    } catch (error) {
       console.error("Validation Error in sendMessage:", error);
       throw error;
     }
@@ -480,17 +466,53 @@ export const sendMessage = catchAsync(
       });
     }
 
-  await chatService.emitNewCommunityMessage(io, id, savedMsg as any);
-  
-  // ... الكود القديم بتاع الـ socket.io ...
     await chatService.emitNewCommunityMessage(io, id, savedMsg as any);
+
+    if (io) {
+      const { User } = require("../models/user");
+      const fullChat = await Chat.findById(id).select("users isGroup groupName");
+      const receiverId = fullChat && !fullChat.isGroup
+        ? (fullChat.users || []).find((uid: any) => uid.toString() !== (req.user as any)._id.toString())?.toString()
+        : null;
+
+      // Direct chat notification
+      if (receiverId) {
+        const receiverUser = await User.findById(receiverId)
+          .select('notificationSettings').lean();
+        if (receiverUser?.notificationSettings?.chatMessages !== false) {
+          io.to(receiverId).emit('notification', {
+            type: 'chat',
+            message: `New message from ${(req.user as any).fullName || 'Someone'}`,
+            senderId: (req.user as any)._id.toString(),
+            chatId: id
+          });
+        }
+      }
+
+      // Group chat notification
+      if (fullChat?.isGroup) {
+        const groupMembers = (fullChat.users || []).filter(
+          (uid: any) => uid.toString() !== (req.user as any)._id.toString()
+        );
+        for (const memberId of groupMembers) {
+          const memberUser = await User.findById(memberId)
+            .select('notificationSettings').lean();
+          if (memberUser?.notificationSettings?.communityMentions !== false) {
+            io.to(memberId.toString()).emit('notification', {
+              type: 'group',
+              message: `New message in ${fullChat.groupName || 'a group'} from ${(req.user as any).fullName || 'Someone'}`,
+              senderId: (req.user as any)._id.toString(),
+              chatId: id
+            });
+          }
+        }
+      }
+    }
 
     // 🔥 السطرين الجداد: تشغيل التغذية التلقائية في الخلفية للـ AI
     // بنجيب اسم اليوزر سواء كان متخزن في fullName أو name
     const senderName = (req.user as any).fullName || (req.user as any).name || "مستخدم في الشات";
     autoIngestSingleMessage(savedMsg, senderName);
-
-    // الرد الطبيعي لليوزر
     res.status(201).json({
       status: "success",
       data: { message: savedMsg },

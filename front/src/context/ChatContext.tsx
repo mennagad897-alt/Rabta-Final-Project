@@ -27,7 +27,7 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     // إنشاء الاتصال مع تمرير التوكن للمصادقة
     const token = localStorage.getItem("token");
-    
+
     // Use the dedicated Socket URL from environment or extract from API URL
     const socketUrl = import.meta.env.VITE_SOCKET_URL || "http://localhost:5000";
 
@@ -57,6 +57,64 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
     socketInstance.on("disconnect", () => {
       console.log("🔴 Socket Disconnected");
       setIsConnected(false);
+    });
+
+    let isPlayingSound = false;
+
+    socketInstance.on('notification', (data: {
+      type: string;
+      message: string;
+      senderId: string;
+      chatId: string
+    }) => {
+      const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+      const currentUserId = currentUser?._id || currentUser?.id;
+      if (data.senderId?.toString() === currentUserId?.toString()) return;
+
+      const token = localStorage.getItem('token');
+
+      fetch('/api/notifications/settings', {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+        .then(res => res.json())
+        .then(settings => {
+          const allowed =
+            (data.type === 'chat' && settings?.chatMessages !== false) ||
+            (data.type === 'group' && settings?.communityMentions !== false);
+
+          if (!allowed) return;
+
+          // Browser Notification
+          if (Notification.permission === 'granted') {
+            new Notification('Rabta', {
+              body: data.message,
+              icon: '/logo.png'
+            });
+          }
+          if (Notification.permission === 'default') {
+            Notification.requestPermission();
+          }
+
+          // Play sound
+          const audio = new Audio('/notification.mp3');
+          audio.volume = 0.5;
+          audio.play().catch(() => {
+            const playOnInteraction = () => {
+              audio.play().catch(() => {});
+              document.removeEventListener('click', playOnInteraction);
+            };
+            document.addEventListener('click', playOnInteraction);
+          });
+        })
+        .catch(() => {
+          // fetch failed — show and play by default
+          if (Notification.permission === 'granted') {
+            new Notification('Rabta', { body: data.message, icon: '/logo.png' });
+          }
+          const audio = new Audio('/notification.mp3');
+          audio.volume = 0.5;
+          audio.play().catch(() => {});
+        });
     });
 
     // التنظيف لما اليوزر يقفل الموقع

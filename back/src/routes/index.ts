@@ -164,6 +164,51 @@ router.get("/users/block-relation/:userId", protect, getBlockRelation);
 // Send friend request via phone number
 router.post("/users/friend-request", protect, sendFriendRequest);
 
+// PATCH /users/settings — partial update of user settings (e.g. settings.privacy.showOnline)
+router.patch(
+  "/users/settings",
+  protect,
+  catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+    const userId = (req.user as any)._id;
+    const { settings } = req.body;
+
+    if (!settings || typeof settings !== "object") {
+      return next(new AppError("A valid 'settings' object is required.", 400));
+    }
+
+    // Flatten nested settings into dot-notation keys to avoid overwriting sibling fields
+    const updateFields: Record<string, unknown> = {};
+    const flattenObject = (obj: Record<string, unknown>, prefix = "settings") => {
+      for (const key of Object.keys(obj)) {
+        const value = obj[key];
+        const fullKey = `${prefix}.${key}`;
+        if (value !== null && typeof value === "object" && !Array.isArray(value)) {
+          flattenObject(value as Record<string, unknown>, fullKey);
+        } else {
+          updateFields[fullKey] = value;
+        }
+      }
+    };
+    flattenObject(settings as Record<string, unknown>);
+
+    if (Object.keys(updateFields).length === 0) {
+      return next(new AppError("No valid settings fields provided.", 400));
+    }
+
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      { $set: updateFields },
+      { new: true, runValidators: true }
+    ).select("-password");
+
+    res.status(200).json({
+      status: "success",
+      message: "Settings updated successfully.",
+      data: { user: updatedUser },
+    });
+  })
+);
+
 // مسار عشان اليوزر يشوف بروفايل أي حد تاني — wildcard MUST come last
 router.get("/users/:id", protect, getUserProfile);
 

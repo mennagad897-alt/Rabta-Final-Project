@@ -24,7 +24,7 @@ export const HomeFeed = () => {
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const activeChatIdRef = useRef<string | null>(null);
   const [, setIsLoadingChats] = useState(true);
-  
+
   // 2. State: التحكم في النوافذ المنبثقة
   const [showNewMessage, setShowNewMessage] = useState(false);
   // Collapsible chat list (Telegram desktop style)
@@ -62,13 +62,7 @@ export const HomeFeed = () => {
       isGroup: false,
       unreadCount: chat.unreadCount || 0,
       lastMessageIsMine,
-      lastMessageStatus,
-      chatStatus: chat.status || 'accepted',
-      initiatedBy:
-        typeof chat.initiatedBy === 'object'
-          ? chat.initiatedBy?._id
-          : chat.initiatedBy,
-      isPendingRequest: chat.status === 'pending',
+      lastMessageStatus
     };
   };
 
@@ -145,22 +139,22 @@ export const HomeFeed = () => {
         const formatted = sortedMessages.map((m: { _id: string; messageType: string; content: string; createdAt: string; senderId: { _id?: string } | string; status?: MessageType['status']; duration?: number; isDeletedForEveryone?: boolean; isEdited?: boolean; isPinned?: boolean; reactions?: any[]; attachments?: any[]; replyTo?: any }) => {
           const isMine = (typeof m.senderId === 'string' ? m.senderId : m.senderId._id) === currentUser._id;
           return {
-          id: m._id,
-          type: (['text', 'audio', 'file', 'image', 'video'].includes(m.messageType) ? m.messageType : (m.content?.endsWith('.webm') ? 'audio' : 'text')) as 'text' | 'audio' | 'file' | 'image' | 'video' | 'call_summary',
-          content: m.content || m.attachments?.[0]?.fileUrl || '',
-          fileUrl: m.attachments?.[0]?.fileUrl || (['image', 'video', 'file'].includes(m.messageType) ? m.content : undefined),
-          fileName: extractFileName(m.attachments?.[0]?.fileUrl),
-          fileSize: formatFileSize(m.attachments?.[0]?.fileSize),
-          duration: m.duration,
-          isDeletedForEveryone: m.isDeletedForEveryone,
-          isEdited: m.isEdited,
-          isPinned: m.isPinned,
-          reactions: m.reactions || [],
-          replyTo: m.replyTo,
-          time: new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          isMine,
-          status: m.status || (isMine ? 'sent' : undefined),
-        };
+            id: m._id,
+            type: (['text', 'audio', 'file', 'image', 'video'].includes(m.messageType) ? m.messageType : (m.content?.endsWith('.webm') ? 'audio' : 'text')) as 'text' | 'audio' | 'file' | 'image' | 'video' | 'call_summary',
+            content: m.content || m.attachments?.[0]?.fileUrl || '',
+            fileUrl: m.attachments?.[0]?.fileUrl || (['image', 'video', 'file'].includes(m.messageType) ? m.content : undefined),
+            fileName: extractFileName(m.attachments?.[0]?.fileUrl),
+            fileSize: formatFileSize(m.attachments?.[0]?.fileSize),
+            duration: m.duration,
+            isDeletedForEveryone: m.isDeletedForEveryone,
+            isEdited: m.isEdited,
+            isPinned: m.isPinned,
+            reactions: m.reactions || [],
+            replyTo: m.replyTo,
+            time: new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            isMine,
+            status: m.status || (isMine ? 'sent' : undefined),
+          };
         });
         if (String(targetChatId) === String(activeChatId)) {
           setMessages(formatted);
@@ -213,6 +207,11 @@ export const HomeFeed = () => {
       const chatId = incoming?.chatId;
       if (!chatId) return;
       upsertChatPreview(chatId, incoming);
+      if (String(chatId) !== String(activeChatIdRef.current)) {
+        const senderName = incoming?.senderName || incoming?.sender?.fullName || 'New message';
+        const content = incoming?.content || 'Sent a message';
+        toast(`💬 ${senderName}: ${content}`, { duration: 4000 });
+      }
     };
 
     const handleStatusUpdate = (payload: { chatId: string; status: 'delivered' | 'read'; readBy?: string }) => {
@@ -253,6 +252,15 @@ export const HomeFeed = () => {
     socket.on('messages-read', handleMessagesReadPreview);
     socket.on('chatCleared', handleChatCleared);
 
+    const handleOnlineUsers = (onlineUserIds: string[]) => {
+      console.log('🟢 online-users received:', onlineUserIds);
+      setChats((prev) => prev.map((chat) => ({
+        ...chat,
+        isOnline: chat.receiverId ? onlineUserIds.includes(String(chat.receiverId)) : false,
+      })));
+    };
+    socket.on('online-users', handleOnlineUsers);
+
     return () => {
       socket.off('receive-message', handleRealtimeMessage);
       socket.off('message-status-update', handleStatusUpdate);
@@ -260,80 +268,12 @@ export const HomeFeed = () => {
       socket.off('messagesRead', handleMessagesReadPreview);
       socket.off('messages-read', handleMessagesReadPreview);
       socket.off('chatCleared', handleChatCleared);
+      socket.off('online-users', handleOnlineUsers);
     };
   }, [socket, currentUserId]);
 
-  useEffect(() => {
-    if (!socket) return;
-
-    const handleChatRequestUpdated = (payload: { chat?: { _id?: string; status?: string } }) => {
-      const chat = payload?.chat;
-      if (!chat?._id) return;
-      const formatted = formatChatFromApi(chat);
-      setChats((prev) => {
-        const exists = prev.some((c) => String(c._id) === String(chat._id));
-        if (exists) {
-          return prev.map((c) =>
-            String(c._id) === String(chat._id) ? { ...c, ...formatted } : c,
-          );
-        }
-        return [formatted, ...prev];
-      });
-    };
-
-    const handleChatRequestRejected = ({ chatId }: { chatId: string }) => {
-      setChats((prev) => prev.filter((c) => String(c._id) !== String(chatId)));
-      if (String(chatId) === String(activeChatId)) {
-        setActiveChatId(null);
-      }
-    };
-
-    socket.on('chat-request-updated', handleChatRequestUpdated);
-    socket.on('chat-request-rejected', handleChatRequestRejected);
-    return () => {
-      socket.off('chat-request-updated', handleChatRequestUpdated);
-      socket.off('chat-request-rejected', handleChatRequestRejected);
-    };
-  }, [socket, activeChatId, currentUserId]);
-
-  const handleRespondToChatRequest = async (
-    chatId: string,
-    action: 'accept' | 'reject',
-  ) => {
-    try {
-      const { data } = await axiosInstance.put(`/chats/${chatId}/request`, {
-        action,
-      });
-      if (action === 'reject') {
-        setChats((prev) => prev.filter((c) => String(c._id) !== String(chatId)));
-        setActiveChatId(null);
-        toast.success('Chat request declined');
-        return;
-      }
-      const updated = data.data?.chat;
-      if (updated) {
-        const formatted = formatChatFromApi(updated);
-        setChats((prev) =>
-          prev.map((c) =>
-            String(c._id) === String(chatId) ? { ...c, ...formatted } : c,
-          ),
-        );
-      }
-      toast.success('Chat request accepted');
-    } catch (error: unknown) {
-      const message = (error as { response?: { data?: { message?: string } } })
-        ?.response?.data?.message;
-      toast.error(message || 'Failed to update chat request');
-    }
-  };
-
   // تحديد بيانات الشات المفتوح حالياً لتمريرها كـ Props
   const activeChat = chats.find(c => c._id === activeChatId);
-  const isPendingChat = activeChat?.chatStatus === 'pending';
-  const isChatInitiator =
-    isPendingChat && String(activeChat?.initiatedBy) === String(currentUserId);
-  const isChatRecipient =
-    isPendingChat && String(activeChat?.initiatedBy) !== String(currentUserId);
 
   // New Message Search Logic
   const [phoneQuery, setPhoneQuery] = useState('');
@@ -405,11 +345,11 @@ export const HomeFeed = () => {
 
   return (
     <div className="flex w-full h-full bg-[#FAFAFA] dark:bg-[#171717] overflow-hidden relative">
-      
+
       {/* 1. قائمة المحادثات (تستقبل الـ State الدايناميك) */}
-      <ChatsList 
-        chats={chats} 
-        activeChatId={activeChatId} 
+      <ChatsList
+        chats={chats}
+        activeChatId={activeChatId}
         onSelectChat={async (id: string) => {
           setActiveChatId(id);
           // Mark as read when opened locally
@@ -435,19 +375,13 @@ export const HomeFeed = () => {
 
       {activeChatId && activeChat ? (
         <div className="flex flex-1 min-h-0 min-w-0">
-          <ChatWindow 
+          <ChatWindow
             chatId={activeChatId}
-            chatName={activeChat.name} 
+            chatName={activeChat.name}
             isOnline={activeChat.isOnline || false}
             showOnlineStatus={activeChat.showOnlineStatus !== false}
             isGroup={activeChat.isGroup || false}
             receiverId={activeChat.receiverId}
-            chatStatus={activeChat.chatStatus}
-            isChatInitiator={isChatInitiator}
-            isChatRecipient={isChatRecipient}
-            onRespondToChatRequest={(action) =>
-              void handleRespondToChatRequest(activeChatId, action)
-            }
             messages={messages}
             setMessages={setMessages}
             isChatSearchOpen={isChatSearchOpen}
@@ -456,10 +390,7 @@ export const HomeFeed = () => {
             onOpenChatList={() => setIsChatListOpen(true)}
             chats={chats}
             onOpenProfile={(userId) => {
-              setProfileUserId(userId);
-              setIsProfileOpen(true);
-              setIsChatSearchOpen(false);
-              setIsSharedMediaOpen(false);
+              navigate(`/freelancer-profile/${userId}`);
             }}
             onOpenSharedMedia={() => {
               setIsSharedMediaOpen(true);
@@ -494,67 +425,67 @@ export const HomeFeed = () => {
         <div className="fixed inset-0 z-110 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowNewMessage(false)}></div>
           <div className="bg-white dark:bg-[#262626] w-full max-w-md rounded-2xl shadow-2xl relative z-10 flex flex-col overflow-hidden">
-             <div className="flex items-center justify-between p-4 border-b border-gray-100 dark:border-gray-800">
-                <h3 className="font-bold text-lg text-[#171717] dark:text-[#F5F5F5]">New Contact</h3>
-                <button onClick={() => setShowNewMessage(false)} className="text-gray-400 hover:text-red-500 transition-colors">
-                  <span className="material-icons-round">close</span>
+            <div className="flex items-center justify-between p-4 border-b border-gray-100 dark:border-gray-800">
+              <h3 className="font-bold text-lg text-[#171717] dark:text-[#F5F5F5]">New Contact</h3>
+              <button onClick={() => setShowNewMessage(false)} className="text-gray-400 hover:text-red-500 transition-colors">
+                <span className="material-icons-round">close</span>
+              </button>
+            </div>
+            <div className="p-4">
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">Enter the phone number to find a user.</p>
+              {/* Search Input */}
+              <div className="flex gap-2 mb-4">
+                <div className="relative flex-1">
+                  <span className="material-icons-round absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">phone</span>
+                  <input
+                    type="text"
+                    placeholder="e.g. +123456789"
+                    value={phoneQuery}
+                    onChange={(e) => setPhoneQuery(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && searchContacts()}
+                    className="w-full pl-9 pr-4 py-2.5 bg-[#FAFAFA] dark:bg-[#171717] border border-gray-200 dark:border-gray-700 rounded-xl text-sm outline-none text-[#171717] dark:text-[#F5F5F5]"
+                  />
+                </div>
+                <button
+                  onClick={searchContacts}
+                  disabled={isSearchingContacts || !phoneQuery.trim()}
+                  className="bg-[#7C3AED] hover:bg-[#6D28D9] text-white px-4 py-2.5 rounded-xl text-sm font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Search
                 </button>
-             </div>
-             <div className="p-4">
-               <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">Enter the phone number to find a user.</p>
-               {/* Search Input */}
-               <div className="flex gap-2 mb-4">
-                  <div className="relative flex-1">
-                    <span className="material-icons-round absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">phone</span>
-                    <input 
-                      type="text" 
-                      placeholder="e.g. +123456789" 
-                      value={phoneQuery}
-                      onChange={(e) => setPhoneQuery(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && searchContacts()}
-                      className="w-full pl-9 pr-4 py-2.5 bg-[#FAFAFA] dark:bg-[#171717] border border-gray-200 dark:border-gray-700 rounded-xl text-sm outline-none text-[#171717] dark:text-[#F5F5F5]" 
-                    />
+              </div>
+
+              {/* Search Results */}
+              <div className="mt-6">
+                {isSearchingContacts ? (
+                  <div className="text-center py-4 text-gray-500">Searching...</div>
+                ) : foundUser ? (
+                  <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-800">
+                    {foundUser.avatar ? (
+                      <img src={foundUser.avatar} alt="" className="w-12 h-12 rounded-full object-cover shrink-0" />
+                    ) : (
+                      <div className="w-12 h-12 rounded-full bg-[#7C3AED]/10 text-[#7C3AED] flex items-center justify-center font-bold shrink-0">
+                        {foundUser.fullName[0]}
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-[#171717] dark:text-[#F5F5F5] truncate">{foundUser.fullName}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{foundUser.jobTitle || foundUser.role}</p>
+                    </div>
+                    <button
+                      onClick={() => handleStartChat(foundUser._id)}
+                      className="shrink-0 bg-[#7C3AED]/10 hover:bg-[#7C3AED]/20 text-[#7C3AED] px-3 py-1.5 rounded-lg text-sm font-bold transition-colors"
+                    >
+                      Message
+                    </button>
                   </div>
-                  <button 
-                    onClick={searchContacts}
-                    disabled={isSearchingContacts || !phoneQuery.trim()}
-                    className="bg-[#7C3AED] hover:bg-[#6D28D9] text-white px-4 py-2.5 rounded-xl text-sm font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Search
-                  </button>
-               </div>
-               
-               {/* Search Results */}
-               <div className="mt-6">
-                 {isSearchingContacts ? (
-                   <div className="text-center py-4 text-gray-500">Searching...</div>
-                 ) : foundUser ? (
-                   <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-100 dark:border-gray-800">
-                     {foundUser.avatar ? (
-                       <img src={foundUser.avatar} alt="" className="w-12 h-12 rounded-full object-cover shrink-0" />
-                     ) : (
-                       <div className="w-12 h-12 rounded-full bg-[#7C3AED]/10 text-[#7C3AED] flex items-center justify-center font-bold shrink-0">
-                         {foundUser.fullName[0]}
-                       </div>
-                     )}
-                     <div className="flex-1 min-w-0">
-                       <p className="text-sm font-bold text-[#171717] dark:text-[#F5F5F5] truncate">{foundUser.fullName}</p>
-                       <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{foundUser.jobTitle || foundUser.role}</p>
-                     </div>
-                     <button 
-                       onClick={() => handleStartChat(foundUser._id)}
-                       className="shrink-0 bg-[#7C3AED]/10 hover:bg-[#7C3AED]/20 text-[#7C3AED] px-3 py-1.5 rounded-lg text-sm font-bold transition-colors"
-                     >
-                       Message
-                     </button>
-                   </div>
-                 ) : searchAttempted ? (
-                   <div className="text-center text-sm text-red-500 dark:text-red-400 py-4 bg-red-50 dark:bg-red-500/10 rounded-xl border border-red-100 dark:border-red-500/20">
-                     User not found. Please check the phone number.
-                   </div>
-                 ) : null}
-               </div>
-             </div>
+                ) : searchAttempted ? (
+                  <div className="text-center text-sm text-red-500 dark:text-red-400 py-4 bg-red-50 dark:bg-red-500/10 rounded-xl border border-red-100 dark:border-red-500/20">
+                    User not found. Please check the phone number.
+                  </div>
+                ) : null}
+              </div>
+            </div>
           </div>
         </div>
       )}

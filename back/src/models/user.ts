@@ -67,6 +67,12 @@ export interface IUser extends Document {
       inAppSounds: boolean;
     };
   };
+  notificationSettings: {
+    chatMessages: boolean;
+    communityMentions: boolean;
+    aiJobMatches: boolean;
+    inAppSounds: boolean;
+  };
   showOnlineStatus: boolean;
   savedProjects?: mongoose.Types.ObjectId[];
   status: 'online' | 'offline' | 'busy';
@@ -220,6 +226,12 @@ const UserSchema: Schema = new Schema({
       aiJobMatches: { type: Boolean, default: true },
       inAppSounds: { type: Boolean, default: true }
     }
+  },
+  notificationSettings: {
+    chatMessages: { type: Boolean, default: true },
+    communityMentions: { type: Boolean, default: true },
+    aiJobMatches: { type: Boolean, default: true },
+    inAppSounds: { type: Boolean, default: true }
   },
   showOnlineStatus: { type: Boolean, default: true },
   savedProjects: [{ type: Schema.Types.ObjectId, ref: 'Job' }],

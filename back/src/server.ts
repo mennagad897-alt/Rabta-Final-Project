@@ -162,7 +162,13 @@ io.on('connection', (socket) => {
     try {
       const { User } = require('./models/user');
       const activeIds = Array.from(activeUsers.keys());
-      const users = await User.find({ _id: { $in: activeIds }, showOnlineStatus: { $ne: false } }).select('_id');
+      const users = await User.find({
+        _id: { $in: activeIds },
+        $or: [
+          { 'settings.privacy.showOnline': true },
+          { 'settings.privacy.showOnline': { $exists: false } }
+        ]
+      }).select('_id');
       const visibleOnlineUsers = users.map((u: any) => u._id.toString());
       io.emit('online-users', visibleOnlineUsers);
     } catch (err) {
@@ -229,15 +235,18 @@ io.on('connection', (socket) => {
   // 💬 إرسال واستقبال الرسائل (Chat Events)
   // ==========================================
   socket.on('send-message', async (data: { chatId: string, content: string, messageType?: string, tempId?: string, replyTo?: string }) => {
+      console.log('🚀 send-message received:', data.chatId);  // ← ضيفي ده
     try {
       const blockStatus = await chatService.checkDirectChatBlockStatus(authenticatedUserId, data.chatId);
+          console.log('🚫 blockStatus:', blockStatus);  // ← وده
+
       if (blockStatus.senderBlockedOther || blockStatus.receiverBlockedSender) {
         socket.emit('blocked', { message: 'You cannot send messages to this user.' });
         return;
       }
 
-      const ChatModel = require('./models/chat').default;
-      const chat = await ChatModel.findById(data.chatId).select('users isGroup');
+   const ChatModel = require('./models/chat').default;
+      const chat = await ChatModel.findById(data.chatId).select('users isGroup name');
 
       // Set delivered instantly when the other participant is online
       let initialStatus: 'sent' | 'delivered' = 'sent';
@@ -267,6 +276,55 @@ io.on('connection', (socket) => {
       // بنبعت الرسالة لكل اللي في الـ room (الشات) - سواء فردي أو جماعي
       io.to(data.chatId).emit('receiveMessage', messageToEmit);
       io.to(data.chatId).emit('receive-message', messageToEmit);
+
+      // Notify for direct chat
+      const receiverId = chat && !chat.isGroup 
+        ? (chat.users || []).find((id: any) => id.toString() !== authenticatedUserId)?.toString() 
+        : null;
+
+      console.log('📨 receiverId:', receiverId);
+      console.log('💬 chat.isGroup:', chat?.isGroup);
+
+      if (receiverId) {
+        const receiverUser = await User.findById(receiverId)
+          .select('notificationSettings')
+          .lean();
+        console.log('🔔 receiver notificationSettings:', receiverUser?.notificationSettings);
+        if (receiverUser?.notificationSettings?.chatMessages !== false) {
+          const senderName = (socket as any).user?.fullName || 'Someone';
+          console.log('✅ Emitting notification to:', receiverId);
+          io.to(receiverId).emit('notification', {
+            type: 'chat',
+            message: `New message from ${senderName}`,
+            senderId: authenticatedUserId,
+            chatId: data.chatId
+          });
+        }
+      }
+
+      // Notify group members who are NOT the sender
+      if (chat?.isGroup) {
+        const groupMembers = (chat.users || []).filter(
+          (id: any) => id.toString() !== authenticatedUserId
+        );
+        console.log('👥 group members to notify:', groupMembers);
+        
+        for (const memberId of groupMembers) {
+          const memberUser = await User.findById(memberId)
+            .select('notificationSettings')
+            .lean();
+          if (memberUser?.notificationSettings?.communityMentions !== false) {
+            const senderName = (socket as any).user?.fullName || 'Someone';
+            console.log('✅ Emitting group notification to:', memberId.toString());
+            io.to(memberId.toString()).emit('notification', {
+              type: 'group',
+              message: `New message in ${chat.name || 'a group'} from ${senderName}`,
+              senderId: authenticatedUserId,
+              chatId: data.chatId
+            });
+          }
+        }
+      }
       
       if (initialStatus === 'delivered') {
         io.to(authenticatedUserId).emit('messageDelivered', {
@@ -703,6 +761,21 @@ io.on('connection', (socket) => {
     socket.to(data.groupId).emit('user-left-group', socket.id);
   });
 
+  // ==========================================
+  // 👁️ تحديث مرئية الأونلاين (Online Visibility Toggle)
+  // ==========================================
+  socket.on('update-online-visibility', async (data: { visible: boolean }) => {
+    try {
+      await User.findByIdAndUpdate(authenticatedUserId, {
+        'settings.privacy.showOnline': data.visible
+      });
+      broadcastActiveUsers();
+      console.log(`👁️ User [${authenticatedUserId}] set online visibility to: ${data.visible}`);
+    } catch (err) {
+      console.error('Error updating online visibility:', err);
+    }
+  });
+
   socket.on('disconnect', () => {
     console.log(`🔴 Line disconnected: ${socket.id}`);
     const disconnectedUserId = removeUserSocket(socket.id);
@@ -750,8 +823,11 @@ app.get('/test', (req: Request, res: Response) => {
   res.send('Server is running');
 });
 
+import notificationRouter from './routes/notification.routes';
+
 app.use(`${BASE_URL}/auth`, authRoutes);
 app.use(BASE_URL, apiRoutes);
+app.use('/api/notifications', notificationRouter);
 
 // ==========================================
 // 🚨 حراس معالجة الأخطاء (Global Error Handlers)

@@ -3,12 +3,13 @@ import { useAppSelector, useAppDispatch } from '../store/hooks';
 import { useNavigate, Link } from 'react-router-dom';
 import { fetchMyProfile } from '../api/auth';
 import { updateProfile } from '../store/slices/authSlice';
+import { useOnlineUsers } from '../hooks/useOnlineUsers';
 
 const Profile: React.FC = () => {
   const user = useAppSelector((state) => state.auth.user);
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(true);
+  const { isOnline } = useOnlineUsers();
 
   useEffect(() => {
     const loadProfile = async () => {
@@ -17,8 +18,6 @@ const Profile: React.FC = () => {
         dispatch(updateProfile(freshUser));
       } catch (error) {
         console.error('Failed to fetch fresh profile data', error);
-      } finally {
-        setLoading(false);
       }
     };
     loadProfile();
@@ -57,11 +56,16 @@ const Profile: React.FC = () => {
             
             {/* Card 1: User Info */}
             <div className="bg-[#FFFFFF] dark:bg-[#1E1E22] rounded-xl p-6 shadow-lg border border-gray-100 dark:border-zinc-800 text-center">
-              <div className="w-32 h-32 bg-[#7C3AED] rounded-full flex items-center justify-center text-white text-4xl font-black shadow-lg mx-auto mb-6 overflow-hidden">
-                {user?.avatar ? (
-                  <img src={user.avatar} alt="Avatar" className="w-full h-full object-cover" />
-                ) : (
-                  getInitials(user?.fullName || "")
+              <div className="relative w-32 h-32 mx-auto mb-6">
+                <div className="w-full h-full bg-[#7C3AED] rounded-full flex items-center justify-center text-white text-4xl font-black shadow-lg overflow-hidden">
+                  {user?.avatar ? (
+                    <img src={user.avatar} alt="Avatar" className="w-full h-full object-cover" />
+                  ) : (
+                    getInitials(user?.fullName || "")
+                  )}
+                </div>
+                {user && isOnline(user._id || user.id) && (
+                  <span className="w-4 h-4 bg-green-400 rounded-full absolute bottom-1 right-1 ring-2 ring-white dark:ring-[#1E1E22] animate-pulse"></span>
                 )}
               </div>
               <h2 className="text-2xl font-bold mb-1">{user?.fullName || 'User Name'}</h2>
