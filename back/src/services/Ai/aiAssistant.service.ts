@@ -1,21 +1,22 @@
+import dotenv from 'dotenv';
+// 👈 استدعاءات متطابقة مع ستايل يوسف في rag.js بالظبط
+import { HumanMessage, SystemMessage } from 'langchain';
 import { MemorySaver, StateGraph, MessagesAnnotation } from "@langchain/langgraph";
-import { SystemMessage, HumanMessage } from "@langchain/core/messages";
+
+// استدعاء ملف الـ Prompts والمحرك الأساسي
 import { AI_ASSISTANT_PROMPTS } from "../Ai/prompts.ai"; 
+import { llm } from "./core.ai.service"; 
 
-// 👈 هنا بنعمل Import للمحرك الجاهز من الفايل بتاعكم (عدلي المسار حسب مكان الفايل)
-import { llm } from "../Ai/core.ai.service"; 
+dotenv.config(); // زي ما يوسف عامل بالظبط
 
-// تهيئة الذاكرة للـ LangGraph
+// 1. تهيئة الذاكرة 
 const memory = new MemorySaver();
 
-// بناء مسار المحادثة (الـ Graph) باستخدام الـ llm المركزي الجاهز
-
+// 2. بناء مسار المحادثة (الـ Graph) 
 export const getAssistantGraph = async () => {
   const workflow = new StateGraph(MessagesAnnotation)
     .addNode("agent", async (state) => {
-      // 👈 بنستنى الموديل يجهز الأول
       const resolvedLlm = await llm; 
-      // 👈 وبعدين نستخدمه
       const response = await resolvedLlm.invoke(state.messages); 
       return { messages: [response] };
     })
@@ -28,7 +29,6 @@ export const getAssistantGraph = async () => {
 // 🚀 الدوال الأساسية (Endpoints Logic)
 // ==========================================
 
-// 1. دالة الإجابة على الأسئلة مع حفظ السياق (Q&A)
 export const answerWithContext = async (threadId: string, question: string) => {
   const graph = await getAssistantGraph();
   const config = { configurable: { thread_id: threadId } };
@@ -41,14 +41,29 @@ export const answerWithContext = async (threadId: string, question: string) => {
   return state.messages[state.messages.length - 1].content;
 };
 
-// 2. دالة التلخيص (Summarize)
 export const summarizeMessages = async (messagesText: string) => {
   const systemPrompt = new SystemMessage(AI_ASSISTANT_PROMPTS.SUMMARIZE_SYSTEM);
   const userPrompt = new HumanMessage(AI_ASSISTANT_PROMPTS.SUMMARIZE_USER(messagesText));
   
-  // 👈 بنستنى الموديل يجهز الأول
   const resolvedLlm = await llm; 
-  // 👈 وبعدين نبعتله الرسايل
+  const response = await resolvedLlm.invoke([systemPrompt, userPrompt]); 
+  return response.content;
+};
+
+export const generateSmartReplies = async (messagesText: string) => {
+  const systemPrompt = new SystemMessage(AI_ASSISTANT_PROMPTS.GENERATE_REPLY_SYSTEM);
+  const userPrompt = new HumanMessage(`Conversation Context:\n${messagesText}`);
+  
+  const resolvedLlm = await llm; 
+  const response = await resolvedLlm.invoke([systemPrompt, userPrompt]); 
+  return response.content; 
+};
+
+export const translateMessage = async (text: string, targetLang: string) => {
+  const systemPrompt = new SystemMessage(AI_ASSISTANT_PROMPTS.TRANSLATE_SYSTEM(targetLang));
+  const userPrompt = new HumanMessage(`Text to translate:\n${text}`);
+  
+  const resolvedLlm = await llm; 
   const response = await resolvedLlm.invoke([systemPrompt, userPrompt]); 
   return response.content;
 };

@@ -8,7 +8,6 @@ const Profile: React.FC = () => {
   const user = useAppSelector((state) => state.auth.user);
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
-  const [isAiOpen, setIsAiOpen] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -180,31 +179,6 @@ const Profile: React.FC = () => {
         </div>
       </main>
 
-      {/* --- AI Floating Button --- */}
-      <div className="fixed bottom-6 right-6 flex flex-col items-end gap-4 z-50">
-        {isAiOpen && (
-          <div className="w-80 bg-white dark:bg-[#262626] rounded-2xl shadow-2xl border border-gray-100 dark:border-white/5 overflow-hidden flex flex-col animate-in slide-in-from-bottom-5 duration-300">
-            <div className="bg-[#7C3AED] dark:bg-[#8B5CF6] p-4 text-white flex justify-between items-center">
-              <div className="flex items-center gap-2">
-                <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
-                <span className="font-bold text-sm">Rabta AI</span>
-              </div>
-              <button onClick={() => setIsAiOpen(false)} className="hover:bg-white/20 p-1 rounded-lg transition-colors">
-                <span className="material-icons-round text-sm">close</span>
-              </button>
-            </div>
-            <div className="h-48 bg-[#FAFAFA] dark:bg-[#171717] p-4 text-sm text-gray-500 dark:text-[#F5F5F5]/50 italic overflow-y-auto">
-              How can I help you today?
-            </div>
-            <div className="p-4 bg-white dark:bg-[#262626] border-t border-gray-100 dark:border-white/10">
-              <input type="text" placeholder="Ask AI anything..." className="w-full text-sm p-2.5 rounded-xl bg-gray-50 dark:bg-[#171717] outline-none" />
-            </div>
-          </div>
-        )}
-        <button onClick={() => setIsAiOpen(!isAiOpen)} className="w-12 h-12 bg-[#7C3AED] dark:bg-[#8B5CF6] rounded-full flex items-center justify-center text-white shadow-xl">
-          <span className="material-icons-round">bolt</span>
-        </button>
-      </div>
     </div>
   );
 };

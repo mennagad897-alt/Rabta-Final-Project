@@ -128,7 +128,7 @@ export const applyToJob = catchAsync(async (req: Request, res: Response, next: N
   const attachments: { fileUrl: string; fileType: string; fileSize?: number }[] = [];
   if (req.file) {
     attachments.push({
-      fileUrl: `/uploads/documents/${req.file.filename}`,
+      fileUrl: req.file.path,
       fileType: req.file.mimetype,
       fileSize: req.file.size
     });

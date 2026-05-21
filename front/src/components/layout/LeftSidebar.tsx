@@ -1,7 +1,7 @@
 import React from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useSelector } from "react-redux";
-import { useChat } from "../../context/ChatContext"; 
+import { useChat } from "../../context/ChatContext";
 import type { RootState } from "../../store/store";
 
 interface NavItem {
@@ -10,10 +10,15 @@ interface NavItem {
   label: string;
 }
 
-const LeftSidebar: React.FC = () => {
+interface LeftSidebarProps {
+  onToggleAi?: () => void;
+  isAiOpen?: boolean;
+}
+
+const LeftSidebar: React.FC<LeftSidebarProps> = ({ onToggleAi, isAiOpen }) => {
   const location = useLocation();
   const { user } = useSelector((state: RootState) => state.auth);
-  
+
   // 1. استدعاء حالة الاتصال بالـ Socket من الـ Context
   const { isConnected } = useChat();
 
@@ -45,7 +50,7 @@ const LeftSidebar: React.FC = () => {
   return (
     // 1. الكلاسات الأساسية للسايد بار
     <aside className="w-16 h-screen flex flex-col items-center py-6 bg-white dark:bg-[#171717] border-r border-gray-100 dark:border-white/5 shrink-0 transition-colors duration-300 z-20 overflow-y-auto hide-scrollbar">
-      
+
       {/* 2. اللوجو الرئيسي (hub) + لمبة البيان */}
       <div className="mb-8 relative">
         <Link
@@ -54,12 +59,11 @@ const LeftSidebar: React.FC = () => {
         >
           <span className="material-icons-round text-[26px]">hub</span>
         </Link>
-        
+
         {/* لمبة بيان حالة الـ Socket (نقطة أعلى يمين اللوجو) */}
         <span
-          className={`absolute -top-1 -right-1 w-3 h-3 rounded-full border-2 border-white dark:border-[#171717] transition-colors duration-300 ${
-            isConnected ? "bg-green-500 shadow-[0_0_8px_#22c55e]" : "bg-red-500"
-          }`}
+          className={`absolute -top-1 -right-1 w-3 h-3 rounded-full border-2 border-white dark:border-[#171717] transition-colors duration-300 ${isConnected ? "bg-green-500 shadow-[0_0_8px_#22c55e]" : "bg-red-500"
+            }`}
           title={isConnected ? "Connected to Server" : "Disconnected"}
         ></span>
       </div>
@@ -71,11 +75,10 @@ const LeftSidebar: React.FC = () => {
             key={item.path}
             to={item.path}
             title={item.label}
-            className={`w-11 h-11 flex items-center justify-center rounded-2xl transition-all ${
-              isActive(item.path)
+            className={`w-11 h-11 flex items-center justify-center rounded-2xl transition-all ${isActive(item.path)
                 ? "bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400"
                 : "text-gray-400 hover:text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/10"
-            }`}
+              }`}
           >
             <span className="material-icons-round text-[24px]">
               {item.icon}
@@ -86,15 +89,26 @@ const LeftSidebar: React.FC = () => {
 
       {/* 4. الجزء السفلي (الاعدادات والبروفايل) */}
       <div className="flex flex-col items-center gap-6 mt-auto pb-4">
+        {/* زر المساعد الذكي العالمي */}
+        <button
+          onClick={onToggleAi}
+          title="Rabta AI Guide"
+          className={`w-11 h-11 flex items-center justify-center rounded-2xl transition-all cursor-pointer ${isAiOpen
+              ? "bg-purple-600 text-white shadow-md shadow-purple-500/20"
+              : "text-gray-400 hover:text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/10"
+            }`}
+        >
+          <span className="material-icons-round text-[24px]">bolt</span>
+        </button>
+
         {/* رابط الإعدادات - زرار الـ Dark Mode هيكون جوا صفحة الـ Settings نفسها */}
         <Link
           to="/settings"
           title="Settings"
-          className={`w-11 h-11 flex items-center justify-center rounded-2xl transition-all ${
-            isActive("/settings")
+          className={`w-11 h-11 flex items-center justify-center rounded-2xl transition-all ${isActive("/settings")
               ? "bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400"
               : "text-gray-400 hover:text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/10"
-          }`}
+            }`}
         >
           <span className="material-icons-round text-[24px]">settings</span>
         </Link>

@@ -10,6 +10,29 @@ import { GroupDetails } from './GroupDetails';
 import { CameraModal } from './CameraModal';
 import { useCall } from '../../context/CallContext';
 import { ForwardMessageModal } from './ForwardMessageModal';
+import { resolveChatMediaUrl } from './ProfileSidePanel';
+
+export function formatFileSize(bytes?: number): string | undefined {
+  if (bytes === undefined || bytes === null) return undefined;
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1048576) return `${(bytes / 1024).toFixed(2)} KB`;
+  return `${(bytes / 1048576).toFixed(2)} MB`;
+}
+
+export function extractFileName(url?: string): string {
+  if (!url) return 'Attachment';
+  const decoded = decodeURIComponent(url);
+  const baseName = decoded.substring(decoded.lastIndexOf('/') + 1);
+  return baseName.replace(/^\d+-/, ''); // Remove unique prefix
+}
+
+export function getDownloadUrl(url?: string): string {
+  if (!url) return '#';
+  if (url.includes('res.cloudinary.com') && url.includes('/upload/')) {
+    return url.replace('/upload/', '/upload/fl_attachment/');
+  }
+  return url;
+}
 
 export type MessageType = {
   id: string;
@@ -123,15 +146,103 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const activeChatId = chatId;
   const [showUserDetails, setShowUserDetails] = useState(false);
   const [showAiPopup, setShowAiPopup] = useState(false);
+
+  // Chat-Specific AI Assistant States
+  const [aiTab, setAiTab] = useState<'summarize' | 'search'>('summarize');
+  const [summaryLimit, setSummaryLimit] = useState<number | string>(10);
+  const [summarizing, setSummarizing] = useState(false);
+  const [summaryResult, setSummaryResult] = useState<string>('');
+  const [summaryError, setSummaryError] = useState<string>('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searching, setSearching] = useState(false);
+  const [searchResult, setSearchResult] = useState<string>('');
+  const [searchFallback, setSearchFallback] = useState(false);
+
+  // Reset AI states when chatId changes
+  useEffect(() => {
+    setShowAiPopup(false);
+    setSummaryResult('');
+    setSummaryError('');
+    setSearchQuery('');
+    setSearchResult('');
+    setSearchFallback(false);
+    setSmartReplies([]);
+    setTranslatedMessages({});
+    setTranslatingMessageId(null);
+  }, [chatId]);
+
+  const handleSummarizeChat = async () => {
+    setSummarizing(true);
+    setSummaryResult('');
+    setSummaryError('');
+    try {
+      const limitVal = summaryLimit === 'All' ? 999999 : Number(summaryLimit);
+      const res = await axiosInstance.post('/api/ai/chat/summarize', {
+        chatId,
+        limit: limitVal,
+      }, {
+        timeout: 60000,
+      });
+      const dataStr = res.data?.data || '';
+      
+      if (typeof dataStr === 'string' && (dataStr.includes("لا توجد رسائل كافية") || dataStr.includes("لا توجد رسائل كافية لتلخيصها"))) {
+        setSummaryError("Cannot summarize: The messages might have been deleted or there are not enough messages in this chat.");
+      } else {
+        setSummaryResult(dataStr);
+      }
+    } catch (err: any) {
+      console.error(err);
+      const errMsg = err.response?.data?.message || err.message || "Failed to summarize chat.";
+      setSummaryError(errMsg);
+    } finally {
+      setSummarizing(false);
+    }
+  };
+
+  const handleSmartSearch = async () => {
+    const trimmed = searchQuery.trim();
+    if (!trimmed) return;
+    setSearching(true);
+    setSearchResult('');
+    setSearchFallback(false);
+    try {
+      const res = await axiosInstance.post(`/api/ai/smart-search/${chatId}`, {
+        query: trimmed,
+        chatId,
+      }, {
+        timeout: 60000,
+      });
+      const dataStr = res.data?.data || '';
+      setSearchResult(dataStr);
+
+      // Check if fallback response detected
+      const isFallback = [
+        "عذراً، لا أمتلك",
+        "لا أمتلك معلومات كافية",
+        "No relevant messages found",
+        "don't have information",
+        "cannot find this information"
+      ].some(phrase => dataStr.toLowerCase().includes(phrase.toLowerCase()));
+      
+      if (isFallback) {
+        setSearchFallback(true);
+      }
+    } catch (err: any) {
+      console.error(err);
+      const errMsg = err.response?.data?.message || err.message || "Search failed.";
+      setSearchResult(`⚠️ ${errMsg}`);
+    } finally {
+      setSearching(false);
+    }
+  };
+
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showCreatePost, setShowCreatePost] = useState(false);
   const [inputText, setInputText] = useState('');
   const [activeSidePanel, setActiveSidePanel] = useState<'details' | 'search' | null>(null);
   const [showDetails, setShowDetails] = useState(false);
-  const [activeTab, setActiveTab] = useState<'Members' | 'Media' | 'Posts'>('Members');
   const [isMuted, setIsMuted] = useState(false);
   
-  const [isPaused, setIsPaused] = useState(false);
   const [showGroupPostModal, setShowGroupPostModal] = useState(false);
   const [showEditGroupModal, setShowEditGroupModal] = useState(false);
   const [showAddMemberModal, setShowAddMemberModal] = useState(false);
@@ -150,7 +261,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState('');
   const [replyingTo, setReplyingTo] = useState<MessageType | null>(null);
-  const [showForwardModal, setShowForwardModal] = useState<MessageType | null>(null);
   const [showReactionPicker, setShowReactionPicker] = useState(false);
   const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
   const [showCameraModal, setShowCameraModal] = useState(false);
@@ -159,6 +269,12 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const [showHeaderMenu, setShowHeaderMenu] = useState(false);
   const [blockedByMe, setBlockedByMe] = useState(false);
   const [blockedMe, setBlockedMe] = useState(false);
+  
+  // Smart Replies & Inline Translation States
+  const [smartReplies, setSmartReplies] = useState<string[]>([]);
+  const [loadingReplies, setLoadingReplies] = useState(false);
+  const [translatedMessages, setTranslatedMessages] = useState<Record<string, { translatedText: string; originalText: string }>>({});
+  const [translatingMessageId, setTranslatingMessageId] = useState<string | null>(null);
   const [chatSearchQuery, setChatSearchQuery] = useState('');
   const navigate = useNavigate();
   const { socket } = useChat();
@@ -391,10 +507,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       const formatted: MessageType = {
         id: incomingMsg._id || incomingMsg.id || `socket-${Date.now()}`,
         type: ['text', 'audio', 'file', 'image', 'video', 'call_summary'].includes(resolvedType) ? resolvedType as MessageType['type'] : 'text',
-        content: resolvedContent,
+        content: resolvedContent || incomingMsg.attachments?.[0]?.fileUrl || '',
         fileUrl: incomingMsg.attachments?.[0]?.fileUrl || (['image', 'video', 'file'].includes(resolvedType) ? resolvedContent : undefined),
-        fileName: incomingMsg.attachments?.[0]?.fileType || 'Attachment',
-        fileSize: incomingMsg.attachments?.[0]?.fileSize ? (incomingMsg.attachments[0].fileSize / 1024 / 1024).toFixed(2) + ' MB' : undefined,
+        fileName: extractFileName(incomingMsg.attachments?.[0]?.fileUrl),
+        fileSize: formatFileSize(incomingMsg.attachments?.[0]?.fileSize),
         time: new Date(createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         isMine: false,
         status: 'delivered',
@@ -694,10 +810,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         const newMsg: MessageType = {
           id: newMsgData._id,
           type: newMsgData.messageType || 'text',
-          content: newMsgData.content,
+          content: newMsgData.content || newMsgData.attachments?.[0]?.fileUrl || '',
           fileUrl: newMsgData.attachments?.[0]?.fileUrl || newMsgData.audioUrl,
-          fileName: newMsgData.attachments?.[0]?.fileType,
-          fileSize: newMsgData.attachments?.[0]?.fileSize?.toString(),
+          fileName: extractFileName(newMsgData.attachments?.[0]?.fileUrl),
+          fileSize: formatFileSize(newMsgData.attachments?.[0]?.fileSize),
           time: new Date(newMsgData.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           isMine: true,
           status: 'sent',
@@ -710,6 +826,110 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     } catch (error: any) {
       console.error('Error forwarding message:', error.response?.data || error.message);
       toast.error('Failed to forward message');
+    }
+  };
+
+  const handleGenerateSmartReplies = async () => {
+    setLoadingReplies(true);
+    setSmartReplies([]);
+    try {
+      const res = await axiosInstance.post('/api/ai/chat/generate-reply', { chatId }, { timeout: 60000 });
+      if (res.data?.status === 'success' && Array.isArray(res.data?.data)) {
+        setSmartReplies(res.data.data);
+      } else {
+        toast.error("Could not generate replies. Please try again.");
+      }
+    } catch (err: any) {
+      console.error("Error generating smart replies:", err);
+      toast.error(err.response?.data?.message || "Failed to generate smart replies.");
+    } finally {
+      setLoadingReplies(false);
+      setActiveMessageMenu(null);
+    }
+  };
+
+  const handleSendSmartReplyText = async (text: string) => {
+    if (cannotReply) {
+      toast.error(blockedByMe ? 'You blocked this user.' : 'You cannot reply to this conversation.');
+      return;
+    }
+    const tempId = `temp-${Date.now()}`;
+    const newMsg: MessageType = {
+      id: tempId,
+      type: 'text',
+      content: text,
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      isMine: true,
+      isPending: true,
+      status: 'sending',
+    };
+
+    if (setMessages) {
+      setMessages(prev => [...prev, newMsg]);
+    }
+
+    try {
+      const response = await axiosInstance.post(`/chats/${chatId}/send`, {
+        content: text,
+        type: 'text',
+      });
+
+      const saved = response.data.data.message;
+      if (setMessages) {
+        setMessages(prev => prev.map(m => m.id === tempId ? {
+          id: saved._id,
+          type: 'text',
+          content: saved.content,
+          time: new Date(saved.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          isMine: true,
+          isPending: false,
+          status: saved.status || 'sent',
+        } : m));
+      }
+
+      if (socket) {
+        socket.emit('send_message', {
+          chatId,
+          content: saved.content,
+          messageType: 'text',
+          _id: saved._id,
+          createdAt: saved.createdAt,
+          senderId: saved.senderId,
+        });
+      }
+    } catch (error: any) {
+      console.log('Smart Reply Send Error:', error?.response?.data || error);
+      toast.error("Failed to send smart reply");
+      if (setMessages) {
+        setMessages(prev => prev.filter(m => m.id !== tempId));
+      }
+    }
+  };
+
+  const handleTranslateMessage = async (msg: MessageType) => {
+    if (!msg.content) return;
+    setTranslatingMessageId(msg.id);
+    setActiveMessageMenu(null);
+    try {
+      const isArabic = /[\u0600-\u06FF]/.test(msg.content);
+      const targetLang = isArabic ? 'en' : 'ar';
+      const res = await axiosInstance.post('/api/ai/chat/translate', { text: msg.content, targetLang }, { timeout: 60000 });
+      if (res.data?.status === 'success' && res.data?.data) {
+        setTranslatedMessages(prev => ({
+          ...prev,
+          [msg.id]: {
+            translatedText: res.data.data,
+            originalText: msg.content || ''
+          }
+        }));
+      } else {
+        toast.error("Failed to translate message.");
+      }
+    } catch (err: any) {
+      console.error("Error translating message:", err);
+      toast.error(err.response?.data?.message || "Failed to translate message.");
+    } finally {
+      setTranslatingMessageId(null);
     }
   };
 
@@ -759,10 +979,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       const formatted: MessageType = {
         id: saved._id,
         type: saved.messageType as any || 'file',
-        content: saved.content,
-        fileUrl: saved.content,
+        content: saved.content || saved.attachments?.[0]?.fileUrl || '',
+        fileUrl: saved.attachments?.[0]?.fileUrl || saved.content || '',
         fileName: file.name,
-        fileSize: (file.size / 1024 / 1024).toFixed(2) + ' MB',
+        fileSize: formatFileSize(file.size),
         time: new Date(saved.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         isMine: true,
         status: saved.status || 'sent',
@@ -803,15 +1023,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     } catch (error: unknown) {
       toast.error("Call failed to initiate");
     }
-  };
-
-  const cancelRecording = () => {
-    setShowAiPopup(false);
-    toast.success("Recording cancelled");
-  };
-
-  const togglePauseResume = () => {
-    setIsPaused(prev => !prev);
   };
 
   const handleAddUserToGroup = async (userId: string) => {
@@ -1158,7 +1369,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                                 
                                 if (isImage) {
                                   const rawUrl = msg.replyTo.attachments?.[0]?.fileUrl || (fileContent.match(/\.(jpeg|jpg|gif|png|webp)$/i) ? fileContent : null);
-                                  const fullUrl = rawUrl ? (rawUrl.startsWith('http') ? rawUrl : `${import.meta.env.VITE_API_URL?.replace('/api/v1', '') || 'http://localhost:5000'}${rawUrl}`) : '';
+                                  const fullUrl = resolveChatMediaUrl(rawUrl || undefined);
                                   return (
                                     <div className="flex items-center gap-2 mt-1">
                                       {fullUrl && (
@@ -1185,7 +1396,36 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                             </div>
                           </div>
                         )}
-                        <p className="text-sm leading-relaxed">{msg.content}</p>
+                        {translatingMessageId === msg.id ? (
+                          <div className="flex items-center gap-2 text-xs py-1 opacity-75">
+                            <svg className="animate-spin h-3.5 w-3.5 text-current" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                            </svg>
+                            <span className="italic">Translating...</span>
+                          </div>
+                        ) : translatedMessages[msg.id] ? (
+                          <div className="space-y-1">
+                            <p className="text-xs opacity-75 flex items-center gap-1 font-medium">
+                              <span className="material-icons-round text-[10px]">g_translate</span> Translated
+                            </p>
+                            <p className="text-sm leading-relaxed">{translatedMessages[msg.id].translatedText}</p>
+                            <button
+                              onClick={() => {
+                                setTranslatedMessages(prev => {
+                                  const copy = { ...prev };
+                                  delete copy[msg.id];
+                                  return copy;
+                                });
+                              }}
+                              className="text-[10px] underline block hover:opacity-80 transition-opacity mt-1"
+                            >
+                              Show Original / عرض الأصلي
+                            </button>
+                          </div>
+                        ) : (
+                          <p className="text-sm leading-relaxed">{msg.content}</p>
+                        )}
                       </>
                     )}
                     <div className={`flex justify-end items-center gap-1 mt-1 ${msg.isMine ? 'text-white/80' : 'text-gray-400'}`}>
@@ -1217,7 +1457,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                             
                             if (isImage) {
                               const rawUrl = msg.replyTo.attachments?.[0]?.fileUrl || (fileContent.match(/\.(jpeg|jpg|gif|png|webp)$/i) ? fileContent : null);
-                              const fullUrl = rawUrl ? (rawUrl.startsWith('http') ? rawUrl : `${import.meta.env.VITE_API_URL?.replace('/api/v1', '') || 'http://localhost:5000'}${rawUrl}`) : '';
+                              const fullUrl = resolveChatMediaUrl(rawUrl || undefined);
                               return (
                                 <div className="flex items-center gap-2 mt-1">
                                   {fullUrl && (
@@ -1246,18 +1486,30 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                     )}
                     {msg.type === 'audio' ? (
                       <div className="flex flex-col">
-                        <audio controls controlsList="nodownload noplaybackrate" src={`${import.meta.env.VITE_API_URL?.replace('/api/v1', '') || 'http://localhost:5000'}${msg?.content || msg?.fileUrl}`} className="max-w-[200px] h-10 mb-1 [&::-webkit-media-controls-enclosure]:rounded-md [&::-webkit-media-controls-panel]:bg-gray-100 dark:[&::-webkit-media-controls-panel]:bg-gray-800 [&::-webkit-media-controls-overflow-button]:hidden" />
+                        <audio controls controlsList="nodownload noplaybackrate" src={resolveChatMediaUrl(msg?.content || msg?.fileUrl || undefined)} className="max-w-[200px] h-10 mb-1 [&::-webkit-media-controls-enclosure]:rounded-md [&::-webkit-media-controls-panel]:bg-gray-100 dark:[&::-webkit-media-controls-panel]:bg-gray-800 [&::-webkit-media-controls-overflow-button]:hidden" />
                         {msg.duration !== undefined && <span className="text-[10px] text-gray-400 text-right">{Math.floor(msg.duration / 60)}:{(msg.duration % 60).toString().padStart(2, '0')}</span>}
                       </div>
                     ) : (
                       (() => {
                         const fileUrl = msg?.fileUrl || msg?.content;
-                        const fullUrl = fileUrl ? `${import.meta.env.VITE_API_URL?.replace('/api/v1', '') || 'http://localhost:5000'}${fileUrl}` : '#';
+                        const fullUrl = resolveChatMediaUrl(fileUrl || undefined) || '#';
                         const isImage = msg?.fileName?.match(/\.(jpeg|jpg|gif|png|webp)$/i) || fileUrl?.match(/\.(jpeg|jpg|gif|png|webp)$/i);
                         
                         return (
                           <div 
-                            onClick={() => setViewingFile({ url: fullUrl, type: isImage ? 'image' : 'document' })}
+                            onClick={() => {
+                              if (isImage) {
+                                setViewingFile({ url: fullUrl, type: 'image' });
+                              } else {
+                                const downloadUrl = getDownloadUrl(fullUrl);
+                                const link = document.createElement('a');
+                                link.href = downloadUrl;
+                                link.setAttribute('download', msg?.fileName || 'Attachment');
+                                document.body.appendChild(link);
+                                link.click();
+                                document.body.removeChild(link);
+                              }
+                            }}
                             className="block rounded-lg overflow-hidden mb-2 hover:opacity-90 transition-opacity cursor-pointer"
                           >
                             {isImage ? (
@@ -1326,6 +1578,16 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                         <button onClick={() => handlePin(msg.id)} className="w-full text-left px-4 py-2 hover:bg-gray-50 dark:hover:bg-[#171717] text-[#171717] dark:text-[#F5F5F5] flex items-center gap-2">
                           <span className="material-icons-round text-[18px]">push_pin</span> {msg.isPinned ? 'Unpin' : 'Pin'}
                         </button>
+                        {msg.type === 'text' && (
+                          <button onClick={() => handleTranslateMessage(msg)} className="w-full text-left px-4 py-2 hover:bg-gray-50 dark:hover:bg-[#171717] text-[#171717] dark:text-[#F5F5F5] flex items-center gap-2">
+                            <span className="material-icons-round text-[18px]">g_translate</span> Translate
+                          </button>
+                        )}
+                        {!msg.isMine && (
+                          <button onClick={handleGenerateSmartReplies} className="w-full text-left px-4 py-2 hover:bg-purple-50 dark:hover:bg-purple-950/20 text-[#7C3AED] dark:text-[#a78bfa] flex items-center gap-2 font-semibold">
+                            <span>💡</span> Smart Replies
+                          </button>
+                        )}
                         <div className="relative">
                           <div className="px-4 py-2 flex items-center gap-2 border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-[#171717] cursor-pointer">
                             <span 
@@ -1516,6 +1778,47 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             </div>
           ) : (
             <>
+          {/* Smart Replies Pills */}
+          {(loadingReplies || smartReplies.length > 0) && (
+            <div className="max-w-4xl mx-auto mb-3 bg-[#FAFAFA]/85 dark:bg-[#171717]/85 backdrop-blur-md border border-gray-200/80 dark:border-gray-800/80 rounded-2xl p-3 flex flex-col gap-2 shadow-sm relative z-10 animate-in fade-in slide-in-from-bottom-2 duration-200">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold text-[#7C3AED] dark:text-[#a78bfa] uppercase tracking-wider flex items-center gap-1">
+                  <span>💡</span> Smart Replies / اقتراحات الرد
+                </span>
+                <button 
+                  onClick={() => setSmartReplies([])}
+                  className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors p-1"
+                >
+                  <span className="material-icons-round text-sm">close</span>
+                </button>
+              </div>
+              {loadingReplies ? (
+                <div className="flex items-center gap-2 py-1 text-xs text-gray-500">
+                  <svg className="animate-spin h-3.5 w-3.5 text-[#7C3AED]" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                  <span>Generating suggestions...</span>
+                </div>
+              ) : (
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {smartReplies.map((reply, i) => (
+                    <button
+                      key={i}
+                      onClick={() => {
+                        handleSendSmartReplyText(reply);
+                        setSmartReplies([]);
+                      }}
+                      className="px-3 py-1.5 bg-[#7C3AED]/10 hover:bg-[#7C3AED]/20 text-[#7C3AED] dark:bg-[#7C3AED]/20 dark:hover:bg-[#7C3AED]/35 dark:text-purple-300 rounded-xl text-xs font-semibold border border-[#7C3AED]/20 hover:border-[#7C3AED]/30 transition-all active:scale-[0.97]"
+                    >
+                      {reply}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {attachedFile && (
             <div className="max-w-4xl mx-auto mb-2 bg-[#FAFAFA] dark:bg-[#171717] border border-gray-200 dark:border-gray-800 rounded-xl p-3 flex justify-between items-center text-sm shadow-sm">
               <div className="flex items-center gap-3 min-w-0">
@@ -1580,18 +1883,197 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
               ) : (
                 <>
                   {showAiPopup && (
-                    <div className="absolute bottom-[calc(100%+10px)] left-4 right-4 md:left-auto md:right-auto md:w-80 bg-white dark:bg-[#262626] rounded-2xl shadow-2xl border border-gray-100 dark:border-white/5 overflow-hidden flex flex-col z-50">
-                      <div className="bg-[#7C3AED] dark:bg-[#8B5CF6] p-4 text-white flex justify-between items-center">
-                        <div className="flex items-center gap-2">
-                          <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
-                          <span className="font-bold text-sm">Rabta AI Assistant</span>
+                    <div className="absolute bottom-[calc(100%+12px)] left-4 right-4 md:left-auto md:right-0 w-[calc(100%-2rem)] md:w-[440px] bg-white/95 dark:bg-[#131316]/98 backdrop-blur-xl rounded-2xl shadow-[0_20px_50px_rgba(124,58,237,0.18)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.5)] border border-gray-100 dark:border-white/[0.08] overflow-hidden flex flex-col z-50 animate-in fade-in zoom-in-95 duration-200">
+                      {/* Gradient Header Banner */}
+                      <div className="bg-gradient-to-r from-[#7C3AED] via-[#8B5CF6] to-[#6366F1] p-4 text-white flex justify-between items-center relative overflow-hidden shadow-[0_4px_20px_rgba(124,58,237,0.25)] shrink-0">
+                        {/* Mesh Overlay */}
+                        <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.15),transparent_60%)] pointer-events-none" />
+                        
+                        <div className="flex items-center gap-2.5 relative z-10">
+                          <div className="w-8 h-8 rounded-xl bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/20">
+                            <span className="material-icons-round text-lg animate-pulse text-yellow-300">bolt</span>
+                          </div>
+                          <div className="flex flex-col text-left">
+                            <span className="font-bold text-sm tracking-wide">Chat AI Assistant</span>
+                            <span className="text-[10px] text-white/70 font-medium">Powered by Rabta AI</span>
+                          </div>
                         </div>
-                        <button onClick={() => setShowAiPopup(false)} className="hover:bg-white/20 p-1 rounded-lg transition-colors">
+                        <button 
+                          onClick={() => setShowAiPopup(false)} 
+                          className="hover:bg-white/20 p-1.5 rounded-xl transition-all relative z-10 active:scale-90"
+                        >
                           <span className="material-icons-round text-sm">close</span>
                         </button>
                       </div>
-                      <div className="h-48 bg-[#FAFAFA] dark:bg-[#171717] p-4 text-sm text-gray-500 italic overflow-y-auto">
-                        How can I help you with your conversation with {chatName}?
+
+                      <div className="p-5 space-y-4 max-h-[500px] overflow-y-auto hide-scrollbar">
+                        {/* Scope Disclaimer */}
+                        <div className="bg-[#7C3AED]/5 dark:bg-[#7C3AED]/10 text-purple-700 dark:text-purple-300 p-3.5 rounded-2xl text-xs leading-relaxed flex gap-3 border border-purple-500/10 dark:border-[#7C3AED]/20 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)]">
+                          <span className="material-icons-round text-base text-[#7C3AED] dark:text-[#a78bfa] shrink-0 mt-0.5">smart_toy</span>
+                          <p className="text-left font-medium">
+                            I only summarize this conversation and search within its messages. For general questions, please use the <strong className="text-[#7C3AED] dark:text-[#a78bfa]">Global AI Guide</strong> in the sidebar.
+                          </p>
+                        </div>
+
+                        {/* Segmented Tabs Bar */}
+                        <div className="flex border border-gray-200/50 dark:border-white/[0.05] p-1 bg-gray-100/50 dark:bg-black/30 rounded-xl relative">
+                          <button
+                            onClick={() => setAiTab('summarize')}
+                            className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all duration-300 flex items-center justify-center gap-1.5 ${
+                              aiTab === 'summarize'
+                                ? 'bg-white dark:bg-[#26262b] text-[#7C3AED] dark:text-[#a78bfa] shadow-[0_4px_12px_rgba(0,0,0,0.06)] border border-gray-100 dark:border-white/[0.05]'
+                                : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-200'
+                            }`}
+                          >
+                            <span className="material-icons-round text-[14px]">summarize</span>
+                            Summarize Chat
+                          </button>
+                          <button
+                            onClick={() => setAiTab('search')}
+                            className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all duration-300 flex items-center justify-center gap-1.5 ${
+                              aiTab === 'search'
+                                ? 'bg-white dark:bg-[#26262b] text-[#7C3AED] dark:text-[#a78bfa] shadow-[0_4px_12px_rgba(0,0,0,0.06)] border border-gray-100 dark:border-white/[0.05]'
+                                : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-200'
+                            }`}
+                          >
+                            <span className="material-icons-round text-[14px]">saved_search</span>
+                            Smart Search 
+                          </button>
+                        </div>
+
+                        {/* Tab Content 1: Summarize */}
+                        {aiTab === 'summarize' && (
+                          <div className="space-y-4">
+                            <div className="flex items-center gap-3">
+                              <label className="text-xs font-bold text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                                Summarize last:
+                              </label>
+                              <select
+                                value={summaryLimit}
+                                onChange={(e) => setSummaryLimit(e.target.value)}
+                                className="flex-1 bg-white/50 dark:bg-black/35 border border-gray-200 dark:border-white/10 rounded-xl px-3 py-2 text-xs text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-[#7C3AED]/25 transition-all font-medium cursor-pointer"
+                              >
+                                <option value={5}>5 Messages</option>
+                                <option value={10}>10 Messages</option>
+                                <option value={20}>20 Messages</option>
+                                <option value={50}>50 Messages</option>
+                                <option value="All">All Messages</option>
+                              </select>
+                              <button
+                                onClick={handleSummarizeChat}
+                                disabled={summarizing}
+                                className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white px-5 py-2 rounded-xl text-xs font-bold transition-all disabled:opacity-50 flex items-center gap-1.5 shrink-0 shadow-[0_4px_12px_rgba(124,58,237,0.2)] active:scale-95"
+                              >
+                                {summarizing && (
+                                  <svg className="animate-spin h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                  </svg>
+                                )}
+                                Summarize
+                              </button>
+                            </div>
+
+                            {/* Summary Error Warning */}
+                            {summaryError && (
+                              <div className="bg-amber-500/10 text-amber-800 dark:text-amber-300 p-3.5 rounded-2xl text-xs flex gap-3 border border-amber-500/20 text-left">
+                                <span className="material-icons-round text-base text-amber-500 shrink-0">warning</span>
+                                <div>
+                                  <h4 className="font-bold mb-0.5">Cannot Summarize</h4>
+                                  <p className="font-medium leading-relaxed text-amber-700/90 dark:text-amber-300/90">{summaryError}</p>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Summary Result Box */}
+                            {summaryResult && (
+                              <div className="bg-white/45 dark:bg-black/20 rounded-2xl p-4 border border-gray-100 dark:border-white/[0.04] relative group text-start shadow-[inset_0_1px_3px_rgba(0,0,0,0.01)]">
+                                <div className="flex justify-between items-center mb-2.5 border-b border-gray-200/40 dark:border-white/[0.06] pb-2">
+                                  <span className="text-[10px] font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wider">Conversation Summary</span>
+                                  <button
+                                    onClick={() => handleCopy(summaryResult)}
+                                    className="text-gray-400 hover:text-[#7C3AED] dark:hover:text-purple-400 p-1.5 hover:bg-gray-100 dark:hover:bg-white/5 rounded-lg transition-all"
+                                    title="Copy Summary"
+                                  >
+                                    <span className="material-icons-round text-sm">content_copy</span>
+                                  </button>
+                                </div>
+                                <div dir="auto" className="text-xs text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap max-h-48 overflow-y-auto scrollbar-thin pr-1">
+                                  {summaryResult}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Tab Content 2: Smart Search */}
+                        {aiTab === 'search' && (
+                          <div className="space-y-4">
+                            <form
+                              onSubmit={(e) => {
+                                e.preventDefault();
+                                handleSmartSearch();
+                              }}
+                              className="flex gap-2.5"
+                            >
+                              <input
+                                type="text"
+                                placeholder="Search past messages, details or files..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className="flex-1 bg-white/50 dark:bg-black/35 border border-gray-200 dark:border-white/10 rounded-xl px-4 py-2 text-xs text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-[#7C3AED]/25 transition-all placeholder-gray-400 dark:placeholder-gray-500 font-medium"
+                              />
+                              <button
+                                type="submit"
+                                disabled={searching || !searchQuery.trim()}
+                                className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white px-5 py-2 rounded-xl text-xs font-bold transition-all disabled:opacity-50 flex items-center gap-1.5 shrink-0 shadow-[0_4px_12px_rgba(124,58,237,0.2)] active:scale-95"
+                              >
+                                {searching && (
+                                  <svg className="animate-spin h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                  </svg>
+                                )}
+                                Search
+                              </button>
+                            </form>
+
+                            {/* Search Result Box */}
+                            {searchResult && (
+                              <div className="space-y-3.5 text-start animate-in fade-in slide-in-from-top-3 duration-255">
+                                <div className="bg-white/45 dark:bg-black/20 rounded-2xl p-4 border border-gray-100 dark:border-white/[0.04] shadow-[inset_0_1px_3px_rgba(0,0,0,0.01)]">
+                                  <div className="flex justify-between items-center mb-2.5 border-b border-gray-200/40 dark:border-white/[0.06] pb-2">
+                                    <span className="text-[10px] font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wider">Search Answer</span>
+                                    <button
+                                      onClick={() => handleCopy(searchResult)}
+                                      className="text-gray-400 hover:text-[#7C3AED] dark:hover:text-purple-400 p-1.5 hover:bg-gray-100 dark:hover:bg-white/5 rounded-lg transition-all"
+                                      title="Copy Answer"
+                                    >
+                                      <span className="material-icons-round text-sm">content_copy</span>
+                                    </button>
+                                  </div>
+                                  <div dir="auto" className="text-xs text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap max-h-48 overflow-y-auto scrollbar-thin pr-1">
+                                    {searchResult}
+                                  </div>
+                                </div>
+
+                                {/* Redirect to Global AI Guide Button */}
+                                {searchFallback && (
+                                  <button
+                                    onClick={() => {
+                                      setShowAiPopup(false);
+                                      window.dispatchEvent(new CustomEvent('open-global-ai'));
+                                    }}
+                                    className="w-full flex items-center justify-center gap-2 p-3 bg-indigo-500/10 hover:bg-indigo-500/20 text-[#7C3AED] dark:text-[#a78bfa] rounded-xl text-xs font-bold border border-indigo-500/20 dark:border-indigo-500/30 transition-all active:scale-[0.98] shadow-sm"
+                                  >
+                                    <span className="material-icons-round text-sm">assistant</span>
+                                    Ask the Global AI Guide instead
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}
@@ -1687,7 +2169,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
               onLeaveGroup={() => setShowLeaveConfirmModal(true)}
               onSearchClick={() => {
                 setShowDetails(false);
-                setIsChatSearchOpen(true);
+                onChatSearchOpenChange?.(true);
               }}
               onEditGroup={() => setShowEditGroupModal(true)}
               isMuted={isMuted}
@@ -1734,7 +2216,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                     className="flex flex-col items-center gap-1.5 cursor-pointer hover:opacity-80 transition-opacity" 
                     onClick={() => {
                       setShowDetails(false);
-                      setIsChatSearchOpen(true);
+                      onChatSearchOpenChange?.(true);
                     }}
                   >
                     <div className="w-12 h-12 rounded-full bg-[#FAFAFA] dark:bg-[#171717] border border-gray-100 dark:border-gray-800 flex items-center justify-center text-gray-500 dark:text-gray-400">
@@ -1853,7 +2335,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
                 <div className="flex items-center gap-1 bg-[#FAFAFA] dark:bg-[#171717] p-1 rounded-xl mb-4 border border-gray-100 dark:border-gray-800">
                   <button 
-                    onClick={() => setActiveTab('Media')}
+                    type="button"
                     className={`flex-1 py-1.5 text-sm font-medium rounded-lg transition-all bg-white dark:bg-[#262626] text-[#7C3AED] shadow-sm`}
                   >
                     Media

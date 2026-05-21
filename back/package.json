@@ -27,6 +27,7 @@
     "@langchain/mongodb": "^1.2.0",
     "@langchain/openai": "^1.4.5",
     "@langchain/textsplitters": "^1.0.1",
+    "@types/streamifier": "^0.1.2",
     "bcryptjs": "^3.0.3",
     "cloudinary": "^1.41.3",
     "cors": "^2.8.6",
@@ -44,6 +45,7 @@
     "passport-google-oauth20": "^2.0.0",
     "pdf2json": "^4.0.3",
     "socket.io": "^4.8.3",
+    "streamifier": "^0.1.1",
     "zod": "^3.25.76"
   },
   "devDependencies": {

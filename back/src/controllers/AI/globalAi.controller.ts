@@ -1,7 +1,9 @@
-import * as vectorStoreService from "../services/Ai/vectorStore.ai.service";
-import { catchAsync } from "../utils/catchAsync";
+import * as vectorStoreService from "../../services/Ai/vectorStore.ai.service";
+import { catchAsync } from "../../utils/catchAsync";
 import { Request, Response } from "express";
-import  Chat  from "../models/chat";
+import  Chat  from "../../models/chat";
+import * as aiAssistantService from "../../services/Ai/aiAssistant.service";
+import  Message  from "../../models/Message";
 
 // Endpoint: POST /api/ai/create-vector-store
 export const createVectorStore = catchAsync(
@@ -74,10 +76,23 @@ export const smartSearch = catchAsync(async (req: Request, res: Response) => {
 
   // طالما عدى من الـ if اللي فوق، يبقى هو عضو وأمان.. نخليه يبحث بقا
   // التعديل: بنمرر الـ chatId كمان للـ Service عشان يبحث جوه الشات ده بس
-  const result = await vectorStoreService.semanticSearchMessages(query, userId.toString(), chatId as string);
+  // 1️⃣ لقط اسم اليوزر الحالي ديناميكياً
+const currentUserName = (req.user as any).fullName || (req.user as any).name || (req.user as any).firstName || "مستخدم";
+
+// 2️⃣ تمرير الاسم كمتغير رابع للدالة مع تقفيل الـ as any عشان نخلص من خناقات الـ Types
+const result = await (vectorStoreService.semanticSearchMessages as any)(
+  query, 
+  userId.toString(), 
+  chatId as string,
+  currentUserName
+);
 
   res.status(200).json({
     status: "success",
     data: result,
   });
 });
+
+
+
+

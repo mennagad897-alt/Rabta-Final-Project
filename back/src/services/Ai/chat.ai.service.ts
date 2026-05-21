@@ -5,7 +5,7 @@ import PDFParser from "pdf2json";
 import mongoose from "mongoose";
 import Message from "../../models/Message";
 import Chat from "../../models/chat";
-import CommunityChunk from "../../models/CommunityChunk.model";
+import CommunityChunk from "../../models/AI/CommunityChunk.model";
 import { embeddingsModel, llm } from "./core.ai.service"; // 👈 استيراد المحركات من فايل يوسف الأساسي
 import { chatAiPromptTemplate } from "./prompts.ai"; // 👈 استيراد الـ Prompt بالإنجليزي
 
@@ -138,7 +138,7 @@ export const searchChatRAG = async (
       $project: {
         _id: 0,
         content: 1,
-        "metadata.sourceType": 1,
+        metadata: 1, // 👈 هنا خلينا الـ project يرجع الـ metadata كلها عشان نستفيد من الـ timestamp
       },
     },
   ]);
@@ -147,11 +147,27 @@ export const searchChatRAG = async (
 // ==========================================
 // 4. Ask Chat AI (Short answers & English)
 // ==========================================
-export const askChatAi = async (chatId: string, question: string) => {
+export const askChatAi = async (
+  chatId: string,
+  question: string,
+  currentUserName: string,
+) => {
   const results = await searchChatRAG(chatId, question);
   let context = "No document context available.";
+
   if (results.length > 0) {
-    context = results.map((r) => r.content).join("\n");
+    // 👈 هنا بنصيغ السياق بحيث يقرأ الـ content (اللي جواه اسم اليوزر) والوقت من الـ metadata
+    context = results
+      .map((r: any) => {
+        const time = r.metadata?.timestamp
+          ? new Date(r.metadata.timestamp).toLocaleTimeString("en-US", {
+              hour: "2-digit",
+              minute: "2-digit",
+            })
+          : "Unknown time";
+        return `[Time: ${time}] - ${r.content}`;
+      })
+      .join("\n");
   }
 
   // استخدام الـ Prompt المنفصل بالإنجليزي
@@ -159,9 +175,42 @@ export const askChatAi = async (chatId: string, question: string) => {
     chat_history: "",
     context: context,
     question: question,
+    currentUserName: currentUserName,
   });
 
   const llmModel = await llm;
   const response = await llmModel.invoke(formattedPrompt);
   return response.content;
+};
+
+// ==========================================
+// 5. Auto-Ingest Single Message (Real-time)
+// ==========================================
+export const autoIngestSingleMessage = async (
+  messageDoc: any,
+  senderName: string,
+) => {
+  try {
+    const text = `Message from ${senderName}: ${messageDoc.content}\n`;
+    const [embedding] = await embeddingsModel.embedDocuments([text]);
+
+    // 🔥 الخدعة هنا: بنعمل الأوبجكت كـ any في متغير منفصل الأول
+    const chunkData: any = {
+      chatId: new mongoose.Types.ObjectId(messageDoc.chatId.toString()),
+      content: text,
+      embedding: embedding,
+      metadata: {
+        sourceId: new mongoose.Types.ObjectId(messageDoc._id.toString()),
+        sourceType: "chat",
+        timestamp: messageDoc.createdAt,
+      },
+    };
+
+    // وبعدين نبعته للـ create
+    await CommunityChunk.create(chunkData);
+
+    console.log(`✅ Message auto-ingested for AI: ${messageDoc._id}`);
+  } catch (error) {
+    console.error("❌ Error auto-ingesting message:", error);
+  }
 };

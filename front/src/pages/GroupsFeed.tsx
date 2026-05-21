@@ -2,8 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useNavigate, useLocation } from 'react-router-dom';
 import axiosInstance from '../api/axiosInstance';
 import toast from 'react-hot-toast';
-import { AiAssistant } from '../components/shared/AiAssistant';
-import { ChatWindow, type MessageType } from '../components/chat/ChatWindow';
+import { ChatWindow, type MessageType, formatFileSize, extractFileName } from '../components/chat/ChatWindow';
 import { SharedMediaSidePanel } from '../components/chat/SharedMediaSidePanel';
 import { GroupDetails } from '../components/chat/GroupDetails';
 import { useChat } from '../context/ChatContext';
@@ -334,14 +333,12 @@ export const GroupsFeed = () => {
                 : m.content?.endsWith('.webm')
                   ? 'audio'
                   : 'text') as MessageType['type'],
-              content: m.content,
+              content: m.content || m.attachments?.[0]?.fileUrl || '',
               fileUrl:
                 m.attachments?.[0]?.fileUrl ||
                 (['image', 'video', 'file'].includes(m.messageType) ? m.content : undefined),
-              fileName: m.attachments?.[0]?.fileType || 'Attachment',
-              fileSize: m.attachments?.[0]?.fileSize
-                ? (m.attachments[0].fileSize / 1024 / 1024).toFixed(2) + ' MB'
-                : undefined,
+              fileName: extractFileName(m.attachments?.[0]?.fileUrl),
+              fileSize: formatFileSize(m.attachments?.[0]?.fileSize),
               duration: m.duration,
               isDeletedForEveryone: m.isDeletedForEveryone,
               isEdited: m.isEdited,
@@ -941,14 +938,6 @@ export const GroupsFeed = () => {
               </div>
             ))
           )}
-        </div>
-
-        {/* AI Assistant - Positioned at bottom of sidebar */}
-        <div className="p-4 mt-auto border-t border-gray-100 dark:border-gray-800">
-          <AiAssistant 
-            className="relative !items-center !justify-center" 
-            placeholder="I can help you find interesting communities or summarize group discussions..." 
-          />
         </div>
       </aside>
 

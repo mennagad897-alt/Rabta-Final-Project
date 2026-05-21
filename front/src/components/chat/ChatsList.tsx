@@ -1,6 +1,5 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AiAssistant } from '../shared/AiAssistant';
 
 export interface ChatItem {
   _id: string;
@@ -184,13 +183,6 @@ export const ChatsList: React.FC<ChatsListProps> = ({
             )}
           </div>
         )))}
-      </div>
-
-      <div className="p-4 mt-auto border-t border-gray-100 dark:border-gray-800">
-        <AiAssistant
-          className="relative items-center! justify-center!"
-          placeholder="I can help you summarize your messages or find information..."
-        />
       </div>
     </aside>
   );

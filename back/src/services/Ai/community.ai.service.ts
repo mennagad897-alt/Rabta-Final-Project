@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
 import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
-import CommunityChunk from "../../models/CommunityChunk.model";
+import CommunityChunk from "../../models/AI/CommunityChunk.model";
 import Community from "../../models/Community";
 import Post from "../../models/Post";
 import Message from "../../models/Message";
@@ -13,6 +13,7 @@ import https from "https";
 import fs from "fs/promises";
 import path from "path";
 import PDFParser from "pdf2json";
+
 
 const fetchBuffer = (fileUrl: string): Promise<Buffer> => {
   return new Promise((resolve, reject) => {
@@ -45,7 +46,7 @@ export const extractTextFromPDF = async (fileUrl: string): Promise<string> => {
 
       if (fileUrl.startsWith("http://") || fileUrl.startsWith("https://")) {
         const response = await fetch(fileUrl, {
-          headers: { "User-Agent": "Mozilla/5.0" }
+          headers: { "User-Agent": "Mozilla/5.0" },
         });
         if (!response.ok) throw new Error(`Status: ${response.status}`);
         const arrayBuffer = await response.arrayBuffer();
@@ -53,27 +54,26 @@ export const extractTextFromPDF = async (fileUrl: string): Promise<string> => {
       } else {
         buffer = await fs.readFile(path.join(process.cwd(), fileUrl));
       }
-      
+
       // تهيئة المكتبة الجديدة (true معناه استخراج النص الخام فقط)
       const pdfParser = new PDFParser(null, true);
-      
+
       pdfParser.on("pdfParser_dataError", (errData: any) => {
         console.error(`❌ PDF Parser Error:`, errData.parserError);
         resolve(""); // لو حصل إيرور نرجع نص فاضي عشان السيرفر ميقعش
       });
-      
+
       pdfParser.on("pdfParser_dataReady", () => {
         const text = pdfParser.getRawTextContent();
         console.log("✅ PDF Text Extracted, Length:", text.length);
         resolve(text); // نرجع النص السليم
       });
-      
+
       // تشغيل عملية القراءة على الملف
       pdfParser.parseBuffer(buffer);
-      
     } catch (error) {
       console.error(`❌ Failed to fetch/parse PDF:`, error);
-      resolve(""); 
+      resolve("");
     }
   });
 };
@@ -251,9 +251,32 @@ export const createSearchTool = (communityId: string) => {
       if (results.length === 0)
         return "No relevant information found in the community records.";
 
+    // 🔥 خوارزمية الفلترة الذكية وإضافة الأسماء:
       return results
-        .map((r) => `[Source: ${r.metadata.sourceType}]: ${r.content}`)
-        .join("\n\n");
+        .filter((r) => {
+          // 1. استبعاد رسائل النظام الآلية (عشان نوفر توكنز ومتبوظش التلخيص)
+          const text = r.content || "";
+          const isSystemMessage = 
+            text.includes("أضافتك إلى المجموعة") || 
+            text.includes("انضم إلى") || 
+            text.includes("غادر");
+          
+          return !isSystemMessage;
+        })
+        .map((r) => {
+          // 2. تنظيف المسافات الزائدة
+          const cleanContent = r.content.replace(/\s+/g, ' ').trim();
+          
+          // 3. لقط اسم المرسل الحقيقي من الميتاداتا
+          let sender = "عضو في الجروب";
+          if (r.metadata?.senderName && r.metadata.senderName !== "مستخدم في الشات") {
+            sender = r.metadata.senderName;
+          }
+
+          // إرسال القالب النهائي للـ Agent شامل الاسم
+          return `[Sender: ${sender} | Source: ${r.metadata?.sourceType || "chat"}]: ${cleanContent}`;
+        })
+        .join("\n"); 
     },
     {
       name: "search_community_knowledge",

@@ -140,7 +140,7 @@ const attachmentFilter = (req: any, file: any, cb: any) => {
 };
 
 export const uploadAttachment = multer({
-  storage: attachmentStorage,
+  storage: multer.memoryStorage(),
   fileFilter: attachmentFilter,
   limits: { fileSize: 50 * 1024 * 1024 }, // 50MB
 });

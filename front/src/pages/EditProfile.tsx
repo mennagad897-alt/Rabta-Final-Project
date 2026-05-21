@@ -36,7 +36,6 @@ const EditProfile: React.FC = () => {
   const user = useAppSelector((state) => state.auth.user);
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
-  const [isAiOpen, setIsAiOpen] = useState(false);
   const [showSuccessPopup, setShowSuccessPopup] = useState(false); // حالة البوب أب
   const [isUploading, setIsUploading] = useState(false);
   const [urlErrors, setUrlErrors] = useState<Record<string, boolean>>({});
@@ -381,20 +380,7 @@ const EditProfile: React.FC = () => {
         </div>
       </main>
 
-      {/* AI & Popup */}
-      <div className="fixed bottom-6 right-6 flex flex-col items-end gap-4 z-50">
-        {isAiOpen && (
-          <div className="w-80 bg-white dark:bg-[#262626] rounded-2xl shadow-2xl border border-gray-100 dark:border-white/5 overflow-hidden flex flex-col animate-in slide-in-from-bottom-5 duration-300">
-            <div className="bg-[#7C3AED] p-4 text-white flex justify-between items-center font-bold text-sm">
-              <div className="flex items-center gap-2"><span className="w-2 h-2 bg-green-400 rounded-full animate-pulse" /><span>Rabta AI</span></div>
-              <button onClick={() => setIsAiOpen(false)}><span className="material-icons-round">close</span></button>
-            </div>
-            <div className="h-40 p-4 text-sm italic opacity-60">I can suggest improvements to your profile content!</div>
-            <div className="p-4 border-t"><input type="text" className="w-full text-sm p-2.5 rounded-xl border border-gray-300 outline-none focus:border-[#7C3AED]" placeholder="Ask AI..." /></div>
-          </div>
-        )}
-        <button onClick={() => setIsAiOpen(!isAiOpen)} className="w-12 h-12 bg-[#7C3AED] rounded-full flex items-center justify-center text-white shadow-xl hover:scale-110 transition-transform"><span className="material-icons-round text-2xl">bolt</span></button>
-      </div>
+
 
       {showSuccessPopup && (
         <Popup onClose={() => navigate('/profile')}>

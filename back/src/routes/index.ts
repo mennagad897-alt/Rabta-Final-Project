@@ -7,7 +7,7 @@ import Chat from "../models/chat";
 import Message from "../models/Message";
 import Post from "../models/Post";
 import Job from "../models/Job";
-import CommunityChunk from "../models/CommunityChunk.model";
+import CommunityChunk from "../models/AI/CommunityChunk.model";
 
 // استيراد أدوات الحماية ومعالجة الأخطاء
 import { protect } from "../middlewares/auth.middleware";

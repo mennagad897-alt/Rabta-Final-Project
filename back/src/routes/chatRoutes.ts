@@ -23,7 +23,7 @@ import {
   uploadAudio,
   uploadAttachment,
 } from "../middlewares/upload.middleware";
-import * as chatAiController from "../controllers/chat.ai.controller";
+import * as chatAiController from "../controllers/AI/chat.ai.controller";
 
 const router = Router();
 
@@ -58,7 +58,7 @@ router.post(
 router.put("/:id/read", markMessagesAsRead);
 
 // Accept or reject a pending 1-to-1 chat request
-router.put('/:id/request', respondToChatRequest);
+router.put("/:id/request", respondToChatRequest);
 
 // جلب المحتوى المشارك في شات معين
 router.get("/:id/shared", getSharedContent);

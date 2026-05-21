@@ -8,6 +8,8 @@ import fs from "fs";
 import path from "path";
 import { isUserOnline } from "../server";
 import { embeddingsModel } from "../services/Ai/core.ai.service";
+import { autoIngestSingleMessage } from "../services/Ai/chat.ai.service"; // اتأكدي من مسار الملف الصح عندك
+import { uploadBufferToCloudinary } from "../services/cloudinary.service";
 // ==========================================
 // 💬 كنترولر الشات والرسائل والجروبات والمجتمعات
 // ==========================================
@@ -479,13 +481,24 @@ export const sendMessage = catchAsync(
     }
 
   await chatService.emitNewCommunityMessage(io, id, savedMsg as any);
+  
+  // ... الكود القديم بتاع الـ socket.io ...
+    await chatService.emitNewCommunityMessage(io, id, savedMsg as any);
 
+    // 🔥 السطرين الجداد: تشغيل التغذية التلقائية في الخلفية للـ AI
+    // بنجيب اسم اليوزر سواء كان متخزن في fullName أو name
+    const senderName = (req.user as any).fullName || (req.user as any).name || "مستخدم في الشات";
+    autoIngestSingleMessage(savedMsg, senderName);
+
+    // الرد الطبيعي لليوزر
     res.status(201).json({
       status: "success",
       data: { message: savedMsg },
     });
-  },
+  }
 );
+
+
 
 export const sendAudioMessage = catchAsync(
   async (req: Request, res: Response, next: NextFunction) => {
@@ -538,8 +551,14 @@ export const sendFileMessage = catchAsync(
       return next(new AppError("File attachment is required", 400));
     }
 
-    // Construct URL for the uploaded file
-    const fileUrl = req.file.path;
+    // Call our Cloudinary upload service to upload the buffer
+    const uploadResult = await uploadBufferToCloudinary(
+      req.file.buffer,
+      req.file.originalname,
+      req.file.mimetype
+    );
+
+    const fileUrl = uploadResult.secure_url;
 
     // Determine if it's an image, video, or generic document based on mimetype
     let messageType = "file";

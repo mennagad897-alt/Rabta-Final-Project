@@ -2,7 +2,6 @@ import React, { useState, useEffect } from "react";
 import { type AxiosResponse, isAxiosError } from "axios";
 import axiosInstance from "../api/axiosInstance";
 import { useNavigate } from "react-router-dom";
-import { AiAssistant } from "../components/shared/AiAssistant";
 import { useAppSelector } from "../store/hooks";
 import { useDispatch } from "react-redux";
 import { updateProfile } from "../store/slices/authSlice";
@@ -390,14 +389,6 @@ export const JobsBoard: React.FC = () => {
                         </label>
                       ))}
                     </div>
-                  </div>
-
-                  {/* AI Assistant - Positioned at bottom of filter sidebar */}
-                  <div className="bg-white dark:bg-[#1E1E1E] rounded-3xl shadow-sm border border-[#8B5CF6]/5 dark:border-[#8B5CF6]/10 p-6 mt-auto">
-                    <AiAssistant
-                      className="relative !items-center !justify-center"
-                      placeholder="I can help you find jobs, improve your profile, or summarize job descriptions..."
-                    />
                   </div>
                 </div>
               </aside>

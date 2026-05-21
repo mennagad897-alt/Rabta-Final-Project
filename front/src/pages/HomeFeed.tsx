@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { ChatsList } from '../components/chat/ChatsList';
 import type { ChatItem } from '../components/chat/ChatsList';
-import { ChatWindow, type MessageType } from '../components/chat/ChatWindow';
+import { ChatWindow, type MessageType, formatFileSize, extractFileName } from '../components/chat/ChatWindow';
 import { ProfileSidePanel } from '../components/chat/ProfileSidePanel';
 import { SharedMediaSidePanel } from '../components/chat/SharedMediaSidePanel';
 import { EmptyChatState } from '../components/chat/EmptyChatState';
@@ -147,10 +147,10 @@ export const HomeFeed = () => {
           return {
           id: m._id,
           type: (['text', 'audio', 'file', 'image', 'video'].includes(m.messageType) ? m.messageType : (m.content?.endsWith('.webm') ? 'audio' : 'text')) as 'text' | 'audio' | 'file' | 'image' | 'video' | 'call_summary',
-          content: m.content,
+          content: m.content || m.attachments?.[0]?.fileUrl || '',
           fileUrl: m.attachments?.[0]?.fileUrl || (['image', 'video', 'file'].includes(m.messageType) ? m.content : undefined),
-          fileName: m.attachments?.[0]?.fileType || 'Attachment',
-          fileSize: m.attachments?.[0]?.fileSize ? (m.attachments[0].fileSize / 1024 / 1024).toFixed(2) + ' MB' : undefined,
+          fileName: extractFileName(m.attachments?.[0]?.fileUrl),
+          fileSize: formatFileSize(m.attachments?.[0]?.fileSize),
           duration: m.duration,
           isDeletedForEveryone: m.isDeletedForEveryone,
           isEdited: m.isEdited,

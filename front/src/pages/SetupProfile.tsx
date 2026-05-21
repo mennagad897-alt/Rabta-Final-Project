@@ -11,7 +11,6 @@ const SetupProfile: React.FC = () => {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const user = useAppSelector((state) => state.auth.user);
-  const [isAiOpen, setIsAiOpen] = useState(false);
   const [showSuccessPopup] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
 
@@ -361,34 +360,7 @@ const SetupProfile: React.FC = () => {
         </div>
       </main>
 
-      {/* AI Popup */}
-      <div className="fixed bottom-6 right-6 flex flex-col items-end gap-4 z-50">
-        {isAiOpen && (
-          <div className="w-80 bg-white dark:bg-[#262626] rounded-2xl shadow-2xl border border-gray-100 dark:border-white/5 overflow-hidden flex flex-col transition-all duration-300 animate-in slide-in-from-bottom-5">
-            <div className="bg-[#7C3AED] dark:bg-[#8B5CF6] p-4 text-white flex justify-between items-center transition-colors">
-              <div className="flex items-center gap-2">
-                <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
-                <span className="font-bold text-sm">Rabta AI</span>
-              </div>
-              <button onClick={() => setIsAiOpen(false)} className="hover:bg-white/20 p-1 rounded-lg transition-colors">
-                <span className="material-icons-round">close</span>
-              </button>
-            </div>
 
-            <div className="h-48 bg-[#FAFAFA] dark:bg-[#171717] p-4 text-sm text-gray-500 dark:text-[#F5F5F5]/50 italic overflow-y-auto">
-              Welcome! I can help you write a professional bio or list your skills effectively.
-            </div>
-
-            <div className="p-4 bg-white dark:bg-[#262626] border-t border-gray-100 dark:border-white/10">
-              <input type="text" placeholder="Ask AI for help..."
-                className="w-full text-sm p-2.5 rounded-xl bg-gray-50 dark:bg-[#171717] text-[#171717] dark:text-[#F5F5F5] border border-gray-200 dark:border-white/10 outline-none focus:border-[#7C3AED] dark:focus:border-[#8B5CF6] transition-all" />
-            </div>
-          </div>
-        )}
-        <button onClick={() => setIsAiOpen(!isAiOpen)} className="w-12 h-12 bg-[#7C3AED] dark:bg-[#8B5CF6] rounded-full flex items-center justify-center text-white shadow-xl hover:scale-110 transition-transform">
-          <span className="material-icons-round text-2xl">bolt</span>
-        </button>
-      </div>
 
       <style>{`
         .nav-icon-btn { @apply w-12 h-12 flex items-center justify-center text-gray-400 hover:text-[#7C3AED] dark:hover:text-[#8B5CF6] hover:bg-[#7C3AED]/10 dark:hover:bg-[#8B5CF6]/10 rounded-2xl transition-all duration-300; }

@@ -56,6 +56,7 @@ import { AdminGroups } from "./pages/admin/AdminGroups";
 import { AdminLogs } from "./pages/admin/AdminLogs";
 import { AddAdmin } from "./pages/admin/AddAdmin";
 import { AdminVerifications } from "./pages/admin/AdminVerifications";
+import { AdminAITraining } from "./pages/admin/AdminAITraining";
 
 function App() {
   const user = useSelector((state: RootState) => state.auth.user);
@@ -138,6 +139,7 @@ function App() {
           <Route path="logs" element={<AdminLogs />} />
           <Route path="add-admin" element={<AddAdmin />} />
           <Route path="verifications" element={<AdminVerifications />} />
+          <Route path="ai-training" element={<AdminAITraining />} />
         </Route>
       </Route>
 
