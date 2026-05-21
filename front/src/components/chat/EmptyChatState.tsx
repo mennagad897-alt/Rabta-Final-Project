@@ -1,4 +1,3 @@
-import React from 'react';
 
 // بنستقبل دالة (onNewMessage) عشان لما ندوس على الزرار يفتح الـ Modal في الصفحة الرئيسية
 export const EmptyChatState = ({ onNewMessage }: { onNewMessage: () => void }) => {

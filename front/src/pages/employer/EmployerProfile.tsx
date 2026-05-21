@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import type { RootState } from '../../store/store';
@@ -9,7 +9,6 @@ const EmployerProfile: React.FC = () => {
   const user = useSelector((state: RootState) => state.auth.user);
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const loadProfile = async () => {
@@ -18,8 +17,6 @@ const EmployerProfile: React.FC = () => {
         dispatch(updateProfile(freshUser));
       } catch (error) {
         console.error('Failed to fetch fresh profile data', error);
-      } finally {
-        setLoading(false);
       }
     };
     loadProfile();

@@ -36,7 +36,7 @@ interface ProjectData {
 // ==========================================
 export const ProjectDetails: React.FC = () => {
   const navigate = useNavigate();
-  const { projectId } = useParams();
+  const { projectId: _projectId } = useParams();
 
   // TODO (Backend): جلب تفاصيل المشروع
   // useEffect(() => {

@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import axiosInstance from '../../api/axiosInstance';
-import toast from 'react-hot-toast';
 
 const AppliedProjects: React.FC = () => {
   const [appliedJobs, setAppliedJobs] = useState<any[]>([]);

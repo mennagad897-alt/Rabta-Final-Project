@@ -1,6 +1,4 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
-import { AiAssistant } from '../shared/AiAssistant';
 
 export interface ChatItem {
   _id: string;

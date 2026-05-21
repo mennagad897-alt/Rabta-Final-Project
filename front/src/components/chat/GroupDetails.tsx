@@ -52,7 +52,6 @@ export const GroupDetails: React.FC<GroupDetailsProps> = ({
   chatId,
   chatName,
   description,
-  isPrivateGroup,
   groupMembers,
   groupAdmins,
   canAddMembers,

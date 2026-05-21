@@ -36,7 +36,7 @@ interface Post {
 // ==========================================
 export const PostDetails: React.FC = () => {
   const navigate = useNavigate();
-  const { postId } = useParams();
+  const { postId: _postId } = useParams();
 
   // States — جاهزة للربط بالباك-إند
   const [post] = useState<Post | null>(null);

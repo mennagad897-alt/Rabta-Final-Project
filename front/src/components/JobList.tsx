@@ -10,7 +10,7 @@ import { fetchJobs, resetFilters } from '../store/slices/jobsSlice';
 import { updateProfile } from '../store/slices/authSlice';
 import axiosInstance from '../api/axiosInstance';
 import toast from 'react-hot-toast';
-import { useNavigate, Link } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 
 /**
  * Job Card Component

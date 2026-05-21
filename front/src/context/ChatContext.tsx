@@ -58,9 +58,6 @@ export const ChatProvider = ({ children }: { children: ReactNode }) => {
       console.log("🔴 Socket Disconnected");
       setIsConnected(false);
     });
-
-    let isPlayingSound = false;
-
     socketInstance.on('notification', (data: {
       type: string;
       message: string;

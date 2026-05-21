@@ -1,24 +1,8 @@
-import { useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import type { RootState } from "../store/store";
 import { logout } from "../store/slices/authSlice";
 import toast from "react-hot-toast";
 import { useNavigate } from "react-router-dom";
-
-interface SettingsState {
-  notifications: {
-    chatMessages: boolean;
-    communityMentions: boolean;
-    aiJobMatches: boolean;
-    inAppSounds: boolean;
-  };
-  privacy: {
-    showOnlineStatus: boolean;
-    showJobTitle: boolean;
-    publicProfile: boolean;
-  };
-  [key: string]: Record<string, boolean>;
-}
 
 export const Settings = () => {
   const user = useSelector((state: RootState) => state.auth.user);
@@ -32,37 +16,12 @@ export const Settings = () => {
     return parts[0].slice(0, 2).toUpperCase();
   };
   
-  const [settings, setSettings] = useState<SettingsState>(user?.settings || {
-    notifications: {
-      chatMessages: true,
-      communityMentions: true,
-      aiJobMatches: true,
-      inAppSounds: true
-    },
-    privacy: {
-      showOnlineStatus: true,
-      showJobTitle: true,
-      publicProfile: true
-    }
-  });
-
   const toggleTheme = () => {
     const html = document.documentElement;
     html.classList.toggle('dark');
     const isDark = html.classList.contains('dark');
     localStorage.setItem('theme', isDark ? 'dark' : 'light');
     toast.success(`Switched to ${isDark ? 'Dark' : 'Light'} Mode`);
-  };
-
-  const handleToggle = (section: string, field: string) => {
-    setSettings((prev: SettingsState) => ({
-      ...prev,
-      [section]: {
-        ...prev[section],
-        [field]: !prev[section][field]
-      }
-    }));
-    toast.success("Preference updated");
   };
 
   const handleLogout = () => {
