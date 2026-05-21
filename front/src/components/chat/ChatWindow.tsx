@@ -1,16 +1,16 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
-import EmojiPicker, { type EmojiClickData } from 'emoji-picker-react';
-import { useChat } from '../../context/ChatContext';
-import axiosInstance from '../../api/axiosInstance';
-import toast from 'react-hot-toast';
-import { CreatePostModal } from '../CreatePostModal';
-import { VoiceRecorder } from './VoiceRecorder';
-import { GroupDetails } from './GroupDetails';
-import { CameraModal } from './CameraModal';
-import { useCall } from '../../context/CallContext';
-import { ForwardMessageModal } from './ForwardMessageModal';
-import { resolveChatMediaUrl } from './ProfileSidePanel';
+import React, { useState, useEffect, useRef, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
+import EmojiPicker, { type EmojiClickData } from "emoji-picker-react";
+import { useChat } from "../../context/ChatContext";
+import axiosInstance from "../../api/axiosInstance";
+import toast from "react-hot-toast";
+import { CreatePostModal } from "../CreatePostModal";
+import { VoiceRecorder } from "./VoiceRecorder";
+import { GroupDetails } from "./GroupDetails";
+import { CameraModal } from "./CameraModal";
+import { useCall } from "../../context/CallContext";
+import { ForwardMessageModal } from "./ForwardMessageModal";
+import { resolveChatMediaUrl } from "./ProfileSidePanel";
 
 export function formatFileSize(bytes?: number): string | undefined {
   if (bytes === undefined || bytes === null) return undefined;
@@ -20,23 +20,23 @@ export function formatFileSize(bytes?: number): string | undefined {
 }
 
 export function extractFileName(url?: string): string {
-  if (!url) return 'Attachment';
+  if (!url) return "Attachment";
   const decoded = decodeURIComponent(url);
-  const baseName = decoded.substring(decoded.lastIndexOf('/') + 1);
-  return baseName.replace(/^\d+-/, ''); // Remove unique prefix
+  const baseName = decoded.substring(decoded.lastIndexOf("/") + 1);
+  return baseName.replace(/^\d+-/, ""); // Remove unique prefix
 }
 
 export function getDownloadUrl(url?: string): string {
-  if (!url) return '#';
-  if (url.includes('res.cloudinary.com') && url.includes('/upload/')) {
-    return url.replace('/upload/', '/upload/fl_attachment/');
+  if (!url) return "#";
+  if (url.includes("res.cloudinary.com") && url.includes("/upload/")) {
+    return url.replace("/upload/", "/upload/fl_attachment/");
   }
   return url;
 }
 
 export type MessageType = {
   id: string;
-  type: 'text' | 'file' | 'audio' | 'call_summary' | 'image' | 'video';
+  type: "text" | "file" | "audio" | "call_summary" | "image" | "video";
   content?: string;
   fileName?: string;
   fileSize?: string;
@@ -44,7 +44,7 @@ export type MessageType = {
   time: string;
   isMine: boolean;
   isPending?: boolean;
-  status?: 'sending' | 'sent' | 'delivered' | 'read';
+  status?: "sending" | "sent" | "delivered" | "read";
   duration?: number;
   isDeletedForEveryone?: boolean;
   isEdited?: boolean;
@@ -81,10 +81,12 @@ interface ChatWindowProps {
   onCloseChat?: () => void;
   /** Open group details in parent layout (keeps chat visible). */
   onOpenGroupDetails?: () => void;
-  chatStatus?: 'pending' | 'accepted';
+  chatStatus?: "pending" | "accepted";
   isChatInitiator?: boolean;
   isChatRecipient?: boolean;
-  onRespondToChatRequest?: (action: 'accept' | 'reject') => void | Promise<void>;
+  onRespondToChatRequest?: (
+    action: "accept" | "reject",
+  ) => void | Promise<void>;
   /** Restricted group invite preview (no messages, accept/decline only). */
   isGroupInviteView?: boolean;
   onAcceptGroupInvitation?: () => void | Promise<void>;
@@ -135,7 +137,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   onOpenSharedMedia,
   onCloseChat,
   onOpenGroupDetails,
-  chatStatus = 'accepted',
+  chatStatus = "accepted",
   isChatInitiator = false,
   isChatRecipient = false,
   onRespondToChatRequest,
@@ -148,23 +150,23 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const [showAiPopup, setShowAiPopup] = useState(false);
 
   // Chat-Specific AI Assistant States
-  const [aiTab, setAiTab] = useState<'summarize' | 'search'>('summarize');
+  const [aiTab, setAiTab] = useState<"summarize" | "search">("summarize");
   const [summaryLimit, setSummaryLimit] = useState<number | string>(10);
   const [summarizing, setSummarizing] = useState(false);
-  const [summaryResult, setSummaryResult] = useState<string>('');
-  const [summaryError, setSummaryError] = useState<string>('');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [summaryResult, setSummaryResult] = useState<string>("");
+  const [summaryError, setSummaryError] = useState<string>("");
+  const [searchQuery, setSearchQuery] = useState("");
   const [searching, setSearching] = useState(false);
-  const [searchResult, setSearchResult] = useState<string>('');
+  const [searchResult, setSearchResult] = useState<string>("");
   const [searchFallback, setSearchFallback] = useState(false);
 
   // Reset AI states when chatId changes
   useEffect(() => {
     setShowAiPopup(false);
-    setSummaryResult('');
-    setSummaryError('');
-    setSearchQuery('');
-    setSearchResult('');
+    setSummaryResult("");
+    setSummaryError("");
+    setSearchQuery("");
+    setSearchResult("");
     setSearchFallback(false);
     setSmartReplies([]);
     setTranslatedMessages({});
@@ -173,26 +175,41 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
   const handleSummarizeChat = async () => {
     setSummarizing(true);
-    setSummaryResult('');
-    setSummaryError('');
+    setSummaryResult("");
+    setSummaryError("");
     try {
-      const limitVal = summaryLimit === 'All' ? 999999 : Number(summaryLimit);
-      const res = await axiosInstance.post('/api/ai/chat/summarize', {
-        chatId,
-        limit: limitVal,
-      }, {
-        timeout: 60000,
-      });
-      const dataStr = res.data?.data || '';
+      const limitVal = summaryLimit === "All" ? 999999 : Number(summaryLimit);
+      const res = await axiosInstance.post(
+        "/api/ai/chat/summarize",
+        {
+          chatId,
+          limit: limitVal,
+        },
+        {
+          timeout: 60000,
+        },
+      );
+      const dataStr = res.data?.data || "";
 
-      if (typeof dataStr === 'string' && (dataStr.includes("┘ä╪º ╪¬┘ê╪¼╪» ╪▒╪│╪º╪ª┘ä ┘â╪º┘ü┘è╪⌐") || dataStr.includes("┘ä╪º ╪¬┘ê╪¼╪» ╪▒╪│╪º╪ª┘ä ┘â╪º┘ü┘è╪⌐ ┘ä╪¬┘ä╪«┘è╪╡┘ç╪º"))) {
-        setSummaryError("Cannot summarize: The messages might have been deleted or there are not enough messages in this chat.");
+      if (
+        typeof dataStr === "string" &&
+        (dataStr.includes("┘ä╪º ╪¬┘ê╪¼╪» ╪▒╪│╪º╪ª┘ä ┘â╪º┘ü┘è╪⌐") ||
+          dataStr.includes(
+            "┘ä╪º ╪¬┘ê╪¼╪» ╪▒╪│╪º╪ª┘ä ┘â╪º┘ü┘è╪⌐ ┘ä╪¬┘ä╪«┘è╪╡┘ç╪º",
+          ))
+      ) {
+        setSummaryError(
+          "Cannot summarize: The messages might have been deleted or there are not enough messages in this chat.",
+        );
       } else {
         setSummaryResult(dataStr);
       }
     } catch (err: any) {
       console.error(err);
-      const errMsg = err.response?.data?.message || err.message || "Failed to summarize chat.";
+      const errMsg =
+        err.response?.data?.message ||
+        err.message ||
+        "Failed to summarize chat.";
       setSummaryError(errMsg);
     } finally {
       setSummarizing(false);
@@ -203,16 +220,20 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     const trimmed = searchQuery.trim();
     if (!trimmed) return;
     setSearching(true);
-    setSearchResult('');
+    setSearchResult("");
     setSearchFallback(false);
     try {
-      const res = await axiosInstance.post(`/api/ai/smart-search/${chatId}`, {
-        query: trimmed,
-        chatId,
-      }, {
-        timeout: 60000,
-      });
-      const dataStr = res.data?.data || '';
+      const res = await axiosInstance.post(
+        `/api/ai/smart-search/${chatId}`,
+        {
+          query: trimmed,
+          chatId,
+        },
+        {
+          timeout: 60000,
+        },
+      );
+      const dataStr = res.data?.data || "";
       setSearchResult(dataStr);
 
       // Check if fallback response detected
@@ -221,15 +242,16 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         "┘ä╪º ╪ú┘à╪¬┘ä┘â ┘à╪╣┘ä┘ê┘à╪º╪¬ ┘â╪º┘ü┘è╪⌐",
         "No relevant messages found",
         "don't have information",
-        "cannot find this information"
-      ].some(phrase => dataStr.toLowerCase().includes(phrase.toLowerCase()));
+        "cannot find this information",
+      ].some((phrase) => dataStr.toLowerCase().includes(phrase.toLowerCase()));
 
       if (isFallback) {
         setSearchFallback(true);
       }
     } catch (err: any) {
       console.error(err);
-      const errMsg = err.response?.data?.message || err.message || "Search failed.";
+      const errMsg =
+        err.response?.data?.message || err.message || "Search failed.";
       setSearchResult(`ΓÜá∩╕Å ${errMsg}`);
     } finally {
       setSearching(false);
@@ -238,8 +260,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showCreatePost, setShowCreatePost] = useState(false);
-  const [inputText, setInputText] = useState('');
-  const [activeSidePanel, setActiveSidePanel] = useState<'details' | 'search' | null>(null);
+  const [inputText, setInputText] = useState("");
+  const [activeSidePanel, setActiveSidePanel] = useState<
+    "details" | "search" | null
+  >(null);
   const [showDetails, setShowDetails] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
 
@@ -247,25 +271,33 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const [showEditGroupModal, setShowEditGroupModal] = useState(false);
   const [showAddMemberModal, setShowAddMemberModal] = useState(false);
   const [showLeaveConfirmModal, setShowLeaveConfirmModal] = useState(false);
-  const [userSearchQuery, setUserSearchQuery] = useState('');
+  const [userSearchQuery, setUserSearchQuery] = useState("");
   const [isSearchingUsers] = useState(false);
   const [searchResults] = useState<SearchUser[]>([]);
   const [isRecordingVoice, setIsRecordingVoice] = useState(false);
   const [voiceBlob, setVoiceBlob] = useState<Blob | null>(null);
   const [voiceUrl, setVoiceUrl] = useState<string | null>(null);
   const [voiceDuration, setVoiceDuration] = useState<number>(0);
-  const [activeMessageMenu, setActiveMessageMenu] = useState<string | null>(null);
-  const [dropdownDirection, setDropdownDirection] = useState<'up' | 'down'>('up');
-  const [forwardingMessage, setForwardingMessage] = useState<MessageType | null>(null);
+  const [activeMessageMenu, setActiveMessageMenu] = useState<string | null>(
+    null,
+  );
+  const [dropdownDirection, setDropdownDirection] = useState<"up" | "down">(
+    "up",
+  );
+  const [forwardingMessage, setForwardingMessage] =
+    useState<MessageType | null>(null);
   const buttonRef = useRef<HTMLButtonElement | null>(null);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
-  const [editingText, setEditingText] = useState('');
+  const [editingText, setEditingText] = useState("");
   const [replyingTo, setReplyingTo] = useState<MessageType | null>(null);
   const [showReactionPicker, setShowReactionPicker] = useState(false);
   const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
   const [showCameraModal, setShowCameraModal] = useState(false);
   const [attachedFile, setAttachedFile] = useState<File | null>(null);
-  const [viewingFile, setViewingFile] = useState<{ url: string, type: 'image' | 'document' } | null>(null);
+  const [viewingFile, setViewingFile] = useState<{
+    url: string;
+    type: "image" | "document";
+  } | null>(null);
   const [showHeaderMenu, setShowHeaderMenu] = useState(false);
   const [blockedByMe, setBlockedByMe] = useState(false);
   const [blockedMe, setBlockedMe] = useState(false);
@@ -273,9 +305,13 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   // Smart Replies & Inline Translation States
   const [smartReplies, setSmartReplies] = useState<string[]>([]);
   const [loadingReplies, setLoadingReplies] = useState(false);
-  const [translatedMessages, setTranslatedMessages] = useState<Record<string, { translatedText: string; originalText: string }>>({});
-  const [translatingMessageId, setTranslatingMessageId] = useState<string | null>(null);
-  const [chatSearchQuery, setChatSearchQuery] = useState('');
+  const [translatedMessages, setTranslatedMessages] = useState<
+    Record<string, { translatedText: string; originalText: string }>
+  >({});
+  const [translatingMessageId, setTranslatingMessageId] = useState<
+    string | null
+  >(null);
+  const [chatSearchQuery, setChatSearchQuery] = useState("");
   const navigate = useNavigate();
   const { socket } = useChat();
   const { callUser, callGroup } = useCall();
@@ -283,20 +319,23 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const mediaInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const msgRef = useRef<HTMLAudioElement>(null);
-  const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+  const currentUser = JSON.parse(localStorage.getItem("user") || "{}");
   const cannotReply = !isGroup && (blockedByMe || blockedMe);
 
   // Calculate if the current user can add members based on group privacy
   const isCurrentUserAdmin = (groupAdmins || []).includes(currentUser._id);
   const canAddMembers = isPrivateGroup ? isCurrentUserAdmin : true;
-  const isParticipant = isGroup ? groupMembers.some(m => (m._id || m) === currentUser._id) : true;
+  const isParticipant = isGroup
+    ? groupMembers.some((m) => (m._id || m) === currentUser._id)
+    : true;
 
   const searchMatchingMessages = useMemo(() => {
     const q = chatSearchQuery.trim().toLowerCase();
     if (!q) return [];
-    return messages.filter((m) =>
-      (m.content || '').toLowerCase().includes(q) ||
-      (m.fileName || '').toLowerCase().includes(q)
+    return messages.filter(
+      (m) =>
+        (m.content || "").toLowerCase().includes(q) ||
+        (m.fileName || "").toLowerCase().includes(q),
     );
   }, [messages, chatSearchQuery]);
 
@@ -309,7 +348,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   };
 
   const scrollToMessageInThread = (messageId: string) => {
-    document.getElementById(`msg-${messageId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    document
+      .getElementById(`msg-${messageId}`)
+      ?.scrollIntoView({ behavior: "smooth", block: "center" });
   };
 
   useEffect(() => {
@@ -321,8 +362,12 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     let cancelled = false;
     (async () => {
       try {
-        const res = await axiosInstance.get(`/users/block-relation/${receiverId}`);
-        const data = res.data?.data as { blockedByMe?: boolean; blockedMe?: boolean } | undefined;
+        const res = await axiosInstance.get(
+          `/users/block-relation/${receiverId}`,
+        );
+        const data = res.data?.data as
+          | { blockedByMe?: boolean; blockedMe?: boolean }
+          | undefined;
         if (!cancelled) {
           setBlockedByMe(!!data?.blockedByMe);
           setBlockedMe(!!data?.blockedMe);
@@ -342,40 +387,43 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   useEffect(() => {
     if (isChatSearchOpen) {
       setShowUserDetails(true);
-      setActiveSidePanel('search');
+      setActiveSidePanel("search");
     }
   }, [isChatSearchOpen]);
 
   useEffect(() => {
     if (!socket) return;
     const onBlocked = (payload?: { message?: string }) => {
-      toast.error(payload?.message || 'This action is not allowed.');
+      toast.error(payload?.message || "This action is not allowed.");
     };
 
-    const onBlockStatusChanged = (payload: { blockerId: string, blocked: boolean }) => {
+    const onBlockStatusChanged = (payload: {
+      blockerId: string;
+      blocked: boolean;
+    }) => {
       // Only update state if the person who blocked/unblocked us is the current chat's receiver
       if (payload.blockerId === receiverId) {
         setBlockedMe(payload.blocked);
       }
     };
 
-    socket.on('blocked', onBlocked);
-    socket.on('block-status-changed', onBlockStatusChanged);
+    socket.on("blocked", onBlocked);
+    socket.on("block-status-changed", onBlockStatusChanged);
     return () => {
-      socket.off('blocked', onBlocked);
-      socket.off('block-status-changed', onBlockStatusChanged);
+      socket.off("blocked", onBlocked);
+      socket.off("block-status-changed", onBlockStatusChanged);
     };
   }, [socket, receiverId]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (!(event.target as Element).closest('.message-context-menu')) {
+      if (!(event.target as Element).closest(".message-context-menu")) {
         setActiveMessageMenu(null);
       }
-      if (!(event.target as Element).closest('.attachment-menu-container')) {
+      if (!(event.target as Element).closest(".attachment-menu-container")) {
         setShowAttachmentMenu(false);
       }
-      if (!(event.target as Element).closest('.header-menu-container')) {
+      if (!(event.target as Element).closest(".header-menu-container")) {
         setShowHeaderMenu(false);
       }
     };
@@ -387,7 +435,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     };
   }, [activeMessageMenu, showHeaderMenu]);
 
-  const handleOpenMessageMenu = (msgId: string, e: React.MouseEvent<HTMLButtonElement>) => {
+  const handleOpenMessageMenu = (
+    msgId: string,
+    e: React.MouseEvent<HTMLButtonElement>,
+  ) => {
     if (activeMessageMenu === msgId) {
       setActiveMessageMenu(null);
       return;
@@ -398,7 +449,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       const spaceAbove = rect.top;
       /** Tall menu (reactions + actions); need enough clearance below viewport top / header */
       const SAFE_MARGIN = 400;
-      setDropdownDirection(spaceAbove < SAFE_MARGIN ? 'down' : 'up');
+      setDropdownDirection(spaceAbove < SAFE_MARGIN ? "down" : "up");
     }
     setActiveMessageMenu(msgId);
   };
@@ -439,7 +490,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   };
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
   useEffect(() => {
@@ -449,9 +500,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   // 1. Join Room Effect (Depends on chatId)
   useEffect(() => {
     if (!socket || !activeChatId) return;
-    socket.emit('join-room', activeChatId);
+    socket.emit("join-room", activeChatId);
     return () => {
-      socket.emit('leave-room', activeChatId);
+      socket.emit("leave-room", activeChatId);
     };
   }, [socket, activeChatId]);
 
@@ -473,139 +524,229 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         sender?: { _id?: string; id?: string; fullName?: string } | string;
         senderId?: { _id?: string; id?: string; fullName?: string } | string;
         replyTo?: any;
-        attachments?: Array<{ fileUrl?: string; fileType?: string; fileSize?: number }>;
+        attachments?: Array<{
+          fileUrl?: string;
+          fileType?: string;
+          fileSize?: number;
+        }>;
       };
 
       // Only append messages for the currently active chat
       if (String(incomingMsg.chatId) !== String(activeChatId)) return;
 
-      const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+      const currentUser = JSON.parse(localStorage.getItem("user") || "{}");
       const senderRaw = incomingMsg.senderId ?? incomingMsg.sender;
-      const senderIdStr = typeof senderRaw === 'object' ? (senderRaw?._id || senderRaw?.id) : senderRaw;
+      const senderIdStr =
+        typeof senderRaw === "object"
+          ? senderRaw?._id || senderRaw?.id
+          : senderRaw;
       if (senderIdStr === currentUser._id) return; // Ignore messages sent by me (Axios handles local append)
 
       // Play message notification sound via local React ref
       if (msgRef.current) {
         msgRef.current.play().catch((e: any) => {
           // Dev-safe: missing/unsupported sources should not spam console
-          if (e?.name === 'NotSupportedError') return;
-          if (e?.name === 'AbortError') return;
-          console.log('Audio blocked', e);
+          if (e?.name === "NotSupportedError") return;
+          if (e?.name === "AbortError") return;
+          console.log("Audio blocked", e);
         });
       }
 
-      const resolvedType = incomingMsg.messageType || incomingMsg.type || 'text';
-      const resolvedContent = incomingMsg.content ?? incomingMsg.text ?? '';
+      const resolvedType =
+        incomingMsg.messageType || incomingMsg.type || "text";
+      const resolvedContent = incomingMsg.content ?? incomingMsg.text ?? "";
       const createdAt = incomingMsg.createdAt || new Date().toISOString();
       const senderName =
-        typeof senderRaw === 'object' && senderRaw?.fullName
+        typeof senderRaw === "object" && senderRaw?.fullName
           ? senderRaw.fullName
           : undefined;
 
       const formatted: MessageType = {
         id: incomingMsg._id || incomingMsg.id || `socket-${Date.now()}`,
-        type: ['text', 'audio', 'file', 'image', 'video', 'call_summary'].includes(resolvedType) ? resolvedType as MessageType['type'] : 'text',
-        content: resolvedContent || incomingMsg.attachments?.[0]?.fileUrl || '',
-        fileUrl: incomingMsg.attachments?.[0]?.fileUrl || (['image', 'video', 'file'].includes(resolvedType) ? resolvedContent : undefined),
+        type: [
+          "text",
+          "audio",
+          "file",
+          "image",
+          "video",
+          "call_summary",
+        ].includes(resolvedType)
+          ? (resolvedType as MessageType["type"])
+          : "text",
+        content: resolvedContent || incomingMsg.attachments?.[0]?.fileUrl || "",
+        fileUrl:
+          incomingMsg.attachments?.[0]?.fileUrl ||
+          (["image", "video", "file"].includes(resolvedType)
+            ? resolvedContent
+            : undefined),
         fileName: extractFileName(incomingMsg.attachments?.[0]?.fileUrl),
         fileSize: formatFileSize(incomingMsg.attachments?.[0]?.fileSize),
-        time: new Date(createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        time: new Date(createdAt).toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
         isMine: false,
-        status: 'delivered',
+        status: "delivered",
         replyTo: incomingMsg.replyTo,
         senderName,
       };
 
       // Functional state update avoids stale closure issues
       setMessages((prev) => {
-        if (prev.some(m => m.id === formatted.id)) return prev;
+        if (prev.some((m) => m.id === formatted.id)) return prev;
         return [...prev, formatted];
       });
     };
 
-    const handleMessageDeleted = ({ messageId, type }: { messageId: string, type: string }) => {
+    const handleMessageDeleted = ({
+      messageId,
+      type,
+    }: {
+      messageId: string;
+      type: string;
+    }) => {
       if (!setMessages) return;
-      if (type === 'everyone') {
-        setMessages(prev => prev.filter(m => m.id !== messageId));
+      if (type === "everyone") {
+        setMessages((prev) => prev.filter((m) => m.id !== messageId));
       }
     };
 
-    const handleMessageEdited = ({ messageId, content }: { messageId: string, content: string }) => {
+    const handleMessageEdited = ({
+      messageId,
+      content,
+    }: {
+      messageId: string;
+      content: string;
+    }) => {
       if (!setMessages) return;
-      setMessages(prev => prev.map(m => m.id === messageId ? { ...m, content, isEdited: true } : m));
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === messageId ? { ...m, content, isEdited: true } : m,
+        ),
+      );
     };
 
-    const handleMessagePinned = ({ messageId, isPinned }: { messageId: string, isPinned: boolean }) => {
+    const handleMessagePinned = ({
+      messageId,
+      isPinned,
+    }: {
+      messageId: string;
+      isPinned: boolean;
+    }) => {
       if (!setMessages) return;
-      setMessages(prev => prev.map(m => m.id === messageId ? { ...m, isPinned } : m));
+      setMessages((prev) =>
+        prev.map((m) => (m.id === messageId ? { ...m, isPinned } : m)),
+      );
     };
 
-    const handleMessageReacted = ({ messageId, reactions }: { messageId: string, reactions: any[] }) => {
+    const handleMessageReacted = ({
+      messageId,
+      reactions,
+    }: {
+      messageId: string;
+      reactions: any[];
+    }) => {
       if (!setMessages) return;
-      setMessages(prev => prev.map(m => m.id === messageId ? { ...m, reactions } : m));
+      setMessages((prev) =>
+        prev.map((m) => (m.id === messageId ? { ...m, reactions } : m)),
+      );
     };
 
-    const handleMessageDelivered = ({ chatId, messageId }: { chatId: string; messageId?: string }) => {
+    const handleMessageDelivered = ({
+      chatId,
+      messageId,
+    }: {
+      chatId: string;
+      messageId?: string;
+    }) => {
       if (!setMessages) return;
       if (String(chatId) !== String(activeChatId)) return;
-      setMessages((prev) => prev.map((m) => {
-        if (!m.isMine) return m;
-        if (messageId && m.id !== messageId) return m;
-        return m.status === 'read' ? m : { ...m, status: 'delivered', isPending: false };
-      }));
+      setMessages((prev) =>
+        prev.map((m) => {
+          if (!m.isMine) return m;
+          if (messageId && m.id !== messageId) return m;
+          return m.status === "read"
+            ? m
+            : { ...m, status: "delivered", isPending: false };
+        }),
+      );
     };
 
-    const handleMessagesRead = ({ chatId, readBy }: { chatId: string; readBy?: string }) => {
+    const handleMessagesRead = ({
+      chatId,
+      readBy,
+    }: {
+      chatId: string;
+      readBy?: string;
+    }) => {
       if (!setMessages) return;
       if (String(chatId) !== String(activeChatId)) return;
       // Ignore when we marked incoming messages read ΓÇö only the other party reading our sends updates ticks
       if (readBy && String(readBy) === String(currentUser._id)) return;
-      setMessages((prev) => prev.map((m) => (
-        m.isMine ? { ...m, status: 'read', isPending: false } : m
-      )));
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.isMine ? { ...m, status: "read", isPending: false } : m,
+        ),
+      );
     };
 
     // Canonical event only (avoid double-fires)
-    socket.on('receiveMessage', handleReceiveMessage);
-    socket.on('messageDeleted', handleMessageDeleted);
-    socket.on('messageEdited', handleMessageEdited);
-    socket.on('messagePinned', handleMessagePinned);
-    socket.on('messageReacted', handleMessageReacted);
-    socket.on('messageDelivered', handleMessageDelivered);
-    socket.on('messagesRead', handleMessagesRead);
-    socket.on('messages-read', handleMessagesRead);
+    socket.on("receiveMessage", handleReceiveMessage);
+    socket.on("messageDeleted", handleMessageDeleted);
+    socket.on("messageEdited", handleMessageEdited);
+    socket.on("messagePinned", handleMessagePinned);
+    socket.on("messageReacted", handleMessageReacted);
+    socket.on("messageDelivered", handleMessageDelivered);
+    socket.on("messagesRead", handleMessagesRead);
+    socket.on("messages-read", handleMessagesRead);
 
     return () => {
-      socket.off('receiveMessage', handleReceiveMessage);
-      socket.off('messageDeleted', handleMessageDeleted);
-      socket.off('messageEdited', handleMessageEdited);
-      socket.off('messagePinned', handleMessagePinned);
-      socket.off('messageReacted', handleMessageReacted);
-      socket.off('messageDelivered', handleMessageDelivered);
-      socket.off('messagesRead', handleMessagesRead);
-      socket.off('messages-read', handleMessagesRead);
+      socket.off("receiveMessage", handleReceiveMessage);
+      socket.off("messageDeleted", handleMessageDeleted);
+      socket.off("messageEdited", handleMessageEdited);
+      socket.off("messagePinned", handleMessagePinned);
+      socket.off("messageReacted", handleMessageReacted);
+      socket.off("messageDelivered", handleMessageDelivered);
+      socket.off("messagesRead", handleMessagesRead);
+      socket.off("messages-read", handleMessagesRead);
     };
   }, [socket, setMessages, activeChatId]);
 
   useEffect(() => {
     if (!socket || !activeChatId || !messages.length) return;
-    if (document.visibilityState !== 'visible' || !document.hasFocus()) return;
-    const hasUnreadFromOther = messages.some((m) => !m.isMine && m.status !== 'read');
+    if (document.visibilityState !== "visible" || !document.hasFocus()) return;
+    const hasUnreadFromOther = messages.some(
+      (m) => !m.isMine && m.status !== "read",
+    );
     if (!hasUnreadFromOther) return;
-    socket.emit('markAsRead', { chatId: activeChatId, userId: currentUser._id });
+    socket.emit("markAsRead", {
+      chatId: activeChatId,
+      userId: currentUser._id,
+    });
   }, [socket, setMessages, activeChatId, currentUser._id]);
 
   const handleRecordingComplete = (blob: Blob, durationSeconds: number) => {
+    console.log("📥 [ChatWindow] handleRecordingComplete called!"); // ← ضيف ده
+    console.log("📥 [ChatWindow] Blob size:", blob.size); // ← ضيف ده
+    console.log("📥 [ChatWindow] Duration:", durationSeconds); // ← ضيف ده
+
     setVoiceBlob(blob);
     setVoiceDuration(durationSeconds);
     const url = URL.createObjectURL(blob);
+    console.log("📥 [ChatWindow] Preview URL created:", url); // ← ضيف ده
+
     setVoiceUrl(url);
     setIsRecordingVoice(false);
+    console.log("✅ [ChatWindow] State updated, preview should show now"); // ← ضيف ده
   };
 
   const handleSendMessage = async () => {
     if (cannotReply) {
-      toast.error(blockedByMe ? 'You blocked this user.' : 'You cannot reply to this conversation.');
+      toast.error(
+        blockedByMe
+          ? "You blocked this user."
+          : "You cannot reply to this conversation.",
+      );
       return;
     }
     // 1. Handle Voice Message Send
@@ -616,41 +757,48 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       setIsRecordingVoice(false);
 
       const formData = new FormData();
-      formData.append('audio', audioBlob, 'voice-message.webm');
-      formData.append('messageType', 'audio');
-      formData.append('duration', voiceDuration.toString());
+      formData.append("audio", audioBlob, "voice-message.webm");
+      formData.append("messageType", "audio");
+      formData.append("duration", voiceDuration.toString());
       if (replyingTo) {
-        formData.append('replyTo', replyingTo.id);
+        formData.append("replyTo", replyingTo.id);
       }
 
       try {
-        toast.loading("Sending voice message...", { id: 'voice' });
-        const response = await axiosInstance.post(`/chats/${chatId}/audio`, formData, {
-          headers: { 'Content-Type': 'multipart/form-data' }
-        });
-        toast.success("Voice message sent", { id: 'voice' });
+        toast.loading("Sending voice message...", { id: "voice" });
+        const response = await axiosInstance.post(
+          `/chats/${chatId}/audio`,
+          formData,
+          {
+            headers: { "Content-Type": "multipart/form-data" },
+          },
+        );
+        toast.success("Voice message sent", { id: "voice" });
 
         const saved = response.data.data.message;
         const formatted: MessageType = {
           id: saved._id,
-          type: 'audio',
+          type: "audio",
           content: saved.content,
           duration: voiceDuration,
-          time: new Date(saved.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          time: new Date(saved.createdAt).toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
           isMine: true,
-          status: saved.status || 'sent'
+          status: saved.status || "sent",
         };
 
         if (setMessages) {
-          setMessages(prev => [...prev, formatted]);
+          setMessages((prev) => [...prev, formatted]);
         }
 
         if (socket) {
-          socket.emit('send_message', { chatId, ...saved });
+          socket.emit("send_message", { chatId, ...saved });
         }
         setReplyingTo(null);
       } catch {
-        toast.error("Failed to send voice message", { id: 'voice' });
+        toast.error("Failed to send voice message", { id: "voice" });
       }
       return;
     }
@@ -661,60 +809,72 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     const tempId = `temp-${Date.now()}`;
     const newMsg: MessageType = {
       id: tempId,
-      type: 'text',
+      type: "text",
       content: inputText.trim(),
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      time: new Date().toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
       isMine: true,
       isPending: true,
-      status: 'sending',
-      replyTo: replyingTo
+      status: "sending",
+      replyTo: replyingTo,
     };
 
     if (setMessages) {
-      setMessages(prev => [...prev, newMsg]);
+      setMessages((prev) => [...prev, newMsg]);
     }
     const textToSend = inputText;
-    setInputText('');
+    setInputText("");
     setShowEmojiPicker(false);
 
     try {
       const response = await axiosInstance.post(`/chats/${chatId}/send`, {
         content: textToSend,
-        type: 'text',
-        replyTo: replyingTo?.id
+        type: "text",
+        replyTo: replyingTo?.id,
       });
 
       const saved = response.data.data.message;
       if (setMessages) {
-        setMessages(prev => prev.map(m => m.id === tempId ? {
-          id: saved._id,
-          type: 'text',
-          content: saved.content,
-          time: new Date(saved.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          isMine: true,
-          isPending: false,
-          status: saved.status || 'sent',
-          replyTo: saved.replyTo
-        } : m));
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === tempId
+              ? {
+                  id: saved._id,
+                  type: "text",
+                  content: saved.content,
+                  time: new Date(saved.createdAt).toLocaleTimeString([], {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  }),
+                  isMine: true,
+                  isPending: false,
+                  status: saved.status || "sent",
+                  replyTo: saved.replyTo,
+                }
+              : m,
+          ),
+        );
       }
 
       if (socket) {
-        socket.emit('send_message', {
+        socket.emit("send_message", {
           chatId,
           content: saved.content,
-          messageType: 'text',
+          messageType: "text",
           _id: saved._id,
           createdAt: saved.createdAt,
           senderId: saved.senderId,
-          replyTo: saved.replyTo
+          replyTo: saved.replyTo,
         });
       }
       setReplyingTo(null);
     } catch (error: any) {
-      console.log('Text Message Send Error:', error?.response?.data || error);
+      console.log("Text Message Send Error:", error?.response?.data || error);
       toast.error("Failed to send message");
       if (setMessages) {
-        setMessages(prev => prev.filter(m => m.id !== tempId));
+        setMessages((prev) => prev.filter((m) => m.id !== tempId));
       }
     }
   };
@@ -723,23 +883,31 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     if (!editingText.trim() || !editingMessageId) return;
 
     try {
-      await axiosInstance.put(`/messages/${editingMessageId}/edit`, { content: editingText.trim() });
+      await axiosInstance.put(`/messages/${editingMessageId}/edit`, {
+        content: editingText.trim(),
+      });
       if (setMessages) {
-        setMessages(prev => prev.map(m => m.id === editingMessageId ? { ...m, content: editingText.trim(), isEdited: true } : m));
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === editingMessageId
+              ? { ...m, content: editingText.trim(), isEdited: true }
+              : m,
+          ),
+        );
       }
       setEditingMessageId(null);
-      setEditingText('');
+      setEditingText("");
       toast.success("Message edited");
     } catch (error) {
       toast.error("Failed to edit message");
     }
   };
 
-  const deleteMessage = async (messageId: string, type: 'me' | 'everyone') => {
+  const deleteMessage = async (messageId: string, type: "me" | "everyone") => {
     try {
       await axiosInstance.delete(`/messages/${messageId}`, { data: { type } });
       if (setMessages) {
-        setMessages(prev => prev.filter(m => m.id !== messageId));
+        setMessages((prev) => prev.filter((m) => m.id !== messageId));
       }
       setActiveMessageMenu(null);
       toast.success("Message deleted");
@@ -760,7 +928,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         document.body.prepend(textArea);
         textArea.select();
         try {
-          document.execCommand('copy');
+          document.execCommand("copy");
         } catch (error) {
           toast.error("Failed to copy");
           return;
@@ -786,44 +954,67 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     setActiveMessageMenu(null);
   };
 
-  const handleForwardMessage = async (targetChatId: string, message: MessageType) => {
+  const handleForwardMessage = async (
+    targetChatId: string,
+    message: MessageType,
+  ) => {
     try {
       const payload = {
         chatId: targetChatId,
         content: message.content,
         messageType: message.type,
         isForwarded: true,
-        audioUrl: message.type === 'audio' ? message.fileUrl : undefined,
+        audioUrl: message.type === "audio" ? message.fileUrl : undefined,
         duration: message.duration,
-        attachments: message.fileUrl && message.type !== 'audio'
-          ? [{ fileUrl: message.fileUrl, fileType: message.type, fileSize: message.fileSize ? parseFloat(message.fileSize) : 0 }]
-          : []
+        attachments:
+          message.fileUrl && message.type !== "audio"
+            ? [
+                {
+                  fileUrl: message.fileUrl,
+                  fileType: message.type,
+                  fileSize: message.fileSize ? parseFloat(message.fileSize) : 0,
+                },
+              ]
+            : [],
       };
 
-      const response = await axiosInstance.post(`/chats/${targetChatId}/send`, payload);
+      const response = await axiosInstance.post(
+        `/chats/${targetChatId}/send`,
+        payload,
+      );
 
       // If the target chat is currently open, instantly show the new message
       if (targetChatId === chatId && setMessages) {
-        const newMsgData = response.data?.data?.message || response.data?.message || response.data;
+        const newMsgData =
+          response.data?.data?.message ||
+          response.data?.message ||
+          response.data;
         const newMsg: MessageType = {
           id: newMsgData._id,
-          type: newMsgData.messageType || 'text',
-          content: newMsgData.content || newMsgData.attachments?.[0]?.fileUrl || '',
+          type: newMsgData.messageType || "text",
+          content:
+            newMsgData.content || newMsgData.attachments?.[0]?.fileUrl || "",
           fileUrl: newMsgData.attachments?.[0]?.fileUrl || newMsgData.audioUrl,
           fileName: extractFileName(newMsgData.attachments?.[0]?.fileUrl),
           fileSize: formatFileSize(newMsgData.attachments?.[0]?.fileSize),
-          time: new Date(newMsgData.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          time: new Date(newMsgData.createdAt).toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
           isMine: true,
-          status: 'sent',
-          isForwarded: true
+          status: "sent",
+          isForwarded: true,
         };
-        setMessages(prev => [...prev, newMsg]);
+        setMessages((prev) => [...prev, newMsg]);
       }
 
-      toast.success('Message forwarded');
+      toast.success("Message forwarded");
     } catch (error: any) {
-      console.error('Error forwarding message:', error.response?.data || error.message);
-      toast.error('Failed to forward message');
+      console.error(
+        "Error forwarding message:",
+        error.response?.data || error.message,
+      );
+      toast.error("Failed to forward message");
     }
   };
 
@@ -831,15 +1022,21 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     setLoadingReplies(true);
     setSmartReplies([]);
     try {
-      const res = await axiosInstance.post('/api/ai/chat/generate-reply', { chatId }, { timeout: 60000 });
-      if (res.data?.status === 'success' && Array.isArray(res.data?.data)) {
+      const res = await axiosInstance.post(
+        "/api/ai/chat/generate-reply",
+        { chatId },
+        { timeout: 60000 },
+      );
+      if (res.data?.status === "success" && Array.isArray(res.data?.data)) {
         setSmartReplies(res.data.data);
       } else {
         toast.error("Could not generate replies. Please try again.");
       }
     } catch (err: any) {
       console.error("Error generating smart replies:", err);
-      toast.error(err.response?.data?.message || "Failed to generate smart replies.");
+      toast.error(
+        err.response?.data?.message || "Failed to generate smart replies.",
+      );
     } finally {
       setLoadingReplies(false);
       setActiveMessageMenu(null);
@@ -848,58 +1045,74 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
   const handleSendSmartReplyText = async (text: string) => {
     if (cannotReply) {
-      toast.error(blockedByMe ? 'You blocked this user.' : 'You cannot reply to this conversation.');
+      toast.error(
+        blockedByMe
+          ? "You blocked this user."
+          : "You cannot reply to this conversation.",
+      );
       return;
     }
     const tempId = `temp-${Date.now()}`;
     const newMsg: MessageType = {
       id: tempId,
-      type: 'text',
+      type: "text",
       content: text,
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      time: new Date().toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
       isMine: true,
       isPending: true,
-      status: 'sending',
+      status: "sending",
     };
 
     if (setMessages) {
-      setMessages(prev => [...prev, newMsg]);
+      setMessages((prev) => [...prev, newMsg]);
     }
 
     try {
       const response = await axiosInstance.post(`/chats/${chatId}/send`, {
         content: text,
-        type: 'text',
+        type: "text",
       });
 
       const saved = response.data.data.message;
       if (setMessages) {
-        setMessages(prev => prev.map(m => m.id === tempId ? {
-          id: saved._id,
-          type: 'text',
-          content: saved.content,
-          time: new Date(saved.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          isMine: true,
-          isPending: false,
-          status: saved.status || 'sent',
-        } : m));
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === tempId
+              ? {
+                  id: saved._id,
+                  type: "text",
+                  content: saved.content,
+                  time: new Date(saved.createdAt).toLocaleTimeString([], {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  }),
+                  isMine: true,
+                  isPending: false,
+                  status: saved.status || "sent",
+                }
+              : m,
+          ),
+        );
       }
 
       if (socket) {
-        socket.emit('send_message', {
+        socket.emit("send_message", {
           chatId,
           content: saved.content,
-          messageType: 'text',
+          messageType: "text",
           _id: saved._id,
           createdAt: saved.createdAt,
           senderId: saved.senderId,
         });
       }
     } catch (error: any) {
-      console.log('Smart Reply Send Error:', error?.response?.data || error);
+      console.log("Smart Reply Send Error:", error?.response?.data || error);
       toast.error("Failed to send smart reply");
       if (setMessages) {
-        setMessages(prev => prev.filter(m => m.id !== tempId));
+        setMessages((prev) => prev.filter((m) => m.id !== tempId));
       }
     }
   };
@@ -910,22 +1123,28 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     setActiveMessageMenu(null);
     try {
       const isArabic = /[\u0600-\u06FF]/.test(msg.content);
-      const targetLang = isArabic ? 'en' : 'ar';
-      const res = await axiosInstance.post('/api/ai/chat/translate', { text: msg.content, targetLang }, { timeout: 60000 });
-      if (res.data?.status === 'success' && res.data?.data) {
-        setTranslatedMessages(prev => ({
+      const targetLang = isArabic ? "en" : "ar";
+      const res = await axiosInstance.post(
+        "/api/ai/chat/translate",
+        { text: msg.content, targetLang },
+        { timeout: 60000 },
+      );
+      if (res.data?.status === "success" && res.data?.data) {
+        setTranslatedMessages((prev) => ({
           ...prev,
           [msg.id]: {
             translatedText: res.data.data,
-            originalText: msg.content || ''
-          }
+            originalText: msg.content || "",
+          },
         }));
       } else {
         toast.error("Failed to translate message.");
       }
     } catch (err: any) {
       console.error("Error translating message:", err);
-      toast.error(err.response?.data?.message || "Failed to translate message.");
+      toast.error(
+        err.response?.data?.message || "Failed to translate message.",
+      );
     } finally {
       setTranslatingMessageId(null);
     }
@@ -951,49 +1170,60 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   };
 
   const onEmojiClick = (emojiData: EmojiClickData) => {
-    setInputText(prev => prev + emojiData.emoji);
+    setInputText((prev) => prev + emojiData.emoji);
   };
 
   const uploadFileToServer = async (file: File) => {
     if (cannotReply) {
-      toast.error(blockedByMe ? 'You blocked this user.' : 'You cannot reply to this conversation.');
+      toast.error(
+        blockedByMe
+          ? "You blocked this user."
+          : "You cannot reply to this conversation.",
+      );
       return;
     }
     const formData = new FormData();
-    formData.append('document', file);
-    formData.append('messageType', 'file');
+    formData.append("document", file);
+    formData.append("messageType", "file");
     if (replyingTo) {
-      formData.append('replyTo', replyingTo.id);
+      formData.append("replyTo", replyingTo.id);
     }
 
     try {
-      toast.loading("Uploading file...", { id: 'upload' });
-      const response = await axiosInstance.post(`/chats/${chatId}/upload`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
-      toast.success("File sent", { id: 'upload' });
+      toast.loading("Uploading file...", { id: "upload" });
+      const response = await axiosInstance.post(
+        `/chats/${chatId}/upload`,
+        formData,
+        {
+          headers: { "Content-Type": "multipart/form-data" },
+        },
+      );
+      toast.success("File sent", { id: "upload" });
 
       const saved = response.data.data.message;
       const formatted: MessageType = {
         id: saved._id,
-        type: saved.messageType as any || 'file',
-        content: saved.content || saved.attachments?.[0]?.fileUrl || '',
-        fileUrl: saved.attachments?.[0]?.fileUrl || saved.content || '',
+        type: (saved.messageType as any) || "file",
+        content: saved.content || saved.attachments?.[0]?.fileUrl || "",
+        fileUrl: saved.attachments?.[0]?.fileUrl || saved.content || "",
         fileName: file.name,
         fileSize: formatFileSize(file.size),
-        time: new Date(saved.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        time: new Date(saved.createdAt).toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
         isMine: true,
-        status: saved.status || 'sent',
-        replyTo: saved.replyTo
+        status: saved.status || "sent",
+        replyTo: saved.replyTo,
       };
 
       if (setMessages) {
-        setMessages(prev => [...prev, formatted]);
+        setMessages((prev) => [...prev, formatted]);
       }
       setReplyingTo(null);
     } catch (error: any) {
-      console.log('File Upload Error:', error?.response?.data || error);
-      toast.error("Failed to upload file", { id: 'upload' });
+      console.log("File Upload Error:", error?.response?.data || error);
+      toast.error("Failed to upload file", { id: "upload" });
     }
   };
 
@@ -1003,13 +1233,15 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       uploadFileToServer(file);
       setShowAttachmentMenu(false);
       // Reset input value so same file can be selected again
-      e.target.value = '';
+      e.target.value = "";
     }
   };
 
-  const handleCall = async (type: 'voice' | 'video') => {
+  const handleCall = async (type: "voice" | "video") => {
     if (!isGroup && cannotReply) {
-      toast.error(blockedByMe ? 'You blocked this user.' : 'You cannot call this user.');
+      toast.error(
+        blockedByMe ? "You blocked this user." : "You cannot call this user.",
+      );
       return;
     }
     try {
@@ -1030,7 +1262,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       setShowAddMemberModal(false);
       setUserSearchQuery("");
     } catch (error: unknown) {
-      const errorMessage = (error as { response?: { data?: { message?: string } } })?.response?.data?.message || "Failed to add member";
+      const errorMessage =
+        (error as { response?: { data?: { message?: string } } })?.response
+          ?.data?.message || "Failed to add member";
       toast.error(errorMessage);
     }
   };
@@ -1040,13 +1274,13 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       <main className="flex-1 flex flex-col bg-[#FAFAFA] dark:bg-[#171717] min-h-0 min-w-0 transition-colors duration-300 relative">
         <header
           onClick={(e) => {
-            if (!(e.target as HTMLElement).closest('button')) {
+            if (!(e.target as HTMLElement).closest("button")) {
               if (isGroup && onOpenGroupDetails) {
                 onOpenGroupDetails();
                 return;
               }
               setShowUserDetails(true);
-              setActiveSidePanel('details');
+              setActiveSidePanel("details");
             }
           }}
           className="relative z-[100] h-16 px-4 bg-white/80 dark:bg-[#262626]/80 backdrop-blur-md flex items-center justify-between border-b border-gray-200 dark:border-gray-800 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 shrink-0 transition-colors"
@@ -1054,7 +1288,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           <div className="flex items-center min-w-0 gap-2">
             {!isChatListOpen && (
               <button
-                onClick={(e) => { e.stopPropagation(); onOpenChatList?.(); }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpenChatList?.();
+                }}
                 className="p-1.5 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400 transition-colors shrink-0"
                 title="Exit Focus Mode"
               >
@@ -1062,13 +1299,20 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
               </button>
             )}
             <div className="flex flex-col min-w-0">
-              <h2 className="text-[#171717] dark:text-[#F5F5F5] font-bold text-base truncate">{chatName || 'Unknown Chat'}</h2>
+              <h2 className="text-[#171717] dark:text-[#F5F5F5] font-bold text-base truncate">
+                {chatName || "Unknown Chat"}
+              </h2>
               {isGroup ? (
                 <span className="text-gray-500 dark:text-gray-400 text-xs truncate">
                   {formatGroupMemberLabel(groupMembers)}
                 </span>
               ) : (
-                (isOnline && showOnlineStatus) && <span className="text-[#7C3AED] dark:text-[#8B5CF6] text-xs font-medium">Online</span>
+                isOnline &&
+                showOnlineStatus && (
+                  <span className="text-[#7C3AED] dark:text-[#8B5CF6] text-xs font-medium">
+                    Online
+                  </span>
+                )
               )}
             </div>
           </div>
@@ -1079,14 +1323,18 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                 onClick={(e) => {
                   e.stopPropagation();
                   if (!isGroup && blockedByMe) {
-                    toast.error("You have blocked this user. Unblock them to start a call.");
+                    toast.error(
+                      "You have blocked this user. Unblock them to start a call.",
+                    );
                     return;
                   }
-                  handleCall('video');
+                  handleCall("video");
                 }}
-                className={`px-2.5 py-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-[#7C3AED] transition-colors ${!isGroup && blockedByMe ? 'opacity-40' : ''}`}
+                className={`px-2.5 py-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-[#7C3AED] transition-colors ${!isGroup && blockedByMe ? "opacity-40" : ""}`}
               >
-                <span className="material-icons-round text-[20px]">videocam</span>
+                <span className="material-icons-round text-[20px]">
+                  videocam
+                </span>
               </button>
               <div className="w-px h-5 bg-gray-200 dark:bg-gray-700"></div>
               <button
@@ -1094,12 +1342,14 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                 onClick={(e) => {
                   e.stopPropagation();
                   if (!isGroup && blockedByMe) {
-                    toast.error("You have blocked this user. Unblock them to start a call.");
+                    toast.error(
+                      "You have blocked this user. Unblock them to start a call.",
+                    );
                     return;
                   }
-                  handleCall('voice');
+                  handleCall("voice");
                 }}
-                className={`px-1 py-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-[#7C3AED] transition-colors ${!isGroup && blockedByMe ? 'opacity-40' : ''}`}
+                className={`px-1 py-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-[#7C3AED] transition-colors ${!isGroup && blockedByMe ? "opacity-40" : ""}`}
               >
                 <span className="material-icons-round text-[18px]">call</span>
               </button>
@@ -1108,10 +1358,20 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             {/* 3-Dots Header Menu ΓÇö high z-index so message rows never paint over */}
             <div className="relative z-[110] header-menu-container">
               <button
-                onClick={(e) => { e.stopPropagation(); setShowHeaderMenu(!showHeaderMenu); }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowHeaderMenu(!showHeaderMenu);
+                }}
                 className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-800 rounded-full transition-colors text-gray-500 dark:text-gray-400"
               >
-                <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                <svg
+                  viewBox="0 0 24 24"
+                  className="w-5 h-5"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  aria-hidden="true"
+                >
                   <circle cx="12" cy="5" r="1.5" />
                   <circle cx="12" cy="12" r="1.5" />
                   <circle cx="12" cy="19" r="1.5" />
@@ -1133,16 +1393,23 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                       } else if (receiverId && onOpenProfile) {
                         onOpenProfile(receiverId);
                       } else {
-                        toast.error('Could not open contact profile.');
+                        toast.error("Could not open contact profile.");
                       }
                     }}
                     className="w-full text-left flex items-center gap-3 px-4 py-3 text-sm text-gray-200 hover:bg-gray-700 transition-colors cursor-pointer"
                   >
-                    <svg viewBox="0 0 24 24" className="w-[18px] h-[18px] text-gray-400" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                    <svg
+                      viewBox="0 0 24 24"
+                      className="w-[18px] h-[18px] text-gray-400"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      aria-hidden="true"
+                    >
                       <path d="M20 21a8 8 0 1 0-16 0" />
                       <circle cx="12" cy="8" r="4" />
                     </svg>
-                    {isGroup ? 'Group Details' : 'View Profile'}
+                    {isGroup ? "Group Details" : "View Profile"}
                   </button>
 
                   <button
@@ -1151,12 +1418,19 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                       e.stopPropagation();
                       setShowHeaderMenu(false);
                       setShowUserDetails(true);
-                      setActiveSidePanel('search');
+                      setActiveSidePanel("search");
                       onChatSearchOpenChange?.(true);
                     }}
                     className="w-full text-left flex items-center gap-3 px-4 py-3 text-sm text-gray-200 hover:bg-gray-700 transition-colors cursor-pointer"
                   >
-                    <svg viewBox="0 0 24 24" className="w-[18px] h-[18px] text-gray-400" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                    <svg
+                      viewBox="0 0 24 24"
+                      className="w-[18px] h-[18px] text-gray-400"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      aria-hidden="true"
+                    >
                       <circle cx="11" cy="11" r="7" />
                       <path d="M20 20l-3.5-3.5" />
                     </svg>
@@ -1173,12 +1447,21 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                       if (onOpenSharedMedia) {
                         onOpenSharedMedia();
                       } else {
-                        toast.error('Shared media panel is available in your chats list.');
+                        toast.error(
+                          "Shared media panel is available in your chats list.",
+                        );
                       }
                     }}
                     className="w-full text-left flex items-center gap-3 px-4 py-3 text-sm text-gray-200 hover:bg-gray-700 transition-colors cursor-pointer"
                   >
-                    <svg viewBox="0 0 24 24" className="w-[18px] h-[18px] text-gray-400" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                    <svg
+                      viewBox="0 0 24 24"
+                      className="w-[18px] h-[18px] text-gray-400"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      aria-hidden="true"
+                    >
                       <rect x="4" y="5" width="16" height="14" rx="2" />
                       <path d="M8 11l2.5 2.5L14 10l6 6" />
                       <path d="M9 9h.01" />
@@ -1195,7 +1478,14 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                     className="w-full text-left flex items-center gap-3 px-4 py-3 text-sm text-gray-200 hover:bg-gray-700 transition-colors cursor-pointer"
                   >
                     {isMuted ? (
-                      <svg viewBox="0 0 24 24" className="w-[18px] h-[18px] text-gray-400" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                      <svg
+                        viewBox="0 0 24 24"
+                        className="w-[18px] h-[18px] text-gray-400"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        aria-hidden="true"
+                      >
                         <path d="M12 22a2 2 0 0 0 2-2H10a2 2 0 0 0 2 2Z" />
                         <path d="M18 16V11a6 6 0 1 0-12 0v5" />
                         <path d="M5 16h14" />
@@ -1203,14 +1493,21 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                         <path d="M21 8l-2 2" />
                       </svg>
                     ) : (
-                      <svg viewBox="0 0 24 24" className="w-[18px] h-[18px] text-gray-400" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                      <svg
+                        viewBox="0 0 24 24"
+                        className="w-[18px] h-[18px] text-gray-400"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        aria-hidden="true"
+                      >
                         <path d="M12 22a2 2 0 0 0 2-2H10a2 2 0 0 0 2 2Z" />
                         <path d="M18 16V11a6 6 0 1 0-12 0v5" />
                         <path d="M5 16h14" />
                         <path d="M4 4l16 16" />
                       </svg>
                     )}
-                    {isMuted ? 'Unmute Notifications' : 'Mute Notifications'}
+                    {isMuted ? "Unmute Notifications" : "Mute Notifications"}
                   </button>
 
                   {onCloseChat && (
@@ -1223,7 +1520,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                       }}
                       className="w-full text-left flex items-center gap-3 px-4 py-3 text-sm text-gray-200 hover:bg-gray-700 transition-colors cursor-pointer"
                     >
-                      <span className="material-icons-round text-[18px] text-gray-400">close</span>
+                      <span className="material-icons-round text-[18px] text-gray-400">
+                        close
+                      </span>
                       Close Chat
                     </button>
                   )}
@@ -1238,7 +1537,14 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                     }}
                     className="w-full text-left flex items-center gap-3 px-4 py-3 text-sm text-red-500 hover:bg-red-500/10 transition-colors cursor-pointer"
                   >
-                    <svg viewBox="0 0 24 24" className="w-[18px] h-[18px]" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                    <svg
+                      viewBox="0 0 24 24"
+                      className="w-[18px] h-[18px]"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      aria-hidden="true"
+                    >
                       <path d="M3 6h18" />
                       <path d="M8 6V4h8v2" />
                       <path d="M6 6l1 16h10l1-16" />
@@ -1257,11 +1563,18 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                       }}
                       className="w-full text-left flex items-center gap-3 px-4 py-3 text-sm text-red-500 hover:bg-red-500/10 transition-colors cursor-pointer"
                     >
-                      <svg viewBox="0 0 24 24" className="w-[18px] h-[18px]" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                      <svg
+                        viewBox="0 0 24 24"
+                        className="w-[18px] h-[18px]"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        aria-hidden="true"
+                      >
                         <circle cx="12" cy="12" r="9" />
                         <path d="M7 7l10 10" />
                       </svg>
-                      {blockedByMe ? 'Unblock User' : 'Block User'}
+                      {blockedByMe ? "Unblock User" : "Block User"}
                     </button>
                   )}
                 </div>
@@ -1270,21 +1583,42 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           </div>
         </header>
 
-        {messages.find(m => m.isPinned) && (
+        {messages.find((m) => m.isPinned) && (
           <div className="bg-white/95 dark:bg-[#262626]/95 backdrop-blur-md border-b border-gray-200 dark:border-gray-800 px-4 py-2 flex items-center justify-between shadow-sm z-10 shrink-0 sticky top-0 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
             <div className="flex items-center gap-3 min-w-0">
-              <span className="material-icons-round text-[#7C3AED] text-[18px] shrink-0">push_pin</span>
+              <span className="material-icons-round text-[#7C3AED] text-[18px] shrink-0">
+                push_pin
+              </span>
               <div className="flex flex-col min-w-0">
-                <span className="text-[#7C3AED] font-bold text-[11px] uppercase tracking-wide">Pinned Message</span>
+                <span className="text-[#7C3AED] font-bold text-[11px] uppercase tracking-wide">
+                  Pinned Message
+                </span>
                 <span className="text-[#171717] dark:text-[#F5F5F5] text-sm truncate font-medium">
-                  {messages.find(m => m.isPinned)?.content || 'Media Message'}
+                  {messages.find((m) => m.isPinned)?.type === "audio" ? (
+                    <span className="flex items-center gap-1">
+                      <span className="material-icons-round text-[11px]">
+                        mic
+                      </span>{" "}
+                      Voice message
+                    </span>
+                  ) : messages.find((m) => m.isPinned)?.type ===
+                    "call_summary" ? (
+                    <span className="flex items-center gap-1">
+                      <span className="material-icons-round text-[11px]">
+                        call
+                      </span>{" "}
+                      {messages.find((m) => m.isPinned)?.content}
+                    </span>
+                  ) : (
+                    messages.find((m) => m.isPinned)?.content || "Media Message"
+                  )}
                 </span>
               </div>
             </div>
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                const pinnedMsg = messages.find(m => m.isPinned);
+                const pinnedMsg = messages.find((m) => m.isPinned);
                 if (pinnedMsg) handlePin(pinnedMsg.id);
               }}
               className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors shrink-0 p-1"
@@ -1296,25 +1630,37 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
         <div className="relative flex-1 overflow-y-auto hide-scrollbar p-6 space-y-4">
           <div className="flex justify-center my-4">
-            <span className="bg-gray-200 dark:bg-gray-800 text-gray-600 dark:text-gray-400 text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider">Today</span>
+            <span className="bg-gray-200 dark:bg-gray-800 text-gray-600 dark:text-gray-400 text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider">
+              Today
+            </span>
           </div>
 
           {messages.map((msg) => (
-            <div id={`msg-${msg.id}`} key={msg.id} className={`group flex flex-col w-full mb-2 ${msg.isMine ? 'items-end' : 'items-start'} transition-colors duration-500 rounded-xl`}>
+            <div
+              id={`msg-${msg.id}`}
+              key={msg.id}
+              className={`group flex flex-col w-full mb-2 ${msg.isMine ? "items-end" : "items-start"} transition-colors duration-500 rounded-xl`}
+            >
               <div className="relative max-w-[85%] flex flex-col">
                 {msg.isPinned && (
-                  <div className={`text-[10px] text-[#7C3AED] flex items-center gap-1 mb-1 ${msg.isMine ? 'justify-end' : 'justify-start'}`}>
-                    <span className="material-icons-round text-[10px]">push_pin</span> Pinned
+                  <div
+                    className={`text-[10px] text-[#7C3AED] flex items-center gap-1 mb-1 ${msg.isMine ? "justify-end" : "justify-start"}`}
+                  >
+                    <span className="material-icons-round text-[10px]">
+                      push_pin
+                    </span>{" "}
+                    Pinned
                   </div>
                 )}
                 {isGroup && !msg.isDeletedForEveryone && (
                   <span
-                    className={`text-xs font-semibold mb-0.5 px-0.5 ${msg.isMine
-                        ? 'text-[#7C3AED] dark:text-[#8B5CF6] self-end'
-                        : 'text-gray-500 dark:text-gray-400 self-start'
-                      }`}
+                    className={`text-xs font-semibold mb-0.5 px-0.5 ${
+                      msg.isMine
+                        ? "text-[#7C3AED] dark:text-[#8B5CF6] self-end"
+                        : "text-gray-500 dark:text-gray-400 self-start"
+                    }`}
                   >
-                    {msg.isMine ? 'You' : (msg.senderName || 'Member')}
+                    {msg.isMine ? "You" : msg.senderName || "Member"}
                   </span>
                 )}
                 {msg.isDeletedForEveryone ? (
@@ -1325,60 +1671,138 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                 ) : (
                   <>
                     {msg.isForwarded && (
-                      <div className={`text-[10px] text-gray-500 flex items-center gap-1 mb-0.5 ${msg.isMine ? 'justify-end' : 'justify-start'}`}>
-                        <span className="material-icons-round text-[10px]">forward</span> Forwarded
+                      <div
+                        className={`text-[10px] text-gray-500 flex items-center gap-1 mb-0.5 ${msg.isMine ? "justify-end" : "justify-start"}`}
+                      >
+                        <span className="material-icons-round text-[10px]">
+                          forward
+                        </span>{" "}
+                        Forwarded
                       </div>
                     )}
-                    {msg.type === 'text' ? (
-                      <div className={`relative ${msg.isMine ? 'bg-[#7C3AED] text-white rounded-tr-none' : 'bg-white dark:bg-[#262626] text-[#171717] dark:text-[#F5F5F5] border border-gray-200 dark:border-gray-800 rounded-tl-none'} rounded-xl p-3 pr-10 shadow-sm ${msg.isPending ? 'opacity-70' : ''}`}>
+                    {msg.type === "text" ? (
+                      <div
+                        className={`relative ${msg.isMine ? "bg-[#7C3AED] text-white rounded-tr-none" : "bg-white dark:bg-[#262626] text-[#171717] dark:text-[#F5F5F5] border border-gray-200 dark:border-gray-800 rounded-tl-none"} rounded-xl p-3 pr-10 shadow-sm ${msg.isPending ? "opacity-70" : ""}`}
+                      >
                         {editingMessageId === msg.id ? (
                           <div className="flex flex-col gap-2">
                             <input
                               type="text"
                               value={editingText}
-                              onChange={e => setEditingText(e.target.value)}
+                              onChange={(e) => setEditingText(e.target.value)}
                               className="text-[#171717] px-2 py-1 rounded text-sm min-w-[200px]"
                               autoFocus
-                              onKeyDown={e => {
-                                if (e.key === 'Enter') submitEditMessage();
-                                if (e.key === 'Escape') setEditingMessageId(null);
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") submitEditMessage();
+                                if (e.key === "Escape")
+                                  setEditingMessageId(null);
                               }}
                             />
                             <div className="flex justify-end gap-2 text-xs">
-                              <button onClick={() => setEditingMessageId(null)} className="text-gray-200 hover:text-white">Cancel</button>
-                              <button onClick={submitEditMessage} className="font-bold hover:text-green-300">Save</button>
+                              <button
+                                onClick={() => setEditingMessageId(null)}
+                                className="text-gray-200 hover:text-white"
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                onClick={submitEditMessage}
+                                className="font-bold hover:text-green-300"
+                              >
+                                Save
+                              </button>
                             </div>
                           </div>
                         ) : (
                           <>
                             {msg.replyTo && (
                               <div
-                                onClick={() => { const el = document.getElementById(`msg-${msg.replyTo._id || msg.replyTo.id}`); el?.scrollIntoView({ behavior: 'smooth', block: 'center' }); el?.classList.add('bg-gray-200', 'dark:bg-gray-800'); setTimeout(() => el?.classList.remove('bg-gray-200', 'dark:bg-gray-800'), 1500); }}
-                                className={`mb-2 pl-3 border-l-4 rounded-r bg-black/5 dark:bg-black/20 p-2 cursor-pointer transition-colors hover:bg-black/10 dark:hover:bg-black/30 ${msg.isMine ? 'border-white/50 text-white/90' : 'border-[#7C3AED] text-[#171717] dark:text-[#F5F5F5]'} text-xs overflow-hidden max-w-full`}
+                                onClick={() => {
+                                  const el = document.getElementById(
+                                    `msg-${msg.replyTo._id || msg.replyTo.id}`,
+                                  );
+                                  el?.scrollIntoView({
+                                    behavior: "smooth",
+                                    block: "center",
+                                  });
+                                  el?.classList.add(
+                                    "bg-gray-200",
+                                    "dark:bg-gray-800",
+                                  );
+                                  setTimeout(
+                                    () =>
+                                      el?.classList.remove(
+                                        "bg-gray-200",
+                                        "dark:bg-gray-800",
+                                      ),
+                                    1500,
+                                  );
+                                }}
+                                className={`mb-2 pl-3 border-l-4 rounded-r bg-black/5 dark:bg-black/20 p-2 cursor-pointer transition-colors hover:bg-black/10 dark:hover:bg-black/30 ${msg.isMine ? "border-white/50 text-white/90" : "border-[#7C3AED] text-[#171717] dark:text-[#F5F5F5]"} text-xs overflow-hidden max-w-full`}
                               >
-                                <div className={`font-bold mb-0.5 ${msg.isMine ? 'text-white' : 'text-[#7C3AED] dark:text-[#8B5CF6]'}`}>{msg.replyTo.senderId?.fullName || 'User'}</div>
+                                <div
+                                  className={`font-bold mb-0.5 ${msg.isMine ? "text-white" : "text-[#7C3AED] dark:text-[#8B5CF6]"}`}
+                                >
+                                  {msg.replyTo.senderId?.fullName || "User"}
+                                </div>
                                 <div className="opacity-80">
                                   {(() => {
-                                    const fileContent = typeof msg.replyTo.content === 'string' ? msg.replyTo.content : '';
-                                    const isImage = msg.replyTo.messageType === 'image' || msg.replyTo.attachments?.[0]?.fileType?.startsWith('image/') || fileContent.match(/\.(jpeg|jpg|gif|png|webp)$/i);
-                                    const isAudio = msg.replyTo.messageType === 'audio' || fileContent.match(/\.(webm|mp3|wav|ogg)$/i);
-                                    const isDoc = msg.replyTo.messageType === 'file' || msg.replyTo.messageType === 'document' || fileContent.match(/\.(pdf|doc|docx|txt|zip|rar)$/i);
+                                    const fileContent =
+                                      typeof msg.replyTo.content === "string"
+                                        ? msg.replyTo.content
+                                        : "";
+                                    const isImage =
+                                      msg.replyTo.messageType === "image" ||
+                                      msg.replyTo.attachments?.[0]?.fileType?.startsWith(
+                                        "image/",
+                                      ) ||
+                                      fileContent.match(
+                                        /\.(jpeg|jpg|gif|png|webp)$/i,
+                                      );
+                                    const isAudio =
+                                      msg.replyTo.messageType === "audio" ||
+                                      fileContent.match(
+                                        /\.(webm|mp3|wav|ogg)$/i,
+                                      );
+                                    const isDoc =
+                                      msg.replyTo.messageType === "file" ||
+                                      msg.replyTo.messageType === "document" ||
+                                      fileContent.match(
+                                        /\.(pdf|doc|docx|txt|zip|rar)$/i,
+                                      );
 
                                     if (isImage) {
-                                      const rawUrl = msg.replyTo.attachments?.[0]?.fileUrl || (fileContent.match(/\.(jpeg|jpg|gif|png|webp)$/i) ? fileContent : null);
-                                      const fullUrl = resolveChatMediaUrl(rawUrl || undefined);
+                                      const rawUrl =
+                                        msg.replyTo.attachments?.[0]?.fileUrl ||
+                                        (fileContent.match(
+                                          /\.(jpeg|jpg|gif|png|webp)$/i,
+                                        )
+                                          ? fileContent
+                                          : null);
+                                      const fullUrl = resolveChatMediaUrl(
+                                        rawUrl || undefined,
+                                      );
                                       return (
                                         <div className="flex items-center gap-2 mt-1">
                                           {fullUrl && (
                                             <div className="w-10 h-10 rounded shrink-0 overflow-hidden bg-black/10 dark:bg-white/10">
-                                              <img src={fullUrl} alt="thumb" className="w-full h-full object-cover" />
+                                              <img
+                                                src={fullUrl}
+                                                alt="thumb"
+                                                className="w-full h-full object-cover"
+                                              />
                                             </div>
                                           )}
                                         </div>
                                       );
                                     }
 
-                                    if (isAudio) return <span className="truncate block">≡ƒÄñ Voice Message</span>;
+                                    if (isAudio)
+                                      return (
+                                        <span className="truncate block">
+                                          ≡ƒÄñ Voice Message
+                                        </span>
+                                      );
 
                                     if (isDoc) {
                                       return (
@@ -1388,28 +1812,52 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                                       );
                                     }
 
-                                    return <span className="truncate block">{fileContent || 'Media Message'}</span>;
+                                    return (
+                                      <span className="truncate block">
+                                        {fileContent || "Media Message"}
+                                      </span>
+                                    );
                                   })()}
                                 </div>
                               </div>
                             )}
                             {translatingMessageId === msg.id ? (
                               <div className="flex items-center gap-2 text-xs py-1 opacity-75">
-                                <svg className="animate-spin h-3.5 w-3.5 text-current" fill="none" viewBox="0 0 24 24">
-                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                <svg
+                                  className="animate-spin h-3.5 w-3.5 text-current"
+                                  fill="none"
+                                  viewBox="0 0 24 24"
+                                >
+                                  <circle
+                                    className="opacity-25"
+                                    cx="12"
+                                    cy="12"
+                                    r="10"
+                                    stroke="currentColor"
+                                    strokeWidth="4"
+                                  />
+                                  <path
+                                    className="opacity-75"
+                                    fill="currentColor"
+                                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                                  />
                                 </svg>
                                 <span className="italic">Translating...</span>
                               </div>
                             ) : translatedMessages[msg.id] ? (
                               <div className="space-y-1">
                                 <p className="text-xs opacity-75 flex items-center gap-1 font-medium">
-                                  <span className="material-icons-round text-[10px]">g_translate</span> Translated
+                                  <span className="material-icons-round text-[10px]">
+                                    g_translate
+                                  </span>{" "}
+                                  Translated
                                 </p>
-                                <p className="text-sm leading-relaxed">{translatedMessages[msg.id].translatedText}</p>
+                                <p className="text-sm leading-relaxed">
+                                  {translatedMessages[msg.id].translatedText}
+                                </p>
                                 <button
                                   onClick={() => {
-                                    setTranslatedMessages(prev => {
+                                    setTranslatedMessages((prev) => {
                                       const copy = { ...prev };
                                       delete copy[msg.id];
                                       return copy;
@@ -1421,18 +1869,28 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                                 </button>
                               </div>
                             ) : (
-                              <p className="text-sm leading-relaxed">{msg.content}</p>
+                              <p className="text-sm leading-relaxed">
+                                {msg.content}
+                              </p>
                             )}
                           </>
                         )}
-                        <div className={`flex justify-end items-center gap-1 mt-1 ${msg.isMine ? 'text-white/80' : 'text-gray-400'}`}>
+                        <div
+                          className={`flex justify-end items-center gap-1 mt-1 ${msg.isMine ? "text-white/80" : "text-gray-400"}`}
+                        >
                           <span className="text-[10px]">{msg.time}</span>
-                          {msg.isEdited && <span className="text-[10px] italic">Edited</span>}
+                          {msg.isEdited && (
+                            <span className="text-[10px] italic">Edited</span>
+                          )}
                           {msg.isMine && (
-                            <span className={`material-icons text-[12px] ${msg.status === 'read' ? 'text-blue-300' : ''}`}>
-                              {msg.isPending || msg.status === 'sending'
-                                ? 'schedule'
-                                : (msg.status === 'sent' ? 'done' : 'done_all')}
+                            <span
+                              className={`material-icons text-[12px] ${msg.status === "read" ? "text-blue-300" : ""}`}
+                            >
+                              {msg.isPending || msg.status === "sending"
+                                ? "schedule"
+                                : msg.status === "sent"
+                                  ? "done"
+                                  : "done_all"}
                             </span>
                           )}
                         </div>
@@ -1441,32 +1899,90 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                       <div className="relative bg-white dark:bg-[#262626] border border-gray-200 dark:border-gray-800 rounded-xl rounded-tl-none p-2 pr-10 shadow-sm">
                         {msg.replyTo && (
                           <div
-                            onClick={() => { const el = document.getElementById(`msg-${msg.replyTo._id || msg.replyTo.id}`); el?.scrollIntoView({ behavior: 'smooth', block: 'center' }); el?.classList.add('bg-gray-200', 'dark:bg-gray-800'); setTimeout(() => el?.classList.remove('bg-gray-200', 'dark:bg-gray-800'), 1500); }}
+                            onClick={() => {
+                              const el = document.getElementById(
+                                `msg-${msg.replyTo._id || msg.replyTo.id}`,
+                              );
+                              el?.scrollIntoView({
+                                behavior: "smooth",
+                                block: "center",
+                              });
+                              el?.classList.add(
+                                "bg-gray-200",
+                                "dark:bg-gray-800",
+                              );
+                              setTimeout(
+                                () =>
+                                  el?.classList.remove(
+                                    "bg-gray-200",
+                                    "dark:bg-gray-800",
+                                  ),
+                                1500,
+                              );
+                            }}
                             className={`mb-2 pl-3 border-l-4 rounded-r bg-black/5 dark:bg-black/20 p-2 cursor-pointer transition-colors hover:bg-black/10 dark:hover:bg-black/30 border-[#7C3AED] text-[#171717] dark:text-[#F5F5F5] text-xs overflow-hidden max-w-full`}
                           >
-                            <div className={`font-bold mb-0.5 text-[#7C3AED] dark:text-[#8B5CF6]`}>{msg.replyTo.senderId?.fullName || 'User'}</div>
+                            <div
+                              className={`font-bold mb-0.5 text-[#7C3AED] dark:text-[#8B5CF6]`}
+                            >
+                              {msg.replyTo.senderId?.fullName || "User"}
+                            </div>
                             <div className="opacity-80">
                               {(() => {
-                                const fileContent = typeof msg.replyTo.content === 'string' ? msg.replyTo.content : '';
-                                const isImage = msg.replyTo.messageType === 'image' || msg.replyTo.attachments?.[0]?.fileType?.startsWith('image/') || fileContent.match(/\.(jpeg|jpg|gif|png|webp)$/i);
-                                const isAudio = msg.replyTo.messageType === 'audio' || fileContent.match(/\.(webm|mp3|wav|ogg)$/i);
-                                const isDoc = msg.replyTo.messageType === 'file' || msg.replyTo.messageType === 'document' || fileContent.match(/\.(pdf|doc|docx|txt|zip|rar)$/i);
+                                const fileContent =
+                                  typeof msg.replyTo.content === "string"
+                                    ? msg.replyTo.content
+                                    : "";
+                                const isImage =
+                                  msg.replyTo.messageType === "image" ||
+                                  msg.replyTo.attachments?.[0]?.fileType?.startsWith(
+                                    "image/",
+                                  ) ||
+                                  fileContent.match(
+                                    /\.(jpeg|jpg|gif|png|webp)$/i,
+                                  );
+                                const isAudio =
+                                  msg.replyTo.messageType === "audio" ||
+                                  fileContent.match(/\.(webm|mp3|wav|ogg)$/i);
+                                const isDoc =
+                                  msg.replyTo.messageType === "file" ||
+                                  msg.replyTo.messageType === "document" ||
+                                  fileContent.match(
+                                    /\.(pdf|doc|docx|txt|zip|rar)$/i,
+                                  );
 
                                 if (isImage) {
-                                  const rawUrl = msg.replyTo.attachments?.[0]?.fileUrl || (fileContent.match(/\.(jpeg|jpg|gif|png|webp)$/i) ? fileContent : null);
-                                  const fullUrl = resolveChatMediaUrl(rawUrl || undefined);
+                                  const rawUrl =
+                                    msg.replyTo.attachments?.[0]?.fileUrl ||
+                                    (fileContent.match(
+                                      /\.(jpeg|jpg|gif|png|webp)$/i,
+                                    )
+                                      ? fileContent
+                                      : null);
+                                  const fullUrl = resolveChatMediaUrl(
+                                    rawUrl || undefined,
+                                  );
                                   return (
                                     <div className="flex items-center gap-2 mt-1">
                                       {fullUrl && (
                                         <div className="w-10 h-10 rounded shrink-0 overflow-hidden bg-black/10 dark:bg-white/10">
-                                          <img src={fullUrl} alt="thumb" className="w-full h-full object-cover" />
+                                          <img
+                                            src={fullUrl}
+                                            alt="thumb"
+                                            className="w-full h-full object-cover"
+                                          />
                                         </div>
                                       )}
                                     </div>
                                   );
                                 }
 
-                                if (isAudio) return <span className="truncate block">≡ƒÄñ Voice Message</span>;
+                                if (isAudio)
+                                  return (
+                                    <span className="truncate block">
+                                      ≡ƒÄñ Voice Message
+                                    </span>
+                                  );
 
                                 if (isDoc) {
                                   return (
@@ -1476,32 +1992,62 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                                   );
                                 }
 
-                                return <span className="truncate block">{fileContent || 'Media Message'}</span>;
+                                return (
+                                  <span className="truncate block">
+                                    {fileContent || "Media Message"}
+                                  </span>
+                                );
                               })()}
                             </div>
                           </div>
                         )}
-                        {msg.type === 'audio' ? (
+                        {msg.type === "audio" ? (
                           <div className="flex flex-col">
-                            <audio controls controlsList="nodownload noplaybackrate" src={resolveChatMediaUrl(msg?.content || msg?.fileUrl || undefined)} className="max-w-[200px] h-10 mb-1 [&::-webkit-media-controls-enclosure]:rounded-md [&::-webkit-media-controls-panel]:bg-gray-100 dark:[&::-webkit-media-controls-panel]:bg-gray-800 [&::-webkit-media-controls-overflow-button]:hidden" />
-                            {msg.duration !== undefined && <span className="text-[10px] text-gray-400 text-right">{Math.floor(msg.duration / 60)}:{(msg.duration % 60).toString().padStart(2, '0')}</span>}
+                            <audio
+                              controls
+                              controlsList="nodownload noplaybackrate"
+                              src={resolveChatMediaUrl(
+                                msg?.content || msg?.fileUrl || undefined,
+                              )}
+                              className="max-w-[200px] h-10 mb-1 [&::-webkit-media-controls-enclosure]:rounded-md [&::-webkit-media-controls-panel]:bg-gray-100 dark:[&::-webkit-media-controls-panel]:bg-gray-800 [&::-webkit-media-controls-overflow-button]:hidden"
+                            />
+                            {msg.duration !== undefined && (
+                              <span className="text-[10px] text-gray-400 text-right">
+                                {Math.floor(msg.duration / 60)}:
+                                {(msg.duration % 60)
+                                  .toString()
+                                  .padStart(2, "0")}
+                              </span>
+                            )}
                           </div>
                         ) : (
                           (() => {
                             const fileUrl = msg?.fileUrl || msg?.content;
-                            const fullUrl = resolveChatMediaUrl(fileUrl || undefined) || '#';
-                            const isImage = msg?.type === 'image' || msg?.fileName?.match(/\.(jpeg|jpg|gif|png|webp)$/i) || fileUrl?.match(/\.(jpeg|jpg|gif|png|webp)$/i);
+                            const fullUrl =
+                              resolveChatMediaUrl(fileUrl || undefined) || "#";
+                            const isImage =
+                              msg?.type === "image" ||
+                              msg?.fileName?.match(
+                                /\.(jpeg|jpg|gif|png|webp)$/i,
+                              ) ||
+                              fileUrl?.match(/\.(jpeg|jpg|gif|png|webp)$/i);
 
                             return (
                               <div
                                 onClick={() => {
                                   if (isImage) {
-                                    setViewingFile({ url: fullUrl, type: 'image' });
+                                    setViewingFile({
+                                      url: fullUrl,
+                                      type: "image",
+                                    });
                                   } else {
                                     const downloadUrl = getDownloadUrl(fullUrl);
-                                    const link = document.createElement('a');
+                                    const link = document.createElement("a");
                                     link.href = downloadUrl;
-                                    link.setAttribute('download', msg?.fileName || 'Attachment');
+                                    link.setAttribute(
+                                      "download",
+                                      msg?.fileName || "Attachment",
+                                    );
                                     document.body.appendChild(link);
                                     link.click();
                                     document.body.removeChild(link);
@@ -1510,15 +2056,27 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                                 className="block rounded-lg overflow-hidden mb-2 hover:opacity-90 transition-opacity cursor-pointer"
                               >
                                 {isImage ? (
-                                  <img src={fullUrl} alt={msg?.fileName || 'Attachment'} className="max-w-xs max-h-64 object-cover rounded-lg" />
+                                  <img
+                                    src={fullUrl}
+                                    alt={msg?.fileName || "Attachment"}
+                                    className="max-w-xs max-h-64 object-cover rounded-lg"
+                                  />
                                 ) : (
                                   <div className="bg-[#FAFAFA] dark:bg-[#171717] p-4 flex items-center gap-3 border border-gray-200 dark:border-gray-800">
                                     <div className="w-10 h-10 bg-white dark:bg-[#262626] rounded flex items-center justify-center border border-gray-200 dark:border-gray-800">
-                                      <span className="material-icons text-[#7C3AED]">description</span>
+                                      <span className="material-icons text-[#7C3AED]">
+                                        description
+                                      </span>
                                     </div>
                                     <div className="flex flex-col">
-                                      <span className="text-[#171717] dark:text-[#F5F5F5] text-sm font-medium">{msg?.fileName || 'Attachment'}</span>
-                                      {msg?.fileSize && <span className="text-gray-400 text-[10px]">{msg?.fileSize}</span>}
+                                      <span className="text-[#171717] dark:text-[#F5F5F5] text-sm font-medium">
+                                        {msg?.fileName || "Attachment"}
+                                      </span>
+                                      {msg?.fileSize && (
+                                        <span className="text-gray-400 text-[10px]">
+                                          {msg?.fileSize}
+                                        </span>
+                                      )}
                                     </div>
                                   </div>
                                 )}
@@ -1526,7 +2084,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                             );
                           })()
                         )}
-                        <span className="block text-right text-[10px] text-gray-400">{msg?.time}</span>
+                        <span className="block text-right text-[10px] text-gray-400">
+                          {msg?.time}
+                        </span>
                       </div>
                     )}
                   </>
@@ -1535,14 +2095,17 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                 {/* Message Context Menu */}
                 {!msg.isDeletedForEveryone && (
                   <div
-                    className={`message-context-menu absolute top-1.5 right-1.5 transition-opacity duration-150 ${activeMessageMenu === msg.id ? 'z-[9999] opacity-100' : 'z-10 opacity-0 group-hover:opacity-100'
-                      }`}
+                    className={`message-context-menu absolute top-1.5 right-1.5 transition-opacity duration-150 ${
+                      activeMessageMenu === msg.id
+                        ? "z-[9999] opacity-100"
+                        : "z-10 opacity-0 group-hover:opacity-100"
+                    }`}
                   >
                     <button
                       type="button"
                       ref={activeMessageMenu === msg.id ? buttonRef : undefined}
                       onClick={(e) => handleOpenMessageMenu(msg.id, e)}
-                      className={`p-1 rounded-full transition-colors ${msg.type === 'text' && msg.isMine ? 'text-white/80 hover:bg-white/20' : 'text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-[#7C3AED]'}`}
+                      className={`p-1 rounded-full transition-colors ${msg.type === "text" && msg.isMine ? "text-white/80 hover:bg-white/20" : "text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-[#7C3AED]"}`}
                     >
                       <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
                         <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
@@ -1550,36 +2113,70 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                     </button>
                     {activeMessageMenu === msg.id && (
                       <div
-                        className={`w-48 overflow-hidden shadow-lg bg-white dark:bg-[#262626] rounded-md border border-gray-200 dark:border-gray-800 ${msg.isMine
-                            ? dropdownDirection === 'up'
-                              ? 'absolute right-0 bottom-full mb-1 z-[9999]'
-                              : 'absolute right-0 top-full mt-1 z-[9999]'
-                            : dropdownDirection === 'up'
-                              ? 'absolute left-0 bottom-full mb-1 z-[9999]'
-                              : 'absolute left-0 top-full mt-1 z-[9999]'
-                          }`}
+                        className={`w-48 overflow-hidden shadow-lg bg-white dark:bg-[#262626] rounded-md border border-gray-200 dark:border-gray-800 ${
+                          msg.isMine
+                            ? dropdownDirection === "up"
+                              ? "absolute right-0 bottom-full mb-1 z-[9999]"
+                              : "absolute right-0 top-full mt-1 z-[9999]"
+                            : dropdownDirection === "up"
+                              ? "absolute left-0 bottom-full mb-1 z-[9999]"
+                              : "absolute left-0 top-full mt-1 z-[9999]"
+                        }`}
                       >
-                        <button onClick={() => handleReply(msg)} className="w-full text-left px-4 py-2 hover:bg-gray-50 dark:hover:bg-[#171717] text-[#171717] dark:text-[#F5F5F5] flex items-center gap-2">
-                          <span className="material-icons-round text-[18px]">reply</span> Reply
+                        <button
+                          onClick={() => handleReply(msg)}
+                          className="w-full text-left px-4 py-2 hover:bg-gray-50 dark:hover:bg-[#171717] text-[#171717] dark:text-[#F5F5F5] flex items-center gap-2"
+                        >
+                          <span className="material-icons-round text-[18px]">
+                            reply
+                          </span>{" "}
+                          Reply
                         </button>
-                        {msg.type === 'text' && (
-                          <button onClick={() => handleCopy(msg.content || '')} className="w-full text-left px-4 py-2 hover:bg-gray-50 dark:hover:bg-[#171717] text-[#171717] dark:text-[#F5F5F5] flex items-center gap-2">
-                            <span className="material-icons-round text-[18px]">content_copy</span> Copy
+                        {msg.type === "text" && (
+                          <button
+                            onClick={() => handleCopy(msg.content || "")}
+                            className="w-full text-left px-4 py-2 hover:bg-gray-50 dark:hover:bg-[#171717] text-[#171717] dark:text-[#F5F5F5] flex items-center gap-2"
+                          >
+                            <span className="material-icons-round text-[18px]">
+                              content_copy
+                            </span>{" "}
+                            Copy
                           </button>
                         )}
-                        <button onClick={() => handleForward(msg)} className="w-full text-left px-4 py-2 hover:bg-gray-50 dark:hover:bg-[#171717] text-[#171717] dark:text-[#F5F5F5] flex items-center gap-2">
-                          <span className="material-icons-round text-[18px]">forward</span> Forward
+                        <button
+                          onClick={() => handleForward(msg)}
+                          className="w-full text-left px-4 py-2 hover:bg-gray-50 dark:hover:bg-[#171717] text-[#171717] dark:text-[#F5F5F5] flex items-center gap-2"
+                        >
+                          <span className="material-icons-round text-[18px]">
+                            forward
+                          </span>{" "}
+                          Forward
                         </button>
-                        <button onClick={() => handlePin(msg.id)} className="w-full text-left px-4 py-2 hover:bg-gray-50 dark:hover:bg-[#171717] text-[#171717] dark:text-[#F5F5F5] flex items-center gap-2">
-                          <span className="material-icons-round text-[18px]">push_pin</span> {msg.isPinned ? 'Unpin' : 'Pin'}
+                        <button
+                          onClick={() => handlePin(msg.id)}
+                          className="w-full text-left px-4 py-2 hover:bg-gray-50 dark:hover:bg-[#171717] text-[#171717] dark:text-[#F5F5F5] flex items-center gap-2"
+                        >
+                          <span className="material-icons-round text-[18px]">
+                            push_pin
+                          </span>{" "}
+                          {msg.isPinned ? "Unpin" : "Pin"}
                         </button>
-                        {msg.type === 'text' && (
-                          <button onClick={() => handleTranslateMessage(msg)} className="w-full text-left px-4 py-2 hover:bg-gray-50 dark:hover:bg-[#171717] text-[#171717] dark:text-[#F5F5F5] flex items-center gap-2">
-                            <span className="material-icons-round text-[18px]">g_translate</span> Translate
+                        {msg.type === "text" && (
+                          <button
+                            onClick={() => handleTranslateMessage(msg)}
+                            className="w-full text-left px-4 py-2 hover:bg-gray-50 dark:hover:bg-[#171717] text-[#171717] dark:text-[#F5F5F5] flex items-center gap-2"
+                          >
+                            <span className="material-icons-round text-[18px]">
+                              g_translate
+                            </span>{" "}
+                            Translate
                           </button>
                         )}
                         {!msg.isMine && (
-                          <button onClick={handleGenerateSmartReplies} className="w-full text-left px-4 py-2 hover:bg-purple-50 dark:hover:bg-purple-950/20 text-[#7C3AED] dark:text-[#a78bfa] flex items-center gap-2 font-semibold">
+                          <button
+                            onClick={handleGenerateSmartReplies}
+                            className="w-full text-left px-4 py-2 hover:bg-purple-50 dark:hover:bg-purple-950/20 text-[#7C3AED] dark:text-[#a78bfa] flex items-center gap-2 font-semibold"
+                          >
                             <span>💡</span> Smart Replies
                           </button>
                         )}
@@ -1595,44 +2192,69 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                               add_reaction
                             </span>
                             <div className="flex gap-2">
-                              {['👍', '❤️', '😂', '🔥', '🎉'].map(emoji => (
-                                <button key={emoji} onClick={() => { handleReact(msg.id, emoji); setShowReactionPicker(false); }} className="hover:scale-125 transition-transform">{emoji}</button>
+                              {["👍", "❤️", "😂", "🔥", "🎉"].map((emoji) => (
+                                <button
+                                  key={emoji}
+                                  onClick={() => {
+                                    handleReact(msg.id, emoji);
+                                    setShowReactionPicker(false);
+                                  }}
+                                  className="hover:scale-125 transition-transform"
+                                >
+                                  {emoji}
+                                </button>
                               ))}
                             </div>
                           </div>
                           {showReactionPicker && (
                             <div
-                              className={`absolute z-[10000] shadow-2xl rounded-2xl overflow-hidden ${msg.isMine ? 'right-0' : 'left-0'
-                                } ${dropdownDirection === 'up' ? 'top-full mt-2' : 'bottom-full mb-2'}`}
-                              onClick={e => e.stopPropagation()}
+                              className={`absolute z-[10000] shadow-2xl rounded-2xl overflow-hidden ${
+                                msg.isMine ? "right-0" : "left-0"
+                              } ${dropdownDirection === "up" ? "top-full mt-2" : "bottom-full mb-2"}`}
+                              onClick={(e) => e.stopPropagation()}
                             >
-                              <EmojiPicker onEmojiClick={(emojiData) => {
-                                handleReact(msg.id, emojiData.emoji);
-                                setShowReactionPicker(false);
-                              }} />
+                              <EmojiPicker
+                                onEmojiClick={(emojiData) => {
+                                  handleReact(msg.id, emojiData.emoji);
+                                  setShowReactionPicker(false);
+                                }}
+                              />
                             </div>
                           )}
                         </div>
-                        {msg.isMine && msg.type === 'text' && (
+                        {msg.isMine && msg.type === "text" && (
                           <button
-                            onClick={() => { setEditingMessageId(msg.id); setEditingText(msg.content || ''); setActiveMessageMenu(null); }}
+                            onClick={() => {
+                              setEditingMessageId(msg.id);
+                              setEditingText(msg.content || "");
+                              setActiveMessageMenu(null);
+                            }}
                             className="w-full text-left px-4 py-2 hover:bg-gray-50 dark:hover:bg-[#171717] text-[#171717] dark:text-[#F5F5F5] flex items-center gap-2"
                           >
-                            <span className="material-icons-round text-[18px]">edit</span> Edit
+                            <span className="material-icons-round text-[18px]">
+                              edit
+                            </span>{" "}
+                            Edit
                           </button>
                         )}
                         <button
-                          onClick={() => deleteMessage(msg.id, 'me')}
+                          onClick={() => deleteMessage(msg.id, "me")}
                           className="w-full text-left px-4 py-2 hover:bg-gray-50 dark:hover:bg-[#171717] text-[#171717] dark:text-[#F5F5F5] flex items-center gap-2"
                         >
-                          <span className="material-icons-round text-[18px]">delete</span> Delete for me
+                          <span className="material-icons-round text-[18px]">
+                            delete
+                          </span>{" "}
+                          Delete for me
                         </button>
                         {msg.isMine && (
                           <button
-                            onClick={() => deleteMessage(msg.id, 'everyone')}
+                            onClick={() => deleteMessage(msg.id, "everyone")}
                             className="w-full text-left px-4 py-2 hover:bg-red-50 dark:hover:bg-red-500/10 text-red-500 flex items-center gap-2"
                           >
-                            <span className="material-icons-round text-[18px]">delete_forever</span> Delete for everyone
+                            <span className="material-icons-round text-[18px]">
+                              delete_forever
+                            </span>{" "}
+                            Delete for everyone
                           </button>
                         )}
                       </div>
@@ -1641,16 +2263,28 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                 )}
 
                 {msg.reactions && msg.reactions.length > 0 && (
-                  <div className={`flex flex-wrap gap-1 mt-1 ${msg.isMine ? 'justify-end' : 'justify-start'}`}>
-                    {Array.from(new Set(msg.reactions.map(r => r.emoji))).map(emoji => {
-                      const count = msg.reactions!.filter(r => r.emoji === emoji).length;
-                      return (
-                        <div key={emoji} onClick={() => handleReact(msg.id, emoji)} className="bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 cursor-pointer text-xs rounded-full px-2 py-0.5 border border-white dark:border-[#171717] shadow-sm flex items-center gap-1 transition-colors">
-                          <span>{emoji}</span>
-                          <span className="text-[10px] text-gray-500 font-medium">{count}</span>
-                        </div>
-                      );
-                    })}
+                  <div
+                    className={`flex flex-wrap gap-1 mt-1 ${msg.isMine ? "justify-end" : "justify-start"}`}
+                  >
+                    {Array.from(new Set(msg.reactions.map((r) => r.emoji))).map(
+                      (emoji) => {
+                        const count = msg.reactions!.filter(
+                          (r) => r.emoji === emoji,
+                        ).length;
+                        return (
+                          <div
+                            key={emoji}
+                            onClick={() => handleReact(msg.id, emoji)}
+                            className="bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 cursor-pointer text-xs rounded-full px-2 py-0.5 border border-white dark:border-[#171717] shadow-sm flex items-center gap-1 transition-colors"
+                          >
+                            <span>{emoji}</span>
+                            <span className="text-[10px] text-gray-500 font-medium">
+                              {count}
+                            </span>
+                          </div>
+                        );
+                      },
+                    )}
                   </div>
                 )}
               </div>
@@ -1669,13 +2303,24 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           {replyingTo && (
             <div className="max-w-4xl mx-auto mb-2 bg-[#FAFAFA] dark:bg-[#171717] border-l-4 border-[#7C3AED] rounded-r-xl p-3 flex justify-between items-center text-sm shadow-sm">
               <div className="flex flex-col min-w-0">
-                <span className="text-[#7C3AED] font-bold text-xs">Replying to</span>
+                <span className="text-[#7C3AED] font-bold text-xs">
+                  Replying to
+                </span>
                 <span className="text-gray-600 dark:text-gray-400 truncate">
                   {(() => {
-                    const fileContent = typeof replyingTo.content === 'string' ? replyingTo.content : '';
-                    const isImage = replyingTo.type === 'image' || fileContent.match(/\.(jpeg|jpg|gif|png|webp)$/i);
-                    const isAudio = replyingTo.type === 'audio' || fileContent.match(/\.(webm|mp3|wav|ogg)$/i);
-                    const isDoc = replyingTo.type === 'file' || fileContent.match(/\.(pdf|doc|docx|txt|zip|rar)$/i);
+                    const fileContent =
+                      typeof replyingTo.content === "string"
+                        ? replyingTo.content
+                        : "";
+                    const isImage =
+                      replyingTo.type === "image" ||
+                      fileContent.match(/\.(jpeg|jpg|gif|png|webp)$/i);
+                    const isAudio =
+                      replyingTo.type === "audio" ||
+                      fileContent.match(/\.(webm|mp3|wav|ogg)$/i);
+                    const isDoc =
+                      replyingTo.type === "file" ||
+                      fileContent.match(/\.(pdf|doc|docx|txt|zip|rar)$/i);
 
                     if (isImage) {
                       return (
@@ -1686,23 +2331,47 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                       );
                     }
 
-                    if (isAudio) return '≡ƒÄñ Voice Message';
-
+                    if (isAudio)
+                      return (
+                        <span className="flex items-center gap-1">
+                          <span className="material-icons-round text-[11px]">
+                            mic
+                          </span>{" "}
+                          Voice Message
+                        </span>
+                      );
+                    if (replyingTo.type === "call_summary")
+                      return (
+                        <span className="flex items-center gap-1">
+                          <span className="material-icons-round text-[11px]">
+                            call
+                          </span>{" "}
+                          {fileContent}
+                        </span>
+                      );
                     if (isDoc) {
-                      const rawName = replyingTo.fileName || fileContent.split('/').pop() || 'File';
+                      const rawName =
+                        replyingTo.fileName ||
+                        fileContent.split("/").pop() ||
+                        "File";
                       return (
                         <span className="inline-flex items-center gap-1 align-middle truncate max-w-full">
                           <span>≡ƒôä Document</span>
-                          <span className="opacity-70 truncate">- {rawName}</span>
+                          <span className="opacity-70 truncate">
+                            - {rawName}
+                          </span>
                         </span>
                       );
                     }
 
-                    return fileContent || 'Media Message';
+                    return fileContent || "Media Message";
                   })()}
                 </span>
               </div>
-              <button onClick={() => setReplyingTo(null)} className="text-gray-400 hover:text-red-500 p-1">
+              <button
+                onClick={() => setReplyingTo(null)}
+                className="text-gray-400 hover:text-red-500 p-1"
+              >
                 <span className="material-icons-round text-sm">close</span>
               </button>
             </div>
@@ -1717,7 +2386,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                 Group Invitation
               </h3>
               <p className="text-sm text-gray-500 mb-6">
-                You have been invited to join <strong>{chatName}</strong>. Accept to see messages and participate.
+                You have been invited to join <strong>{chatName}</strong>.
+                Accept to see messages and participate.
               </p>
               <div className="flex flex-col gap-3">
                 <button
@@ -1736,11 +2406,11 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                 </button>
               </div>
             </div>
-          ) : isChatInitiator && chatStatus === 'pending' ? (
+          ) : isChatInitiator && chatStatus === "pending" ? (
             <div className="max-w-4xl mx-auto py-4 px-4 rounded-xl bg-[#7C3AED]/10 text-center text-sm text-[#7C3AED] border border-[#7C3AED]/20 font-medium">
               Request Sent... waiting for approval
             </div>
-          ) : isChatRecipient && chatStatus === 'pending' ? (
+          ) : isChatRecipient && chatStatus === "pending" ? (
             <div className="max-w-md mx-auto py-6 px-4 text-center">
               <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
                 <strong>{chatName}</strong> wants to message you.
@@ -1748,27 +2418,30 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
               <div className="flex gap-3 justify-center">
                 <button
                   type="button"
-                  onClick={() => void onRespondToChatRequest?.('accept')}
+                  onClick={() => void onRespondToChatRequest?.("accept")}
                   className="px-5 py-2.5 bg-[#7C3AED] hover:bg-[#6D28D9] text-white rounded-xl font-bold text-sm"
                 >
                   Accept
                 </button>
                 <button
                   type="button"
-                  onClick={() => void onRespondToChatRequest?.('reject')}
+                  onClick={() => void onRespondToChatRequest?.("reject")}
                   className="px-5 py-2.5 bg-red-50 dark:bg-red-500/10 text-red-500 rounded-xl font-bold text-sm hover:bg-red-100"
                 >
                   Reject
                 </button>
               </div>
             </div>
-          ) : (!isParticipant && isGroup) ? (
+          ) : !isParticipant && isGroup ? (
             <div className="max-w-4xl mx-auto py-4 px-4 rounded-xl bg-gray-100 dark:bg-gray-800 text-center text-sm text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700">
-              You can't send messages to this group because you're no longer a participant.
+              You can't send messages to this group because you're no longer a
+              participant.
             </div>
           ) : cannotReply && !isGroup ? (
             <div className="max-w-4xl mx-auto py-4 px-4 rounded-xl bg-gray-100 dark:bg-gray-800 text-center text-sm text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700">
-              {blockedByMe ? 'You blocked this user. Unblock to send a message.' : 'You cannot reply to this conversation.'}
+              {blockedByMe
+                ? "You blocked this user. Unblock to send a message."
+                : "You cannot reply to this conversation."}
             </div>
           ) : (
             <>
@@ -1777,20 +2450,38 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                 <div className="max-w-4xl mx-auto mb-3 bg-[#FAFAFA]/85 dark:bg-[#171717]/85 backdrop-blur-md border border-gray-200/80 dark:border-gray-800/80 rounded-2xl p-3 flex flex-col gap-2 shadow-sm relative z-10 animate-in fade-in slide-in-from-bottom-2 duration-200">
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] font-bold text-[#7C3AED] dark:text-[#a78bfa] uppercase tracking-wider flex items-center gap-1">
-                      <span>≡ƒÆí</span> Smart Replies / ╪º┘é╪¬╪▒╪º╪¡╪º╪¬ ╪º┘ä╪▒╪»
+                      <span>≡ƒÆí</span> Smart Replies / ╪º┘é╪¬╪▒╪º╪¡╪º╪¬
+                      ╪º┘ä╪▒╪»
                     </span>
                     <button
                       onClick={() => setSmartReplies([])}
                       className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors p-1"
                     >
-                      <span className="material-icons-round text-sm">close</span>
+                      <span className="material-icons-round text-sm">
+                        close
+                      </span>
                     </button>
                   </div>
                   {loadingReplies ? (
                     <div className="flex items-center gap-2 py-1 text-xs text-gray-500">
-                      <svg className="animate-spin h-3.5 w-3.5 text-[#7C3AED]" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                      <svg
+                        className="animate-spin h-3.5 w-3.5 text-[#7C3AED]"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                      >
+                        <circle
+                          className="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                        />
+                        <path
+                          className="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                        />
                       </svg>
                       <span>Generating suggestions...</span>
                     </div>
@@ -1818,44 +2509,86 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                   <div className="flex items-center gap-3 min-w-0">
                     <div className="w-10 h-10 bg-white dark:bg-[#262626] rounded flex items-center justify-center border border-gray-200 dark:border-gray-800 shrink-0">
                       <span className="material-icons text-[#7C3AED]">
-                        {attachedFile.type.startsWith('image/') ? 'image' : attachedFile.type.startsWith('video/') ? 'videocam' : 'description'}
+                        {attachedFile.type.startsWith("image/")
+                          ? "image"
+                          : attachedFile.type.startsWith("video/")
+                            ? "videocam"
+                            : "description"}
                       </span>
                     </div>
                     <div className="flex flex-col min-w-0">
-                      <span className="text-[#171717] dark:text-[#F5F5F5] font-medium truncate">{attachedFile.name}</span>
-                      <span className="text-gray-400 text-xs">{(attachedFile.size / 1024 / 1024).toFixed(2)} MB</span>
+                      <span className="text-[#171717] dark:text-[#F5F5F5] font-medium truncate">
+                        {attachedFile.name}
+                      </span>
+                      <span className="text-gray-400 text-xs">
+                        {(attachedFile.size / 1024 / 1024).toFixed(2)} MB
+                      </span>
                     </div>
                   </div>
-                  <button type="button" onClick={() => setAttachedFile(null)} className="text-gray-400 hover:text-red-500 p-1 bg-white dark:bg-black rounded-full shadow-sm border border-gray-100 dark:border-gray-800">
+                  <button
+                    type="button"
+                    onClick={() => setAttachedFile(null)}
+                    className="text-gray-400 hover:text-red-500 p-1 bg-white dark:bg-black rounded-full shadow-sm border border-gray-100 dark:border-gray-800"
+                  >
                     <span className="material-icons-round text-sm">close</span>
                   </button>
                 </div>
               )}
 
               <div className="max-w-4xl mx-auto flex items-end gap-4">
-                <input type="file" ref={docInputRef} accept=".pdf,.doc,.docx,.txt" onChange={handleFileSelect} className="hidden" />
-                <input type="file" ref={mediaInputRef} accept="image/*,video/*" onChange={handleFileSelect} className="hidden" />
+                <input
+                  type="file"
+                  ref={docInputRef}
+                  accept=".pdf,.doc,.docx,.txt"
+                  onChange={handleFileSelect}
+                  className="hidden"
+                />
+                <input
+                  type="file"
+                  ref={mediaInputRef}
+                  accept="image/*,video/*"
+                  onChange={handleFileSelect}
+                  className="hidden"
+                />
 
                 <div className="relative attachment-menu-container">
                   <button
                     onClick={() => setShowAttachmentMenu(!showAttachmentMenu)}
-                    className={`mb-2 transition-colors shrink-0 ${showAttachmentMenu ? 'text-[#7C3AED]' : 'text-gray-400 hover:text-[#7C3AED]'}`}
+                    className={`mb-2 transition-colors shrink-0 ${showAttachmentMenu ? "text-[#7C3AED]" : "text-gray-400 hover:text-[#7C3AED]"}`}
                   >
                     <span className="material-icons">attach_file</span>
                   </button>
 
                   {showAttachmentMenu && (
                     <div className="absolute bottom-full left-0 mb-2 w-48 bg-white dark:bg-[#262626] rounded-xl shadow-xl border border-gray-100 dark:border-gray-800 py-2 z-50">
-                      <button onClick={() => docInputRef.current?.click()} className="w-full px-4 py-2 text-left hover:bg-gray-50 dark:hover:bg-[#171717] text-[#171717] dark:text-[#F5F5F5] flex items-center gap-3 transition-colors">
-                        <span className="material-icons text-[#7C3AED]">description</span>
+                      <button
+                        onClick={() => docInputRef.current?.click()}
+                        className="w-full px-4 py-2 text-left hover:bg-gray-50 dark:hover:bg-[#171717] text-[#171717] dark:text-[#F5F5F5] flex items-center gap-3 transition-colors"
+                      >
+                        <span className="material-icons text-[#7C3AED]">
+                          description
+                        </span>
                         Document
                       </button>
-                      <button onClick={() => mediaInputRef.current?.click()} className="w-full px-4 py-2 text-left hover:bg-gray-50 dark:hover:bg-[#171717] text-[#171717] dark:text-[#F5F5F5] flex items-center gap-3 transition-colors">
-                        <span className="material-icons text-[#EC4899]">image</span>
+                      <button
+                        onClick={() => mediaInputRef.current?.click()}
+                        className="w-full px-4 py-2 text-left hover:bg-gray-50 dark:hover:bg-[#171717] text-[#171717] dark:text-[#F5F5F5] flex items-center gap-3 transition-colors"
+                      >
+                        <span className="material-icons text-[#EC4899]">
+                          image
+                        </span>
                         Photo & Video
                       </button>
-                      <button onClick={() => { setShowAttachmentMenu(false); setShowCameraModal(true); }} className="w-full px-4 py-2 text-left hover:bg-gray-50 dark:hover:bg-[#171717] text-[#171717] dark:text-[#F5F5F5] flex items-center gap-3 transition-colors">
-                        <span className="material-icons text-[#10B981]">photo_camera</span>
+                      <button
+                        onClick={() => {
+                          setShowAttachmentMenu(false);
+                          setShowCameraModal(true);
+                        }}
+                        className="w-full px-4 py-2 text-left hover:bg-gray-50 dark:hover:bg-[#171717] text-[#171717] dark:text-[#F5F5F5] flex items-center gap-3 transition-colors"
+                      >
+                        <span className="material-icons text-[#10B981]">
+                          photo_camera
+                        </span>
                         Camera
                       </button>
                     </div>
@@ -1869,7 +2602,14 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                     />
                   ) : voiceUrl ? (
                     <div className="flex items-center w-full gap-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg px-2 py-1">
-                      <button onClick={() => { setVoiceBlob(null); setVoiceUrl(null); }} className="text-gray-400 hover:text-red-500 transition-colors p-1" title="Discard">
+                      <button
+                        onClick={() => {
+                          setVoiceBlob(null);
+                          setVoiceUrl(null);
+                        }}
+                        className="text-gray-400 hover:text-red-500 transition-colors p-1"
+                        title="Discard"
+                      >
                         <span className="material-icons-round">delete</span>
                       </button>
                       <audio controls src={voiceUrl} className="h-8 flex-1" />
@@ -1885,56 +2625,78 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
                             <div className="flex items-center gap-2.5 relative z-10">
                               <div className="w-8 h-8 rounded-xl bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/20">
-                                <span className="material-icons-round text-lg animate-pulse text-yellow-300">bolt</span>
+                                <span className="material-icons-round text-lg animate-pulse text-yellow-300">
+                                  bolt
+                                </span>
                               </div>
                               <div className="flex flex-col text-left">
-                                <span className="font-bold text-sm tracking-wide">Chat AI Assistant</span>
-                                <span className="text-[10px] text-white/70 font-medium">Powered by Rabta AI</span>
+                                <span className="font-bold text-sm tracking-wide">
+                                  Chat AI Assistant
+                                </span>
+                                <span className="text-[10px] text-white/70 font-medium">
+                                  Powered by Rabta AI
+                                </span>
                               </div>
                             </div>
                             <button
                               onClick={() => setShowAiPopup(false)}
                               className="hover:bg-white/20 p-1.5 rounded-xl transition-all relative z-10 active:scale-90"
                             >
-                              <span className="material-icons-round text-sm">close</span>
+                              <span className="material-icons-round text-sm">
+                                close
+                              </span>
                             </button>
                           </div>
 
                           <div className="p-5 space-y-4 max-h-[500px] overflow-y-auto hide-scrollbar">
                             {/* Scope Disclaimer */}
                             <div className="bg-[#7C3AED]/5 dark:bg-[#7C3AED]/10 text-purple-700 dark:text-purple-300 p-3.5 rounded-2xl text-xs leading-relaxed flex gap-3 border border-purple-500/10 dark:border-[#7C3AED]/20 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)]">
-                              <span className="material-icons-round text-base text-[#7C3AED] dark:text-[#a78bfa] shrink-0 mt-0.5">smart_toy</span>
+                              <span className="material-icons-round text-base text-[#7C3AED] dark:text-[#a78bfa] shrink-0 mt-0.5">
+                                smart_toy
+                              </span>
                               <p className="text-left font-medium">
-                                I only summarize this conversation and search within its messages. For general questions, please use the <strong className="text-[#7C3AED] dark:text-[#a78bfa]">Global AI Guide</strong> in the sidebar.
+                                I only summarize this conversation and search
+                                within its messages. For general questions,
+                                please use the{" "}
+                                <strong className="text-[#7C3AED] dark:text-[#a78bfa]">
+                                  Global AI Guide
+                                </strong>{" "}
+                                in the sidebar.
                               </p>
                             </div>
 
                             {/* Segmented Tabs Bar */}
                             <div className="flex border border-gray-200/50 dark:border-white/[0.05] p-1 bg-gray-100/50 dark:bg-black/30 rounded-xl relative">
                               <button
-                                onClick={() => setAiTab('summarize')}
-                                className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all duration-300 flex items-center justify-center gap-1.5 ${aiTab === 'summarize'
-                                    ? 'bg-white dark:bg-[#26262b] text-[#7C3AED] dark:text-[#a78bfa] shadow-[0_4px_12px_rgba(0,0,0,0.06)] border border-gray-100 dark:border-white/[0.05]'
-                                    : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-200'
-                                  }`}
+                                onClick={() => setAiTab("summarize")}
+                                className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all duration-300 flex items-center justify-center gap-1.5 ${
+                                  aiTab === "summarize"
+                                    ? "bg-white dark:bg-[#26262b] text-[#7C3AED] dark:text-[#a78bfa] shadow-[0_4px_12px_rgba(0,0,0,0.06)] border border-gray-100 dark:border-white/[0.05]"
+                                    : "text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                                }`}
                               >
-                                <span className="material-icons-round text-[14px]">summarize</span>
+                                <span className="material-icons-round text-[14px]">
+                                  summarize
+                                </span>
                                 Summarize Chat
                               </button>
                               <button
-                                onClick={() => setAiTab('search')}
-                                className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all duration-300 flex items-center justify-center gap-1.5 ${aiTab === 'search'
-                                    ? 'bg-white dark:bg-[#26262b] text-[#7C3AED] dark:text-[#a78bfa] shadow-[0_4px_12px_rgba(0,0,0,0.06)] border border-gray-100 dark:border-white/[0.05]'
-                                    : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-200'
-                                  }`}
+                                onClick={() => setAiTab("search")}
+                                className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all duration-300 flex items-center justify-center gap-1.5 ${
+                                  aiTab === "search"
+                                    ? "bg-white dark:bg-[#26262b] text-[#7C3AED] dark:text-[#a78bfa] shadow-[0_4px_12px_rgba(0,0,0,0.06)] border border-gray-100 dark:border-white/[0.05]"
+                                    : "text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                                }`}
                               >
-                                <span className="material-icons-round text-[14px]">saved_search</span>
+                                <span className="material-icons-round text-[14px]">
+                                  saved_search
+                                </span>
                                 Smart Search
                               </button>
                             </div>
 
                             {/* Tab Content 1: Summarize */}
-                            {aiTab === 'summarize' && (
+                            {aiTab === "summarize" && (
                               <div className="space-y-4">
                                 <div className="flex items-center gap-3">
                                   <label className="text-xs font-bold text-gray-500 dark:text-gray-400 whitespace-nowrap">
@@ -1942,7 +2704,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                                   </label>
                                   <select
                                     value={summaryLimit}
-                                    onChange={(e) => setSummaryLimit(e.target.value)}
+                                    onChange={(e) =>
+                                      setSummaryLimit(e.target.value)
+                                    }
                                     className="flex-1 bg-white/50 dark:bg-black/35 border border-gray-200 dark:border-white/10 rounded-xl px-3 py-2 text-xs text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-[#7C3AED]/25 transition-all font-medium cursor-pointer"
                                   >
                                     <option value={5}>5 Messages</option>
@@ -1957,9 +2721,24 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                                     className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white px-5 py-2 rounded-xl text-xs font-bold transition-all disabled:opacity-50 flex items-center gap-1.5 shrink-0 shadow-[0_4px_12px_rgba(124,58,237,0.2)] active:scale-95"
                                   >
                                     {summarizing && (
-                                      <svg className="animate-spin h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24">
-                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                      <svg
+                                        className="animate-spin h-3.5 w-3.5 text-white"
+                                        fill="none"
+                                        viewBox="0 0 24 24"
+                                      >
+                                        <circle
+                                          className="opacity-25"
+                                          cx="12"
+                                          cy="12"
+                                          r="10"
+                                          stroke="currentColor"
+                                          strokeWidth="4"
+                                        />
+                                        <path
+                                          className="opacity-75"
+                                          fill="currentColor"
+                                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                                        />
                                       </svg>
                                     )}
                                     Summarize
@@ -1969,10 +2748,16 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                                 {/* Summary Error Warning */}
                                 {summaryError && (
                                   <div className="bg-amber-500/10 text-amber-800 dark:text-amber-300 p-3.5 rounded-2xl text-xs flex gap-3 border border-amber-500/20 text-left">
-                                    <span className="material-icons-round text-base text-amber-500 shrink-0">warning</span>
+                                    <span className="material-icons-round text-base text-amber-500 shrink-0">
+                                      warning
+                                    </span>
                                     <div>
-                                      <h4 className="font-bold mb-0.5">Cannot Summarize</h4>
-                                      <p className="font-medium leading-relaxed text-amber-700/90 dark:text-amber-300/90">{summaryError}</p>
+                                      <h4 className="font-bold mb-0.5">
+                                        Cannot Summarize
+                                      </h4>
+                                      <p className="font-medium leading-relaxed text-amber-700/90 dark:text-amber-300/90">
+                                        {summaryError}
+                                      </p>
                                     </div>
                                   </div>
                                 )}
@@ -1981,16 +2766,25 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                                 {summaryResult && (
                                   <div className="bg-white/45 dark:bg-black/20 rounded-2xl p-4 border border-gray-100 dark:border-white/[0.04] relative group text-start shadow-[inset_0_1px_3px_rgba(0,0,0,0.01)]">
                                     <div className="flex justify-between items-center mb-2.5 border-b border-gray-200/40 dark:border-white/[0.06] pb-2">
-                                      <span className="text-[10px] font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wider">Conversation Summary</span>
+                                      <span className="text-[10px] font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wider">
+                                        Conversation Summary
+                                      </span>
                                       <button
-                                        onClick={() => handleCopy(summaryResult)}
+                                        onClick={() =>
+                                          handleCopy(summaryResult)
+                                        }
                                         className="text-gray-400 hover:text-[#7C3AED] dark:hover:text-purple-400 p-1.5 hover:bg-gray-100 dark:hover:bg-white/5 rounded-lg transition-all"
                                         title="Copy Summary"
                                       >
-                                        <span className="material-icons-round text-sm">content_copy</span>
+                                        <span className="material-icons-round text-sm">
+                                          content_copy
+                                        </span>
                                       </button>
                                     </div>
-                                    <div dir="auto" className="text-xs text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap max-h-48 overflow-y-auto scrollbar-thin pr-1">
+                                    <div
+                                      dir="auto"
+                                      className="text-xs text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap max-h-48 overflow-y-auto scrollbar-thin pr-1"
+                                    >
                                       {summaryResult}
                                     </div>
                                   </div>
@@ -1999,7 +2793,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                             )}
 
                             {/* Tab Content 2: Smart Search */}
-                            {aiTab === 'search' && (
+                            {aiTab === "search" && (
                               <div className="space-y-4">
                                 <form
                                   onSubmit={(e) => {
@@ -2012,7 +2806,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                                     type="text"
                                     placeholder="Search past messages, details or files..."
                                     value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    onChange={(e) =>
+                                      setSearchQuery(e.target.value)
+                                    }
                                     className="flex-1 bg-white/50 dark:bg-black/35 border border-gray-200 dark:border-white/10 rounded-xl px-4 py-2 text-xs text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-[#7C3AED]/25 transition-all placeholder-gray-400 dark:placeholder-gray-500 font-medium"
                                   />
                                   <button
@@ -2021,9 +2817,24 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                                     className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white px-5 py-2 rounded-xl text-xs font-bold transition-all disabled:opacity-50 flex items-center gap-1.5 shrink-0 shadow-[0_4px_12px_rgba(124,58,237,0.2)] active:scale-95"
                                   >
                                     {searching && (
-                                      <svg className="animate-spin h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24">
-                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                      <svg
+                                        className="animate-spin h-3.5 w-3.5 text-white"
+                                        fill="none"
+                                        viewBox="0 0 24 24"
+                                      >
+                                        <circle
+                                          className="opacity-25"
+                                          cx="12"
+                                          cy="12"
+                                          r="10"
+                                          stroke="currentColor"
+                                          strokeWidth="4"
+                                        />
+                                        <path
+                                          className="opacity-75"
+                                          fill="currentColor"
+                                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                                        />
                                       </svg>
                                     )}
                                     Search
@@ -2035,16 +2846,25 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                                   <div className="space-y-3.5 text-start animate-in fade-in slide-in-from-top-3 duration-255">
                                     <div className="bg-white/45 dark:bg-black/20 rounded-2xl p-4 border border-gray-100 dark:border-white/[0.04] shadow-[inset_0_1px_3px_rgba(0,0,0,0.01)]">
                                       <div className="flex justify-between items-center mb-2.5 border-b border-gray-200/40 dark:border-white/[0.06] pb-2">
-                                        <span className="text-[10px] font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wider">Search Answer</span>
+                                        <span className="text-[10px] font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wider">
+                                          Search Answer
+                                        </span>
                                         <button
-                                          onClick={() => handleCopy(searchResult)}
+                                          onClick={() =>
+                                            handleCopy(searchResult)
+                                          }
                                           className="text-gray-400 hover:text-[#7C3AED] dark:hover:text-purple-400 p-1.5 hover:bg-gray-100 dark:hover:bg-white/5 rounded-lg transition-all"
                                           title="Copy Answer"
                                         >
-                                          <span className="material-icons-round text-sm">content_copy</span>
+                                          <span className="material-icons-round text-sm">
+                                            content_copy
+                                          </span>
                                         </button>
                                       </div>
-                                      <div dir="auto" className="text-xs text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap max-h-48 overflow-y-auto scrollbar-thin pr-1">
+                                      <div
+                                        dir="auto"
+                                        className="text-xs text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap max-h-48 overflow-y-auto scrollbar-thin pr-1"
+                                      >
                                         {searchResult}
                                       </div>
                                     </div>
@@ -2054,11 +2874,15 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                                       <button
                                         onClick={() => {
                                           setShowAiPopup(false);
-                                          window.dispatchEvent(new CustomEvent('open-global-ai'));
+                                          window.dispatchEvent(
+                                            new CustomEvent("open-global-ai"),
+                                          );
                                         }}
                                         className="w-full flex items-center justify-center gap-2 p-3 bg-indigo-500/10 hover:bg-indigo-500/20 text-[#7C3AED] dark:text-[#a78bfa] rounded-xl text-xs font-bold border border-indigo-500/20 dark:border-indigo-500/30 transition-all active:scale-[0.98] shadow-sm"
                                       >
-                                        <span className="material-icons-round text-sm">assistant</span>
+                                        <span className="material-icons-round text-sm">
+                                          assistant
+                                        </span>
                                         Ask the Global AI Guide instead
                                       </button>
                                     )}
@@ -2074,28 +2898,36 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                         value={inputText}
                         onChange={(e) => setInputText(e.target.value)}
                         onKeyDown={(e) => {
-                          if (e.key === 'Enter' && !e.shiftKey && !cannotReply) {
+                          if (
+                            e.key === "Enter" &&
+                            !e.shiftKey &&
+                            !cannotReply
+                          ) {
                             e.preventDefault();
                             handleSendMessage();
                           }
                         }}
-                        className={`w-full bg-transparent border-none focus:ring-0 text-sm py-2 resize-none text-[#171717] dark:text-[#F5F5F5] placeholder-gray-400 outline-none hide-scrollbar ${cannotReply ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        className={`w-full bg-transparent border-none focus:ring-0 text-sm py-2 resize-none text-[#171717] dark:text-[#F5F5F5] placeholder-gray-400 outline-none hide-scrollbar ${cannotReply ? "opacity-50 cursor-not-allowed" : ""}`}
                         placeholder={
                           cannotReply
-                            ? (blockedByMe ? 'You blocked this user.' : 'You cannot reply to this conversation.')
-                            : 'Write a message...'
+                            ? blockedByMe
+                              ? "You blocked this user."
+                              : "You cannot reply to this conversation."
+                            : "Write a message..."
                         }
                         rows={1}
                       ></textarea>
                       <button
                         onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                        className={`ml-4 transition-colors shrink-0 ${showEmojiPicker ? 'text-[#7C3AED]' : 'text-gray-400 hover:text-[#7C3AED]'}`}
+                        className={`ml-4 transition-colors shrink-0 ${showEmojiPicker ? "text-[#7C3AED]" : "text-gray-400 hover:text-[#7C3AED]"}`}
                       >
-                        <span className="material-icons">sentiment_satisfied_alt</span>
+                        <span className="material-icons">
+                          sentiment_satisfied_alt
+                        </span>
                       </button>
                       <button
                         onClick={() => setShowAiPopup(!showAiPopup)}
-                        className={`ml-4 transition-colors shrink-0 ${showAiPopup ? 'text-[#7C3AED]' : 'text-gray-400 hover:text-[#7C3AED]'}`}
+                        className={`ml-4 transition-colors shrink-0 ${showAiPopup ? "text-[#7C3AED]" : "text-gray-400 hover:text-[#7C3AED]"}`}
                       >
                         <span className="material-icons-round">bolt</span>
                       </button>
@@ -2123,7 +2955,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                   type="button"
                   onClick={handleSendMessage}
                   disabled={cannotReply}
-                  className={`bg-[#7C3AED] text-white w-10 h-10 rounded-xl flex items-center justify-center hover:opacity-90 shadow-md shrink-0 ${cannotReply ? 'opacity-40 pointer-events-none' : ''}`}
+                  className={`bg-[#7C3AED] text-white w-10 h-10 rounded-xl flex items-center justify-center hover:opacity-90 shadow-md shrink-0 ${cannotReply ? "opacity-40 pointer-events-none" : ""}`}
                 >
                   <span className="material-icons text-xl">send</span>
                 </button>
@@ -2170,10 +3002,16 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           ) : (
             <div className="flex flex-col h-full">
               <div className="p-6 pb-4 flex flex-col items-center border-b border-gray-100 dark:border-gray-800 relative shrink-0">
-                <button type="button" onClick={() => setShowDetails(false)} className="absolute top-4 left-4 text-gray-400 hover:text-red-500 transition-colors">
+                <button
+                  type="button"
+                  onClick={() => setShowDetails(false)}
+                  className="absolute top-4 left-4 text-gray-400 hover:text-red-500 transition-colors"
+                >
                   <span className="material-icons">close</span>
                 </button>
-                <h3 className="font-bold text-[#171717] dark:text-[#F5F5F5]">Contact Info</h3>
+                <h3 className="font-bold text-[#171717] dark:text-[#F5F5F5]">
+                  Contact Info
+                </h3>
               </div>
 
               <div className="flex-1 overflow-y-auto hide-scrollbar p-6">
@@ -2184,9 +3022,11 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                     </div>
                     <div className="absolute bottom-1 right-1 w-5 h-5 bg-[#10B981] border-4 border-white dark:border-[#262626] rounded-full"></div>
                   </div>
-                  <h3 className="font-bold text-xl text-[#171717] dark:text-[#F5F5F5] text-center mb-1">{chatName}</h3>
+                  <h3 className="font-bold text-xl text-[#171717] dark:text-[#F5F5F5] text-center mb-1">
+                    {chatName}
+                  </h3>
                   <p className="text-sm text-gray-500 text-center">
-                    {isOnline ? 'Online' : 'Offline'}
+                    {isOnline ? "Online" : "Offline"}
                   </p>
                 </div>
 
@@ -2195,13 +3035,23 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                     className="flex flex-col items-center gap-1.5 cursor-pointer hover:opacity-80 transition-opacity"
                     onClick={() => {
                       setIsMuted(!isMuted);
-                      toast.success(isMuted ? "Notifications unmuted" : "Notifications muted");
+                      toast.success(
+                        isMuted
+                          ? "Notifications unmuted"
+                          : "Notifications muted",
+                      );
                     }}
                   >
-                    <div className={`w-12 h-12 rounded-full bg-[#FAFAFA] dark:bg-[#171717] border border-gray-100 dark:border-gray-800 flex items-center justify-center ${isMuted ? 'text-[#7C3AED]' : 'text-gray-500 dark:text-gray-400'}`}>
-                      <span className="material-icons-round">{isMuted ? 'notifications_off' : 'notifications'}</span>
+                    <div
+                      className={`w-12 h-12 rounded-full bg-[#FAFAFA] dark:bg-[#171717] border border-gray-100 dark:border-gray-800 flex items-center justify-center ${isMuted ? "text-[#7C3AED]" : "text-gray-500 dark:text-gray-400"}`}
+                    >
+                      <span className="material-icons-round">
+                        {isMuted ? "notifications_off" : "notifications"}
+                      </span>
                     </div>
-                    <span className="text-xs text-gray-500 font-medium">{isMuted ? 'Unmute' : 'Mute'}</span>
+                    <span className="text-xs text-gray-500 font-medium">
+                      {isMuted ? "Unmute" : "Mute"}
+                    </span>
                   </div>
 
                   <div
@@ -2214,12 +3064,16 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                     <div className="w-12 h-12 rounded-full bg-[#FAFAFA] dark:bg-[#171717] border border-gray-100 dark:border-gray-800 flex items-center justify-center text-gray-500 dark:text-gray-400">
                       <span className="material-icons-round">search</span>
                     </div>
-                    <span className="text-xs text-gray-500 font-medium">Search</span>
+                    <span className="text-xs text-gray-500 font-medium">
+                      Search
+                    </span>
                   </div>
                 </div>
 
                 <div className="w-full bg-[#FAFAFA] dark:bg-[#171717] rounded-2xl p-4 mb-4 border border-gray-100 dark:border-gray-800">
-                  <h4 className="text-xs font-bold text-[#7C3AED] uppercase tracking-wider mb-2">About</h4>
+                  <h4 className="text-xs font-bold text-[#7C3AED] uppercase tracking-wider mb-2">
+                    About
+                  </h4>
                   <p className="text-sm text-[#171717] dark:text-[#F5F5F5] leading-relaxed">
                     Hey there! I am using Rabta.
                   </p>
@@ -2233,13 +3087,21 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       {(showUserDetails || !!isChatSearchOpen) && !showDetails && (
         <aside className="w-85 bg-white dark:bg-[#262626] border-l border-gray-200 dark:border-gray-800 flex flex-col transition-colors duration-300 relative z-10 shrink-0">
           <div className="p-6 pb-4 flex flex-col items-center border-b border-gray-100 dark:border-gray-800 relative shrink-0">
-            <button type="button" onClick={closeChatSidebar} className="absolute top-4 left-4 text-gray-400 hover:text-red-500 transition-colors">
+            <button
+              type="button"
+              onClick={closeChatSidebar}
+              className="absolute top-4 left-4 text-gray-400 hover:text-red-500 transition-colors"
+            >
               <span className="material-icons">close</span>
             </button>
             <h3 className="font-bold text-[#171717] dark:text-[#F5F5F5]">
-              {activeSidePanel === 'details' ? (isGroup ? 'Group Info' : 'Contact Info') : 'Search Messages'}
+              {activeSidePanel === "details"
+                ? isGroup
+                  ? "Group Info"
+                  : "Contact Info"
+                : "Search Messages"}
             </h3>
-            {activeSidePanel === 'details' ? (
+            {activeSidePanel === "details" ? (
               isGroup && (
                 <button
                   onClick={() => setShowEditGroupModal(true)}
@@ -2254,7 +3116,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           </div>
 
           <div className="flex-1 overflow-y-auto hide-scrollbar p-6">
-            {activeSidePanel === 'details' ? (
+            {activeSidePanel === "details" ? (
               isGroup ? (
                 <GroupDetails
                   chatId={chatId}
@@ -2267,7 +3129,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                   onAddMember={() => setShowAddMemberModal(true)}
                   onLeaveGroup={() => setShowLeaveConfirmModal(true)}
                   onSearchClick={() => {
-                    setActiveSidePanel('search');
+                    setActiveSidePanel("search");
                     onChatSearchOpenChange?.(true);
                   }}
                   onEditGroup={() => setShowEditGroupModal(true)}
@@ -2283,43 +3145,58 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                       </div>
                       <div className="absolute bottom-1 right-1 w-5 h-5 bg-[#10B981] border-4 border-white dark:border-[#262626] rounded-full"></div>
                     </div>
-                    <h3 className="font-bold text-xl text-[#171717] dark:text-[#F5F5F5] text-center mb-1">{chatName}</h3>
+                    <h3 className="font-bold text-xl text-[#171717] dark:text-[#F5F5F5] text-center mb-1">
+                      {chatName}
+                    </h3>
                     <p className="text-sm text-gray-500 text-center">
-                      {isOnline ? 'Online' : 'Offline'}
+                      {isOnline ? "Online" : "Offline"}
                     </p>
                   </div>
 
                   <div className="flex justify-between items-center w-full px-2 mb-8">
-
                     <div
                       className="flex flex-col items-center gap-1.5 cursor-pointer hover:opacity-80 transition-opacity"
                       onClick={() => {
                         setIsMuted(!isMuted);
-                        toast.success(isMuted ? "Notifications unmuted" : "Notifications muted");
+                        toast.success(
+                          isMuted
+                            ? "Notifications unmuted"
+                            : "Notifications muted",
+                        );
                       }}
                     >
-                      <div className={`w-12 h-12 rounded-full bg-[#FAFAFA] dark:bg-[#171717] border border-gray-100 dark:border-gray-800 flex items-center justify-center ${isMuted ? 'text-[#7C3AED]' : 'text-gray-500 dark:text-gray-400'}`}>
-                        <span className="material-icons-round">{isMuted ? 'notifications_off' : 'notifications'}</span>
+                      <div
+                        className={`w-12 h-12 rounded-full bg-[#FAFAFA] dark:bg-[#171717] border border-gray-100 dark:border-gray-800 flex items-center justify-center ${isMuted ? "text-[#7C3AED]" : "text-gray-500 dark:text-gray-400"}`}
+                      >
+                        <span className="material-icons-round">
+                          {isMuted ? "notifications_off" : "notifications"}
+                        </span>
                       </div>
-                      <span className="text-xs text-gray-500 font-medium">{isMuted ? 'Unmute' : 'Mute'}</span>
+                      <span className="text-xs text-gray-500 font-medium">
+                        {isMuted ? "Unmute" : "Mute"}
+                      </span>
                     </div>
 
                     <div
                       className="flex flex-col items-center gap-1.5 cursor-pointer hover:opacity-80 transition-opacity"
                       onClick={() => {
-                        setActiveSidePanel('search');
+                        setActiveSidePanel("search");
                         onChatSearchOpenChange?.(true);
                       }}
                     >
                       <div className="w-12 h-12 rounded-full bg-[#FAFAFA] dark:bg-[#171717] border border-gray-100 dark:border-gray-800 flex items-center justify-center text-gray-500 dark:text-gray-400">
                         <span className="material-icons-round">search</span>
                       </div>
-                      <span className="text-xs text-gray-500 font-medium">Search</span>
+                      <span className="text-xs text-gray-500 font-medium">
+                        Search
+                      </span>
                     </div>
                   </div>
 
                   <div className="w-full bg-[#FAFAFA] dark:bg-[#171717] rounded-2xl p-4 mb-4 border border-gray-100 dark:border-gray-800">
-                    <h4 className="text-xs font-bold text-[#7C3AED] uppercase tracking-wider mb-2">About</h4>
+                    <h4 className="text-xs font-bold text-[#7C3AED] uppercase tracking-wider mb-2">
+                      About
+                    </h4>
                     <p className="text-sm text-[#171717] dark:text-[#F5F5F5] leading-relaxed">
                       Hey there! I am using Rabta.
                     </p>
@@ -2342,13 +3219,14 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                       <div className="aspect-square bg-gray-200 dark:bg-gray-800 rounded-lg"></div>
                     </div>
                   </div>
-
                 </div>
               )
             ) : (
               <div className="flex flex-col gap-4">
                 <div className="relative">
-                  <span className="material-icons-round absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">search</span>
+                  <span className="material-icons-round absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">
+                    search
+                  </span>
                   <input
                     type="text"
                     placeholder="Search in chat..."
@@ -2367,9 +3245,28 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                             onClick={() => scrollToMessageInThread(m.id)}
                             className="w-full text-left p-3 rounded-xl bg-[#FAFAFA] dark:bg-[#171717] border border-gray-100 dark:border-gray-800 hover:border-[#7C3AED]/40 transition-colors"
                           >
-                            <span className="text-xs text-gray-400 block mb-1">{m.time}{m.isMine ? ' · You' : ''}</span>
+                            <span className="text-xs text-gray-400 block mb-1">
+                              {m.time}
+                              {m.isMine ? " · You" : ""}
+                            </span>
                             <span className="text-sm text-[#171717] dark:text-[#F5F5F5] line-clamp-3">
-                              {m.content || m.fileName || 'Media'}
+                              {m.type === "audio" ? (
+                                <span className="flex items-center gap-1">
+                                  <span className="material-icons-round text-[11px]">
+                                    mic
+                                  </span>{" "}
+                                  Voice message
+                                </span>
+                              ) : m.type === "call_summary" ? (
+                                <span className="flex items-center gap-1">
+                                  <span className="material-icons-round text-[11px]">
+                                    call
+                                  </span>{" "}
+                                  {m.content}
+                                </span>
+                              ) : (
+                                m.content || m.fileName || "Media"
+                              )}
                             </span>
                           </button>
                         </li>
@@ -2382,7 +3279,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                   )
                 ) : (
                   <div className="text-center text-gray-400 text-sm mt-10">
-                    <span className="material-icons-round text-4xl opacity-20 mb-2 block">search</span>
+                    <span className="material-icons-round text-4xl opacity-20 mb-2 block">
+                      search
+                    </span>
                     Search for messages in this chat
                   </div>
                 )}
@@ -2396,8 +3295,13 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in">
           <div className="bg-white dark:bg-[#262626] rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95">
             <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
-              <h2 className="text-xl font-bold text-[#171717] dark:text-[#F5F5F5]">Create Group Post</h2>
-              <button onClick={() => setShowGroupPostModal(false)} className="text-gray-400 hover:text-red-500 transition-colors">
+              <h2 className="text-xl font-bold text-[#171717] dark:text-[#F5F5F5]">
+                Create Group Post
+              </h2>
+              <button
+                onClick={() => setShowGroupPostModal(false)}
+                className="text-gray-400 hover:text-red-500 transition-colors"
+              >
                 <span className="material-icons-round">close</span>
               </button>
             </div>
@@ -2416,10 +3320,19 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
               </div>
             </div>
             <div className="px-6 py-4 bg-gray-50 dark:bg-[#1f1f1f] flex justify-end gap-3">
-              <button onClick={() => setShowGroupPostModal(false)} className="px-5 py-2 text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-800 rounded-xl transition-colors font-medium">
+              <button
+                onClick={() => setShowGroupPostModal(false)}
+                className="px-5 py-2 text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-800 rounded-xl transition-colors font-medium"
+              >
                 Cancel
               </button>
-              <button onClick={() => { setShowGroupPostModal(false); toast.success("Post created in group!"); }} className="px-6 py-2 bg-[#7C3AED] hover:bg-[#6D28D9] text-white rounded-xl font-medium transition-colors">
+              <button
+                onClick={() => {
+                  setShowGroupPostModal(false);
+                  toast.success("Post created in group!");
+                }}
+                className="px-6 py-2 bg-[#7C3AED] hover:bg-[#6D28D9] text-white rounded-xl font-medium transition-colors"
+              >
                 Post
               </button>
             </div>
@@ -2431,21 +3344,51 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in">
           <div className="bg-white dark:bg-[#262626] rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95">
             <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
-              <h2 className="text-xl font-bold text-[#171717] dark:text-[#F5F5F5]">Edit Group Info</h2>
-              <button onClick={() => setShowEditGroupModal(false)} className="text-gray-400 hover:text-red-500 transition-colors">
+              <h2 className="text-xl font-bold text-[#171717] dark:text-[#F5F5F5]">
+                Edit Group Info
+              </h2>
+              <button
+                onClick={() => setShowEditGroupModal(false)}
+                className="text-gray-400 hover:text-red-500 transition-colors"
+              >
                 <span className="material-icons-round">close</span>
               </button>
             </div>
             <div className="p-6">
-              <label className="block text-sm font-medium text-gray-500 mb-2">Group Name</label>
-              <input type="text" defaultValue={chatName} className="w-full bg-[#FAFAFA] dark:bg-[#171717] border border-gray-200 dark:border-gray-800 rounded-xl py-3 px-4 text-[#171717] dark:text-[#F5F5F5] focus:outline-none focus:border-[#7C3AED] mb-4" />
+              <label className="block text-sm font-medium text-gray-500 mb-2">
+                Group Name
+              </label>
+              <input
+                type="text"
+                defaultValue={chatName}
+                className="w-full bg-[#FAFAFA] dark:bg-[#171717] border border-gray-200 dark:border-gray-800 rounded-xl py-3 px-4 text-[#171717] dark:text-[#F5F5F5] focus:outline-none focus:border-[#7C3AED] mb-4"
+              />
 
-              <label className="block text-sm font-medium text-gray-500 mb-2">Description</label>
-              <textarea rows={3} defaultValue="Welcome to the group! We discuss frontend development, React, and modern UI/UX design patterns." className="w-full bg-[#FAFAFA] dark:bg-[#171717] border border-gray-200 dark:border-gray-800 rounded-xl py-3 px-4 text-[#171717] dark:text-[#F5F5F5] resize-none focus:outline-none focus:border-[#7C3AED]"></textarea>
+              <label className="block text-sm font-medium text-gray-500 mb-2">
+                Description
+              </label>
+              <textarea
+                rows={3}
+                defaultValue="Welcome to the group! We discuss frontend development, React, and modern UI/UX design patterns."
+                className="w-full bg-[#FAFAFA] dark:bg-[#171717] border border-gray-200 dark:border-gray-800 rounded-xl py-3 px-4 text-[#171717] dark:text-[#F5F5F5] resize-none focus:outline-none focus:border-[#7C3AED]"
+              ></textarea>
             </div>
             <div className="px-6 py-4 bg-gray-50 dark:bg-[#1f1f1f] flex justify-end gap-3">
-              <button onClick={() => setShowEditGroupModal(false)} className="px-5 py-2 text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-800 rounded-xl transition-colors font-medium">Cancel</button>
-              <button onClick={() => { setShowEditGroupModal(false); toast.success("Group info updated"); }} className="px-6 py-2 bg-[#7C3AED] hover:bg-[#6D28D9] text-white rounded-xl font-medium transition-colors">Save Changes</button>
+              <button
+                onClick={() => setShowEditGroupModal(false)}
+                className="px-5 py-2 text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-800 rounded-xl transition-colors font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  setShowEditGroupModal(false);
+                  toast.success("Group info updated");
+                }}
+                className="px-6 py-2 bg-[#7C3AED] hover:bg-[#6D28D9] text-white rounded-xl font-medium transition-colors"
+              >
+                Save Changes
+              </button>
             </div>
           </div>
         </div>
@@ -2455,15 +3398,25 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in">
           <div className="bg-white dark:bg-[#262626] rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 flex flex-col max-h-[80vh]">
             <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
-              <h2 className="text-xl font-bold text-[#171717] dark:text-[#F5F5F5]">Add Member</h2>
-              <button onClick={() => { setShowAddMemberModal(false); setUserSearchQuery(""); }} className="text-gray-400 hover:text-red-500 transition-colors">
+              <h2 className="text-xl font-bold text-[#171717] dark:text-[#F5F5F5]">
+                Add Member
+              </h2>
+              <button
+                onClick={() => {
+                  setShowAddMemberModal(false);
+                  setUserSearchQuery("");
+                }}
+                className="text-gray-400 hover:text-red-500 transition-colors"
+              >
                 <span className="material-icons-round">close</span>
               </button>
             </div>
 
             <div className="p-6 overflow-y-auto">
               <div className="relative mb-6">
-                <span className="material-icons-round absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">search</span>
+                <span className="material-icons-round absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                  search
+                </span>
                 <input
                   type="text"
                   value={userSearchQuery}
@@ -2481,14 +3434,28 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                   </div>
                 ) : searchResults.length > 0 ? (
                   searchResults.map((user) => (
-                    <div key={user._id} className="flex items-center justify-between p-3 bg-[#FAFAFA] dark:bg-[#171717] rounded-xl border border-gray-100 dark:border-gray-800">
+                    <div
+                      key={user._id}
+                      className="flex items-center justify-between p-3 bg-[#FAFAFA] dark:bg-[#171717] rounded-xl border border-gray-100 dark:border-gray-800"
+                    >
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-full bg-[#7C3AED]/10 text-[#7C3AED] flex items-center justify-center font-bold">
-                          {user.avatar ? <img src={user.avatar} className="w-full h-full rounded-full object-cover" /> : user.fullName.charAt(0)}
+                          {user.avatar ? (
+                            <img
+                              src={user.avatar}
+                              className="w-full h-full rounded-full object-cover"
+                            />
+                          ) : (
+                            user.fullName.charAt(0)
+                          )}
                         </div>
                         <div className="flex flex-col min-w-0">
-                          <span className="text-sm font-bold text-[#171717] dark:text-[#F5F5F5] truncate">{user.fullName}</span>
-                          <span className="text-xs text-gray-500 truncate">{user.email || user.role}</span>
+                          <span className="text-sm font-bold text-[#171717] dark:text-[#F5F5F5] truncate">
+                            {user.fullName}
+                          </span>
+                          <span className="text-xs text-gray-500 truncate">
+                            {user.email || user.role}
+                          </span>
                         </div>
                       </div>
                       <button
@@ -2500,9 +3467,13 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                     </div>
                   ))
                 ) : userSearchQuery.trim().length >= 2 ? (
-                  <div className="text-center py-8 text-gray-500 text-sm">No users found matching "{userSearchQuery}"</div>
+                  <div className="text-center py-8 text-gray-500 text-sm">
+                    No users found matching "{userSearchQuery}"
+                  </div>
                 ) : (
-                  <div className="text-center py-8 text-gray-400 text-sm italic">Type at least 2 characters to search...</div>
+                  <div className="text-center py-8 text-gray-400 text-sm italic">
+                    Type at least 2 characters to search...
+                  </div>
                 )}
               </div>
             </div>
@@ -2517,10 +3488,20 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
               <div className="w-16 h-16 rounded-full bg-red-100 dark:bg-red-500/20 text-red-500 flex items-center justify-center mx-auto mb-4">
                 <span className="material-icons-round text-3xl">warning</span>
               </div>
-              <h2 className="text-xl font-bold text-[#171717] dark:text-[#F5F5F5] mb-2">Leave Group?</h2>
-              <p className="text-sm text-gray-500 mb-6">Are you sure you want to leave this group? You won't receive any more messages from it.</p>
+              <h2 className="text-xl font-bold text-[#171717] dark:text-[#F5F5F5] mb-2">
+                Leave Group?
+              </h2>
+              <p className="text-sm text-gray-500 mb-6">
+                Are you sure you want to leave this group? You won't receive any
+                more messages from it.
+              </p>
               <div className="flex gap-3">
-                <button onClick={() => setShowLeaveConfirmModal(false)} className="flex-1 py-3 text-gray-500 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 rounded-xl transition-colors font-medium">Cancel</button>
+                <button
+                  onClick={() => setShowLeaveConfirmModal(false)}
+                  className="flex-1 py-3 text-gray-500 bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 rounded-xl transition-colors font-medium"
+                >
+                  Cancel
+                </button>
                 <button
                   onClick={async () => {
                     try {
@@ -2557,16 +3538,28 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             <span className="material-icons-round text-3xl">close</span>
           </button>
 
-          {viewingFile.type === 'image' ? (
-            <img src={viewingFile.url} alt="Attachment Fullscreen" className="max-h-full max-w-full object-contain rounded-lg" />
+          {viewingFile.type === "image" ? (
+            <img
+              src={viewingFile.url}
+              alt="Attachment Fullscreen"
+              className="max-h-full max-w-full object-contain rounded-lg"
+            />
           ) : (
-            <iframe src={viewingFile.url} className="w-full max-w-5xl h-[80vh] bg-white rounded-xl shadow-2xl" />
+            <iframe
+              src={viewingFile.url}
+              className="w-full max-w-5xl h-[80vh] bg-white rounded-xl shadow-2xl"
+            />
           )}
         </div>
       )}
 
       {/* Local Audio Element for Message Notifications */}
-      <audio ref={msgRef} src="/notification.mp3" preload="auto" style={{ display: 'none' }} />
+      <audio
+        ref={msgRef}
+        src="/notification.mp3"
+        preload="auto"
+        style={{ display: "none" }}
+      />
 
       {/* Forward Message Modal */}
       <ForwardMessageModal
