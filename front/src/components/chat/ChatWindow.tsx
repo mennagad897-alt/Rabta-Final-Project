@@ -275,6 +275,11 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const [isSearchingUsers] = useState(false);
   const [searchResults] = useState<SearchUser[]>([]);
   const [isRecordingVoice, setIsRecordingVoice] = useState(false);
+  const [recordingMode, setRecordingMode] = useState<"normal" | "stt" | null>(
+    null,
+  );
+  const [isSttMenuOpen, setIsSttMenuOpen] = useState(false);
+  const [isLoadingStt, setIsLoadingStt] = useState(false);
   const [voiceBlob, setVoiceBlob] = useState<Blob | null>(null);
   const [voiceUrl, setVoiceUrl] = useState<string | null>(null);
   const [voiceDuration, setVoiceDuration] = useState<number>(0);
@@ -738,6 +743,40 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     setVoiceUrl(url);
     setIsRecordingVoice(false);
     console.log("✅ [ChatWindow] State updated, preview should show now"); // ← ضيف ده
+  };
+  const handleSttRecordingComplete = async (blob: Blob) => {
+    setIsRecordingVoice(false);
+    setRecordingMode(null);
+    setIsLoadingStt(true);
+    try {
+      const formData = new FormData();
+      formData.append("audio", blob, "audio.webm");
+
+      // ⚠️ تأكد أن هذا الراوت مطابق تماماً لما في الباك إند.
+      // لو الباك إند عندك بيبدأ بـ /api/v1، والـ axiosInstance بيكمل عليه، يبقى كده صح.
+      const response = await axiosInstance.post(
+        "/api/ai/chat/speech-to-text",
+        formData,
+        {
+          headers: { "Content-Type": "multipart/form-data" },
+        },
+      );
+
+      if (response.data?.data) {
+        setInputText((prev) => prev + (prev ? " " : "") + response.data.data);
+      }
+    } catch (error: any) {
+      // السطر ده هيطبعلك الإيرور الحقيقي اللي راجع من الباك إند
+      console.error(
+        "❌ STT Backend Error:",
+        error.response?.data || error.message,
+      );
+      toast.error(
+        error.response?.data?.message || "Failed to convert speech to text",
+      );
+    } finally {
+      setIsLoadingStt(false);
+    }
   };
 
   const handleSendMessage = async () => {
@@ -2597,8 +2636,17 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                 <div className="flex-1 bg-[#FAFAFA] dark:bg-[#171717] rounded-xl border border-gray-200 dark:border-gray-700 flex items-center px-4 py-1.5 focus-within:border-[#7C3AED] transition-colors min-w-0 relative">
                   {isRecordingVoice ? (
                     <VoiceRecorder
-                      onRecordingComplete={handleRecordingComplete}
-                      onCancel={() => setIsRecordingVoice(false)}
+                      onRecordingComplete={(blob, duration) => {
+                        if (recordingMode === "stt") {
+                          handleSttRecordingComplete(blob);
+                        } else {
+                          handleRecordingComplete(blob, duration);
+                        }
+                      }}
+                      onCancel={() => {
+                        setIsRecordingVoice(false);
+                        setRecordingMode(null);
+                      }}
                     />
                   ) : voiceUrl ? (
                     <div className="flex items-center w-full gap-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg px-2 py-1">
@@ -2894,20 +2942,25 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                         </div>
                       )}
                       <textarea
-                        disabled={cannotReply}
-                        value={inputText}
+                        disabled={cannotReply || isLoadingStt}
+                        value={
+                          isLoadingStt
+                            ? "Extracting text from audio... ⏳"
+                            : inputText
+                        }
                         onChange={(e) => setInputText(e.target.value)}
                         onKeyDown={(e) => {
                           if (
                             e.key === "Enter" &&
                             !e.shiftKey &&
-                            !cannotReply
+                            !cannotReply &&
+                            !isLoadingStt
                           ) {
                             e.preventDefault();
                             handleSendMessage();
                           }
                         }}
-                        className={`w-full bg-transparent border-none focus:ring-0 text-sm py-2 resize-none text-[#171717] dark:text-[#F5F5F5] placeholder-gray-400 outline-none hide-scrollbar ${cannotReply ? "opacity-50 cursor-not-allowed" : ""}`}
+                        className={`w-full bg-transparent border-none focus:ring-0 text-sm py-2 resize-none text-[#171717] dark:text-[#F5F5F5] placeholder-gray-400 outline-none hide-scrollbar ${cannotReply || isLoadingStt ? "opacity-50 cursor-not-allowed text-[#7C3AED] font-medium animate-pulse" : ""}`}
                         placeholder={
                           cannotReply
                             ? blockedByMe
@@ -2931,12 +2984,48 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                       >
                         <span className="material-icons-round">bolt</span>
                       </button>
-                      <button
-                        onClick={() => setIsRecordingVoice(true)}
-                        className="ml-4 text-gray-400 hover:text-[#7C3AED] transition-colors shrink-0"
-                      >
-                        <span className="material-icons">mic</span>
-                      </button>
+                      <div className="relative ml-4 flex items-center">
+                        {isSttMenuOpen && (
+                          <div className="absolute bottom-full right-0 mb-2 w-48 bg-white dark:bg-[#262626] border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg flex flex-col overflow-hidden z-50">
+                            <button
+                              onClick={() => {
+                                setIsSttMenuOpen(false);
+                                setRecordingMode("normal");
+                                setIsRecordingVoice(true);
+                              }}
+                              className="flex items-center gap-3 px-4 py-3 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-[#171717] transition-colors w-full text-left"
+                            >
+                              <span className="material-icons-round text-[18px] text-[#7C3AED]">
+                                mic
+                              </span>
+                              <span>Voice Message</span>
+                            </button>
+                            <div className="h-[1px] bg-gray-100 dark:bg-gray-700 w-full"></div>
+                            <button
+                              onClick={() => {
+                                setIsSttMenuOpen(false);
+                                setRecordingMode("stt");
+                                setIsRecordingVoice(true);
+                              }}
+                              className="flex items-center gap-3 px-4 py-3 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-[#171717] transition-colors w-full text-left"
+                            >
+                              <span className="material-icons-round text-[18px] text-purple-500">
+                                auto_awesome
+                              </span>
+                              <span>AI Speech-to-Text</span>
+                            </button>
+                          </div>
+                        )}
+                        <button
+                          onClick={() => setIsSttMenuOpen(!isSttMenuOpen)}
+                          disabled={isLoadingStt}
+                          className={`transition-colors shrink-0 flex items-center justify-center ${isSttMenuOpen ? "text-[#7C3AED]" : "text-gray-400 hover:text-[#7C3AED]"} ${isLoadingStt ? "opacity-50 cursor-not-allowed animate-pulse" : ""}`}
+                        >
+                          <span className="material-icons">
+                            {isLoadingStt ? "hourglass_empty" : "mic"}
+                          </span>
+                        </button>
+                      </div>
                     </>
                   )}
                 </div>
@@ -2954,8 +3043,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                 <button
                   type="button"
                   onClick={handleSendMessage}
-                  disabled={cannotReply}
-                  className={`bg-[#7C3AED] text-white w-10 h-10 rounded-xl flex items-center justify-center hover:opacity-90 shadow-md shrink-0 ${cannotReply ? "opacity-40 pointer-events-none" : ""}`}
+                  disabled={cannotReply || isLoadingStt}
+                  className={`bg-[#7C3AED] text-white w-10 h-10 rounded-xl flex items-center justify-center hover:opacity-90 shadow-md shrink-0 ${cannotReply || isLoadingStt ? "opacity-40 pointer-events-none" : ""}`}
                 >
                   <span className="material-icons text-xl">send</span>
                 </button>
