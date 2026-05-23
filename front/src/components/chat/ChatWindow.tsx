@@ -578,10 +578,15 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         ].includes(resolvedType)
           ? (resolvedType as MessageType["type"])
           : "text",
-        content: resolvedContent || incomingMsg.attachments?.[0]?.fileUrl || "",
+        content:
+          resolvedContent ||
+          incomingMsg.attachments?.[0]?.fileUrl ||
+          (incomingMsg as any).audioUrl ||
+          "",
         fileUrl:
           incomingMsg.attachments?.[0]?.fileUrl ||
-          (["image", "video", "file"].includes(resolvedType)
+          (incomingMsg as any).audioUrl ||
+          (["image", "video", "file", "audio"].includes(resolvedType)
             ? resolvedContent
             : undefined),
         fileName: extractFileName(incomingMsg.attachments?.[0]?.fileUrl),
@@ -594,6 +599,11 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         status: "delivered",
         replyTo: incomingMsg.replyTo,
         senderName,
+        isForwarded:
+          (incomingMsg as any).isForwarded ||
+          !!incomingMsg.replyTo?.isForwarded ||
+          false, // 💡 قراءة حالة الفوروارد من السوكيت
+        duration: (incomingMsg as any).duration,
       };
 
       // Functional state update avoids stale closure issues
@@ -1001,6 +1011,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       const payload = {
         chatId: targetChatId,
         content: message.content,
+        type: message.type,
         messageType: message.type,
         isForwarded: true,
         audioUrl: message.type === "audio" ? message.fileUrl : undefined,
@@ -1028,21 +1039,22 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           response.data?.data?.message ||
           response.data?.message ||
           response.data;
+        const mediaUrl = message.fileUrl || message.content || "";
         const newMsg: MessageType = {
-          id: newMsgData._id,
-          type: newMsgData.messageType || "text",
-          content:
-            newMsgData.content || newMsgData.attachments?.[0]?.fileUrl || "",
-          fileUrl: newMsgData.attachments?.[0]?.fileUrl || newMsgData.audioUrl,
-          fileName: extractFileName(newMsgData.attachments?.[0]?.fileUrl),
-          fileSize: formatFileSize(newMsgData.attachments?.[0]?.fileSize),
-          time: new Date(newMsgData.createdAt).toLocaleTimeString([], {
+          id: newMsgData._id || `forward-${Date.now()}`,
+          type: message.type, // 💡 إجبار الفرونت على رسمها بنوعها الأصلي (audio أو image)
+          content: message.type === "text" ? message.content : mediaUrl,
+          fileUrl: mediaUrl,
+          fileName: message.fileName,
+          fileSize: message.fileSize,
+          time: new Date().toLocaleTimeString([], {
             hour: "2-digit",
             minute: "2-digit",
           }),
           isMine: true,
           status: "sent",
-          isForwarded: true,
+          isForwarded: true, // 💡 تفعيل كلمة Forwarded فوق الرسالة فوراً
+          duration: message.duration,
         };
         setMessages((prev) => [...prev, newMsg]);
       }
