@@ -105,31 +105,34 @@ export const summarizeChat = catchAsync(async (req: Request, res: Response) => {
       .json({ status: "success", data: "لا توجد رسائل كافية لتلخيصها." });
     return;
   }
-const compressedMessages: string[] = [];
+  const compressedMessages: string[] = [];
   let lastSenderId = "";
 
   // عكس الترتيب لتبدأ من الأقدم إلى الأحدث قبل الضغط
-lastMessages.reverse().forEach((msg: any) => {
+  lastMessages.reverse().forEach((msg: any) => {
     if (!msg.content || msg.content.trim() === "") return;
 
-    const currentSenderId = msg.senderId?._id?.toString() || msg.senderId?.toString() || "unknown";
-    
+    const currentSenderId =
+      msg.senderId?._id?.toString() || msg.senderId?.toString() || "unknown";
+
     // 💡 التعديل السحري: لو الـ ID بتاع الرسالة هو نفس الـ ID بتاع التوكن، اقلبها لـ "أنت"
-    let senderName = "الطرف الآخر"; 
+    let senderName = "الطرف الآخر";
     if (currentSenderId === userId) {
       senderName = "أنت";
     } else {
-      senderName = msg.senderName || (msg.senderId as any)?.fullName || "الطرف الآخر";
+      senderName =
+        msg.senderName || (msg.senderId as any)?.fullName || "الطرف الآخر";
     }
 
     if (currentSenderId === lastSenderId && currentSenderId !== "unknown") {
-      compressedMessages[compressedMessages.length - 1] += ` . ${msg.content.trim()}`;
+      compressedMessages[compressedMessages.length - 1] +=
+        ` . ${msg.content.trim()}`;
     } else {
       compressedMessages.push(`${senderName}: ${msg.content.trim()}`);
       lastSenderId = currentSenderId;
     }
   });
-const messagesText = compressedMessages.join("\n");
+  const messagesText = compressedMessages.join("\n");
 
   // إرسال النص المضغوط للمساعد الذكي
   const summary = await aiAssistantService.summarizeMessages(messagesText);
@@ -148,12 +151,10 @@ export const answerQuestion = catchAsync(
       !chatDoc ||
       !chatDoc.users.some((user: any) => user.toString() === userId)
     ) {
-      res
-        .status(403)
-        .json({
-          status: "error",
-          message: "Unauthorized access to this chat.",
-        });
+      res.status(403).json({
+        status: "error",
+        message: "Unauthorized access to this chat.",
+      });
       return;
     }
 
@@ -174,12 +175,10 @@ export const generateChatReplies = catchAsync(
       !chatDoc ||
       !chatDoc.users.some((user: any) => user.toString() === userId)
     ) {
-      res
-        .status(403)
-        .json({
-          status: "error",
-          message: "Unauthorized access to this chat.",
-        });
+      res.status(403).json({
+        status: "error",
+        message: "Unauthorized access to this chat.",
+      });
       return;
     }
 
@@ -187,12 +186,10 @@ export const generateChatReplies = catchAsync(
       .sort({ createdAt: -1 })
       .limit(3);
     if (lastMessages.length === 0) {
-      res
-        .status(200)
-        .json({
-          status: "success",
-          data: ["أهلاً بك!", "كيف يمكنني مساعدتك؟"],
-        });
+      res.status(200).json({
+        status: "success",
+        data: ["أهلاً بك!", "كيف يمكنني مساعدتك؟"],
+      });
       return;
     }
 
@@ -222,3 +219,26 @@ export const translateMessage = catchAsync(
     res.status(200).json({ status: "success", data: result });
   },
 );
+
+// Speech-to-Text Controller
+export const speechToText = catchAsync(async (req: Request, res: Response) => {
+  if (!req.file) {
+    console.warn("⚠️ [SpeechToText] No audio file provided in the request.");
+    res.status(400).json({
+      status: "error",
+      message: "No audio file provided. Please record and try again.",
+    });
+    return;
+  }
+
+  // استخدام Deepgram حالياً (يمكنك تغييره إلى transcribeAudioWhisper لاحقاً)
+  const transcribedText = await aiAssistantService.transcribeAudioDeepgram(
+    req.file.buffer,
+    req.file.mimetype,
+  );
+
+  res.status(200).json({
+    status: "success",
+    data: transcribedText,
+  });
+});

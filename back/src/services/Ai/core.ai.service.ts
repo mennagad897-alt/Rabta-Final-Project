@@ -14,3 +14,7 @@ export const embeddingsModel = new OpenAIEmbeddings({
   modelName: "text-embedding-3-small",
   apiKey: process.env.OPENAI_API_KEY,
 });
+
+export const WHISPER_MODEL = "whisper-1";
+// المحرك الأساسي لتحويل الصوت إلى نص (Deepgram)
+export const DEEPGRAM_MODEL = "nova-3";
