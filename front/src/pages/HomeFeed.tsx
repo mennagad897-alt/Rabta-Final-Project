@@ -250,13 +250,14 @@ export const HomeFeed = () => {
             reactions?: any[];
             attachments?: any[];
             replyTo?: any;
+            postId?: any;
           }) => {
             const isMine =
               (typeof m.senderId === "string" ? m.senderId : m.senderId._id) ===
               currentUser._id;
             return {
               id: m._id,
-              type: (["text", "audio", "file", "image", "video"].includes(
+              type: (["text", "audio", "file", "image", "video", "call_summary", "post"].includes(
                 m.messageType,
               )
                 ? m.messageType
@@ -268,8 +269,10 @@ export const HomeFeed = () => {
                 | "file"
                 | "image"
                 | "video"
-                | "call_summary",
+                | "call_summary"
+                | "post",
               content: m.content || m.attachments?.[0]?.fileUrl || "",
+              postId: m.postId,
               fileUrl:
                 m.attachments?.[0]?.fileUrl ||
                 (["image", "video", "file"].includes(m.messageType)

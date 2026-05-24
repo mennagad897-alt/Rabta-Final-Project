@@ -4,17 +4,20 @@ import axiosInstance from "../api/axiosInstance";
 
 // ── Types ──────────────────────────────────────────────────────────────
 export interface ChatMessage {
-  _id: string;          // Real DB id (used for dedup)
-  tempId?: string;      // Optimistic UI id (before server confirms)
-  senderId: {
-    _id: string;
-    fullName: string;
-    avatar?: string;
-  } | string;
+  _id: string; // Real DB id (used for dedup)
+  tempId?: string; // Optimistic UI id (before server confirms)
+  senderId:
+    | {
+        _id: string;
+        fullName: string;
+        avatar?: string;
+      }
+    | string;
   content: string;
-  messageType: "text" | "code_snippet" | "image" | "file";
+  messageType: "text" | "code_snippet" | "image" | "file" | "post";
+  postId?: any; // 💡 شايل بيانات البوست
   createdAt: string;
-  isPending?: boolean;  // True while the server hasn't confirmed yet
+  isPending?: boolean; // True while the server hasn't confirmed yet
 }
 
 interface UseCommunityChat {
@@ -23,7 +26,7 @@ interface UseCommunityChat {
   isSending: boolean;
   typingUsers: string[];
   isConnectedToRoom: boolean;
-  sendMessage: (content: string) => void;
+  sendMessage: (content: string, type?: string, postId?: string) => void;
   emitTyping: () => void;
   emitStopTyping: () => void;
 }
@@ -42,7 +45,7 @@ interface UseCommunityChat {
  */
 export const useCommunityChat = (
   communityId: string | null,
-  currentUserId: string | null
+  currentUserId: string | null,
 ): UseCommunityChat => {
   const { socket } = useChat();
 
@@ -72,9 +75,7 @@ export const useCommunityChat = (
 
       try {
         // REST call: get chatId + last 30 messages
-        const { data } = await axiosInstance.get(
-          `/groups/${communityId}/chat`
-        );
+        const { data } = await axiosInstance.get(`/groups/${communityId}/chat`);
         const { chatId, messages: history } = data.data;
 
         if (!active) return;
@@ -117,21 +118,26 @@ export const useCommunityChat = (
 
     const handleReceiveMessage = (incomingMessage: ChatMessage) => {
       console.log("📥 Received socket message:", incomingMessage);
-      
+
       setMessages((prev) => {
         // If it's our own optimistic message coming back
-        if (incomingMessage.tempId && prev.some(m => m.tempId === incomingMessage.tempId)) {
+        if (
+          incomingMessage.tempId &&
+          prev.some((m) => m.tempId === incomingMessage.tempId)
+        ) {
           seenIdsRef.current.add(incomingMessage._id);
-          return prev.map(m => 
-            m.tempId === incomingMessage.tempId ? { ...incomingMessage, isPending: false } : m
+          return prev.map((m) =>
+            m.tempId === incomingMessage.tempId
+              ? { ...incomingMessage, isPending: false }
+              : m,
           );
         }
-        
+
         // Prevent exact duplicates
         if (seenIdsRef.current.has(incomingMessage._id)) {
           return prev;
         }
-        
+
         seenIdsRef.current.add(incomingMessage._id);
         // EXACT functional update requested by user:
         return [...prev, { ...incomingMessage, isPending: false }];
@@ -153,7 +159,7 @@ export const useCommunityChat = (
 
     const onTyping = ({ userId }: { userId: string }) => {
       setTypingUsers((prev) =>
-        prev.includes(userId) ? prev : [...prev, userId]
+        prev.includes(userId) ? prev : [...prev, userId],
       );
     };
     const onStopTyping = ({ userId }: { userId: string }) => {
@@ -179,42 +185,49 @@ export const useCommunityChat = (
       setMessages((prev) => prev.filter((m) => !m.isPending));
     };
     socket.on("message-error", onError);
-    return () => { socket.off("message-error", onError); };
+    return () => {
+      socket.off("message-error", onError);
+    };
   }, [socket]);
 
   // ── 5. Send a message (optimistic UI) ─────────────────────────────
   const sendMessage = useCallback(
-    (content: string) => {
-      if (!content.trim() || !socket || !chatIdRef.current || !currentUserId) return;
+    (content: string, type: string = "text", postId?: string) => {
+      // 💡 عدلنا الـ Validation عشان يقبل لو مفيش text بس فيه postId
+      if (
+        (!content.trim() && !postId) ||
+        !socket ||
+        !chatIdRef.current ||
+        !currentUserId
+      )
+        return;
 
-      // Generate a temporary ID for dedup + optimistic rendering
       const tempId = `temp-${Date.now()}`;
 
-      // Optimistic update: show message immediately before server confirms
       const newOptimisticMessage: ChatMessage = {
         _id: tempId,
         tempId,
         senderId: currentUserId,
         content: content.trim(),
-        messageType: "text",
+        messageType: type as any,
+        postId: postId,
         createdAt: new Date().toISOString(),
         isPending: true,
       };
 
       console.log("📤 Sending message instantly to UI:", newOptimisticMessage);
-      
+
       seenIdsRef.current.add(tempId);
-      
-      // EXACT functional update requested by user:
+
       setMessages((prev) => [...prev, newOptimisticMessage]);
-      
+
       setIsSending(true);
 
-      // Emit to the community's isolated room
       socket.emit("send-message", {
         chatId: chatIdRef.current,
         content: content.trim(),
-        messageType: "text",
+        messageType: type,
+        postId: postId,
         tempId: tempId,
       });
 
@@ -222,7 +235,7 @@ export const useCommunityChat = (
       // optimistic entry using the tempId ↔ _id match
       setIsSending(false);
     },
-    [socket, currentUserId]
+    [socket, currentUserId],
   );
 
   // ── 6. Typing indicator helpers ────────────────────────────────────

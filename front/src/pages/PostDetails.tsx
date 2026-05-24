@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import axiosInstance from '../api/axiosInstance';
+import toast from 'react-hot-toast';
 
 // ==========================================
 // Interfaces
@@ -29,6 +31,8 @@ interface Post {
   commentsCount: number;
   likedByText: string;
   createdAt: string;
+  media?: { fileUrl: string, fileType: string }[];
+  likesData?: { _id: string, fullName: string }[];
 }
 
 // ==========================================
@@ -38,27 +42,154 @@ export const PostDetails: React.FC = () => {
   const navigate = useNavigate();
   const { postId } = useParams();
 
-  // States — جاهزة للربط بالباك-إند
-  const [post] = useState<Post | null>(null);
-  const [comments] = useState<Comment[]>([]);
+  // States
+  const [post, setPost] = useState<Post | null>(null);
+  const [comments, setComments] = useState<Comment[]>([]);
   const [commentText, setCommentText] = useState('');
   const [isLiked, setIsLiked] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
 
-  // TODO (Backend): جلب بيانات البوست والتعليقات
-  // useEffect(() => {
-  //   axios.get(`/api/posts/${postId}`).then(res => setPost(res.data));
-  //   axios.get(`/api/posts/${postId}/comments`).then(res => setComments(res.data));
-  // }, [postId]);
+  const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+  const currentUserId = currentUser?._id;
 
-  const handleSubmitComment = () => {
-    if (!commentText.trim()) return;
-    // TODO (Backend): إرسال التعليق
-    // axios.post(`/api/posts/${postId}/comments`, { content: commentText });
-    setCommentText('');
+  useEffect(() => {
+    if (!postId) return;
+
+    const fetchPostDetails = async () => {
+      try {
+        setIsLoading(true);
+        const res = await axiosInstance.get(`/posts/${postId}`);
+        const fetchedPost = res.data.data.post;
+
+        setPost({
+          _id: fetchedPost._id,
+          author: {
+            _id: fetchedPost.authorId?._id || '',
+            fullName: fetchedPost.authorId?.fullName || 'Unknown User',
+            avatar: fetchedPost.authorId?.avatar || '',
+            role: fetchedPost.authorId?.jobTitle || '',
+          },
+          content: fetchedPost.content,
+          tags: fetchedPost.tags || [],
+          likesCount: fetchedPost.likes?.length || 0,
+          commentsCount: fetchedPost.comments?.length || 0,
+          likedByText: '', // Will calculate below
+          createdAt: new Date(fetchedPost.createdAt).toLocaleDateString(),
+          media: fetchedPost.media || [],
+          likesData: fetchedPost.likes || [],
+        });
+
+        // 3. Like logic
+        let calculatedLikedBy = fetchedPost.likes?.length > 0 ? `${fetchedPost.likes.length} Likes` : 'No likes yet';
+        if (fetchedPost.authorId?._id === currentUserId && fetchedPost.likes?.length > 0) {
+          const names = fetchedPost.likes.map((u: any) => u.fullName).filter(Boolean);
+          if (names.length === 1) calculatedLikedBy = `Liked by ${names[0]}`;
+          else if (names.length === 2) calculatedLikedBy = `Liked by ${names[0]} and ${names[1]}`;
+          else if (names.length > 2) calculatedLikedBy = `Liked by ${names[0]}, ${names[1]} and ${names.length - 2} others`;
+        }
+
+        setPost((prev: any) => prev ? { ...prev, likedByText: calculatedLikedBy } : prev);
+
+        setIsLiked(fetchedPost.likes?.some((u: any) => u._id === currentUserId || u === currentUserId));
+
+        if (fetchedPost.comments) {
+          const mappedComments = fetchedPost.comments.map((c: any) => ({
+            _id: c._id,
+            author: {
+              _id: c.userId?._id || '',
+              fullName: c.userId?.fullName || 'Unknown User',
+              avatar: c.userId?.avatar || '',
+              role: c.userId?.jobTitle || '',
+            },
+            content: c.commentText,
+            createdAt: new Date(c.createdAt).toLocaleDateString(),
+            likesCount: 0,
+            isAuthor: c.userId?._id === fetchedPost.authorId?._id,
+          }));
+          setComments(mappedComments);
+        }
+      } catch (error) {
+        toast.error('Failed to load post details');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchPostDetails();
+  }, [postId, currentUserId]);
+
+  const handleSubmitComment = async () => {
+    if (!commentText.trim() || !postId) return;
+    try {
+      await axiosInstance.post(`/posts/${postId}/comments`, { content: commentText });
+      setCommentText('');
+      toast.success('Comment added successfully!');
+      
+      // Refetch post to get populated new comments
+      const res = await axiosInstance.get(`/posts/${postId}`);
+      const refetchedPost = res.data.data.post;
+      
+      if (refetchedPost.comments) {
+        const mappedComments = refetchedPost.comments.map((c: any) => ({
+          _id: c._id,
+          author: {
+            _id: c.userId?._id || '',
+            fullName: c.userId?.fullName || 'Unknown User',
+            avatar: c.userId?.avatar || '',
+            role: c.userId?.jobTitle || '',
+          },
+          content: c.commentText,
+          createdAt: new Date(c.createdAt).toLocaleDateString(),
+          likesCount: 0,
+          isAuthor: c.userId?._id === refetchedPost.authorId?._id,
+        }));
+        setComments(mappedComments);
+        setPost((prev: any) => prev ? { ...prev, commentsCount: refetchedPost.comments.length } : prev);
+      }
+    } catch (error) {
+      toast.error('Failed to add comment');
+    }
   };
 
+  const handleToggleLike = async () => {
+    try {
+      const res = await axiosInstance.post(`/posts/${postId}/like`);
+      const updatedPost = res.data.data.post;
+      setIsLiked(updatedPost.likes?.some((id: string) => id === currentUserId));
+      setPost((prev: any) => prev ? {
+        ...prev,
+        likesCount: updatedPost.likes?.length || 0,
+        likedByText: updatedPost.likes?.length > 0 ? `${updatedPost.likes.length} Likes` : 'No likes yet'
+      } : prev);
+    } catch (error) {
+      toast.error('Failed to toggle like');
+    }
+  };
 
-  // حالة التحميل أو عدم وجود البوست
+  const handleDeletePost = async () => {
+    if (!window.confirm("Are you sure you want to delete this post?")) return;
+    try {
+      await axiosInstance.delete(`/posts/${postId}`);
+      toast.success("Post deleted successfully");
+      navigate(-1);
+    } catch (error) {
+      toast.error("Failed to delete post");
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <main className="flex-1 overflow-y-auto relative custom-scrollbar bg-[#FAFAFA] dark:bg-[#171717]">
+        <div className="max-w-3xl mx-auto px-6 py-12 flex flex-col gap-8 justify-center items-center h-full">
+          <span className="material-icons-round animate-spin text-[#7C3AED] text-4xl">sync</span>
+          <p className="text-gray-500 font-medium mt-4">Loading post details...</p>
+        </div>
+      </main>
+    );
+  }
+
+  // حالة عدم وجود البوست
   if (!post) {
     return (
       <main className="flex-1 overflow-y-auto relative custom-scrollbar bg-[#FAFAFA] dark:bg-[#171717]">
@@ -113,15 +244,39 @@ export const PostDetails: React.FC = () => {
                 <p className="text-sm opacity-70 mt-1 font-medium tracking-wide">{post.author.role} • {post.createdAt}</p>
               </div>
             </div>
-            <button className="p-2 hover:bg-black/5 dark:hover:bg-white/10 rounded-full transition-colors duration-300">
-              <span className="material-icons-round text-xl opacity-60">more_vert</span>
-            </button>
+            <div className="relative">
+              <button 
+                onClick={() => setIsMenuOpen(!isMenuOpen)}
+                className="p-2 hover:bg-black/5 dark:hover:bg-white/10 rounded-full transition-colors duration-300"
+              >
+                <span className="material-icons-round text-xl opacity-60">more_vert</span>
+              </button>
+              
+              {isMenuOpen && post.author._id === currentUserId && (
+                <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-[#262626] rounded-xl shadow-lg border border-black/5 dark:border-white/5 py-2 z-10">
+                  <button 
+                    onClick={handleDeletePost}
+                    className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors flex items-center gap-2 font-medium"
+                  >
+                    <span className="material-icons-round text-[18px]">delete</span>
+                    Delete Post
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Post Content */}
-          <div className="mb-8">
+          <div className="mb-6">
             <p className="leading-loose text-lg font-light text-[#171717] dark:text-[#F5F5F5]">{post.content}</p>
           </div>
+
+          {/* Media Images */}
+          {post.media && post.media.length > 0 && (
+            <div className="mb-8 rounded-2xl overflow-hidden border border-black/5 dark:border-white/5 shadow-sm max-h-96 flex justify-center bg-black/5 dark:bg-white/5">
+              <img src={post.media[0].fileUrl} alt="Post Attachment" className="max-w-full h-auto object-contain max-h-96" />
+            </div>
+          )}
 
           {/* Tags */}
           {post.tags.length > 0 && (
@@ -144,7 +299,7 @@ export const PostDetails: React.FC = () => {
           {/* Action Buttons */}
           <div className="flex items-center justify-between gap-4 pt-2 border-t border-black/5 dark:border-white/5">
             <button
-              onClick={() => setIsLiked(!isLiked)}
+              onClick={handleToggleLike}
               className={`flex-1 flex items-center justify-center gap-3 py-3 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl transition-all duration-500 font-semibold tracking-wide text-sm group ${isLiked ? 'text-[#7C3AED] dark:text-[#8B5CF6]' : ''}`}
             >
               <span className={`material-icons-round text-xl ${isLiked ? '' : 'opacity-70 group-hover:text-[#7C3AED] dark:group-hover:text-[#8B5CF6]'} transition-colors`}>
