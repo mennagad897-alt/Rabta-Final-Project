@@ -162,6 +162,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
   // Reset AI states when chatId changes
   useEffect(() => {
+    setHasMore(true);
     setShowAiPopup(false);
     setSummaryResult("");
     setSummaryError("");
@@ -325,6 +326,13 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const msgRef = useRef<HTMLAudioElement>(null);
   const currentUser = JSON.parse(localStorage.getItem("user") || "{}");
+  // --- Pagination & Scroll States ---
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const topObserverRef = useRef<HTMLDivElement>(null);
+  const lastMessageIdRef = useRef<string | null>(null);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+
   const cannotReply = !isGroup && (blockedByMe || blockedMe);
 
   // Calculate if the current user can add members based on group privacy
@@ -495,11 +503,18 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   };
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    messagesEndRef.current?.scrollIntoView({ behavior: "auto" });
   };
 
   useEffect(() => {
-    scrollToBottom();
+    if (!messages.length) return;
+    const currentLastMsg = messages[messages.length - 1];
+
+    // ننزل لتحت فقط لو فيه رسالة جديدة انضافت في الآخر
+    if (lastMessageIdRef.current !== currentLastMsg.id) {
+      scrollToBottom();
+      lastMessageIdRef.current = currentLastMsg.id;
+    }
   }, [messages]);
 
   // 1. Join Room Effect (Depends on chatId)
@@ -788,6 +803,113 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       setIsLoadingStt(false);
     }
   };
+
+  // ── Pagination & Scroll Restoration Logic ──
+  const loadOlderMessages = async () => {
+    if (!messages.length || !setMessages) return;
+    const oldestMsgId = messages[0].id;
+
+    // متعملش فيتش لو أول رسالة دي رسالة مؤقتة لسه متبعتتش
+    if (oldestMsgId.startsWith("temp-") || oldestMsgId.startsWith("socket-"))
+      return;
+
+    setIsLoadingMore(true);
+    try {
+      const res = await axiosInstance.get(`/chats/${chatId}/messages`, {
+        params: { before: oldestMsgId, limit: 30 },
+      });
+
+      const olderMessagesRaw = res.data?.data?.messages || [];
+      if (olderMessagesRaw.length === 0) {
+        setHasMore(false); // مفيش رسايل أقدم من كده
+        return;
+      }
+
+      // تجهيز الرسايل القديمة بنفس الفورمات
+      const formattedOlder: MessageType[] = olderMessagesRaw.map((m: any) => {
+        const isMine =
+          (typeof m.senderId === "string" ? m.senderId : m.senderId?._id) ===
+          currentUser._id;
+        const senderName =
+          typeof m.senderId === "object" ? m.senderId?.fullName : undefined;
+        return {
+          id: m._id,
+          type: (["text", "audio", "file", "image", "video"].includes(
+            m.messageType,
+          )
+            ? m.messageType
+            : m.content?.endsWith(".webm")
+              ? "audio"
+              : "text") as MessageType["type"],
+          content: m.content || m.attachments?.[0]?.fileUrl || "",
+          fileUrl:
+            m.attachments?.[0]?.fileUrl ||
+            (["image", "video", "file"].includes(m.messageType)
+              ? m.content
+              : undefined),
+          fileName: extractFileName(m.attachments?.[0]?.fileUrl),
+          fileSize: formatFileSize(m.attachments?.[0]?.fileSize),
+          duration: m.duration,
+          isDeletedForEveryone: m.isDeletedForEveryone,
+          isEdited: m.isEdited,
+          isPinned: m.isPinned,
+          reactions: m.reactions || [],
+          replyTo: m.replyTo,
+          time: new Date(m.createdAt).toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
+          isMine,
+          status: m.status || (isMine ? "sent" : undefined),
+          senderName,
+          isForwarded: m.isForwarded,
+        };
+      });
+
+      const container = scrollContainerRef.current;
+      const prevScrollHeight = container?.scrollHeight || 0;
+
+      // دمج الرسايل القديمة "فوق" الرسايل الحالية
+      setMessages((prev) => {
+        const existingIds = new Set(prev.map((p) => p.id));
+        const uniqueOlder = formattedOlder.filter(
+          (old) => !existingIds.has(old.id),
+        );
+        return [...uniqueOlder, ...prev];
+      });
+
+      // 🎯 Scroll Restoration: تثبيت مكان الشاشة بعد إضافة رسايل فوق
+      setTimeout(() => {
+        if (container) {
+          container.scrollTop = container.scrollHeight - prevScrollHeight;
+        }
+      }, 0);
+    } catch (error) {
+      console.error("Failed to fetch older messages", error);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  };
+
+  // رادار مراقبة بداية الشات
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (
+          entries[0].isIntersecting &&
+          hasMore &&
+          !isLoadingMore &&
+          messages.length > 0
+        ) {
+          loadOlderMessages();
+        }
+      },
+      { threshold: 0.1 },
+    );
+    if (topObserverRef.current) observer.observe(topObserverRef.current);
+    return () => observer.disconnect();
+  }, [hasMore, isLoadingMore, messages]);
+  // ─────────────────────────────────────────
 
   const handleSendMessage = async () => {
     if (cannotReply) {
@@ -1679,7 +1801,21 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           </div>
         )}
 
-        <div className="relative flex-1 overflow-y-auto hide-scrollbar p-6 space-y-4">
+        <div
+          ref={scrollContainerRef}
+          className="relative flex-1 overflow-y-auto hide-scrollbar p-6 space-y-4"
+        >
+          {/* اللمبة المخفية (الرادار) */}
+          <div ref={topObserverRef} className="w-full h-1" />
+
+          {isLoadingMore && (
+            <div className="flex justify-center py-2">
+              <span className="material-icons-round animate-spin text-[#7C3AED] text-2xl">
+                sync
+              </span>
+            </div>
+          )}
+
           <div className="flex justify-center my-4">
             <span className="bg-gray-200 dark:bg-gray-800 text-gray-600 dark:text-gray-400 text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider">
               Today
