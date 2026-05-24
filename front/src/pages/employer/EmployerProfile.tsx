@@ -79,13 +79,15 @@ const EmployerProfile: React.FC = () => {
                   Edit Profile
                 </button>
 
-                <button
-                  onClick={() => navigate('/employer-dashboard')}
-                  className="w-full border-2 border-[#7C3AED] text-[#7C3AED] dark:text-[#8B5CF6] dark:border-[#8B5CF6] hover:bg-[#7C3AED]/5 py-3 rounded-xl font-bold transition-all flex items-center justify-center gap-2"
-                >
-                  <span className="material-icons-round text-sm">dashboard</span>
-                  My Dashboard
-                </button>
+                {user?.role !== 'admin' && (
+                  <button
+                    onClick={() => navigate('/employer-dashboard')}
+                    className="w-full border-2 border-[#7C3AED] text-[#7C3AED] dark:text-[#8B5CF6] dark:border-[#8B5CF6] hover:bg-[#7C3AED]/5 py-3 rounded-xl font-bold transition-all flex items-center justify-center gap-2"
+                  >
+                    <span className="material-icons-round text-sm">dashboard</span>
+                    My Dashboard
+                  </button>
+                )}
               </div>
             </div>
 

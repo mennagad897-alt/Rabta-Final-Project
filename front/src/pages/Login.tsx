@@ -59,7 +59,9 @@ export const Login = () => {
       toast.success("Successfully logged in!", { duration: 4000 });
       
       // التوجيه بناءً على حالة البروفايل
-      if (responseData.user.role === 'employer' && responseData.profileComplete) {
+      if (responseData.user.role === 'admin') {
+        navigate("/admin");
+      } else if (responseData.user.role === 'employer' && responseData.profileComplete) {
         navigate("/employer-dashboard");
       } else if (!responseData.profileComplete) {
         navigate("/setup-profile");

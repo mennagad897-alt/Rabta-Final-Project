@@ -43,7 +43,9 @@ export const LoginSuccess = () => {
         toast.success("Successfully logged in with Google!");
 
         // 4. Redirect logically
-        if (user.role === "employer" && profileComplete) {
+        if (user.role === "admin") {
+          navigate("/admin", { replace: true });
+        } else if (user.role === "employer" && profileComplete) {
           navigate("/employer-dashboard", { replace: true });
         } else if (!profileComplete) {
           navigate("/setup-profile", { replace: true });

@@ -118,13 +118,18 @@ function App() {
           
           <Route path="/settings" element={<Settings />} />
           <Route path="/employer/setup" element={<EmployerSetup />} />
-          <Route path="/employer-dashboard" element={<EmployerDashboard />} />
-          <Route path="/post-job" element={<PostJob />} />
-          <Route path="/manage-project/:id" element={<ManageProject />} />
-          <Route path="/edit-project/:id" element={<EditProject />} />
-          <Route path="/freelancer-profile/:id" element={<FreelancerProfile />} />
-          <Route path="/applied-projects" element={<AppliedProjects />} />
-          <Route path="/freelancer-dashboard" element={<FreelancerDashboard />} />
+          
+          {user?.role !== 'admin' && (
+            <>
+              <Route path="/employer-dashboard" element={<EmployerDashboard />} />
+              <Route path="/post-job" element={<PostJob />} />
+              <Route path="/manage-project/:id" element={<ManageProject />} />
+              <Route path="/edit-project/:id" element={<EditProject />} />
+              <Route path="/freelancer-profile/:id" element={<FreelancerProfile />} />
+              <Route path="/applied-projects" element={<AppliedProjects />} />
+              <Route path="/freelancer-dashboard" element={<FreelancerDashboard />} />
+            </>
+          )}
         </Route>
       </Route>
 
