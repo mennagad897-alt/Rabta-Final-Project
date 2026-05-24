@@ -309,6 +309,8 @@ export const GroupsFeed = () => {
     );
     if (community && isCommunityInvited(community, currentUserId)) return;
 
+    let isMounted = true; // 💡 1. إضافة متغير المراقبة (الفرامل)
+
     const fetchMessages = async () => {
       const targetChatId = activeChatId;
       try {
@@ -357,7 +359,7 @@ export const GroupsFeed = () => {
               content: m.content || m.attachments?.[0]?.fileUrl || "",
               fileUrl:
                 m.attachments?.[0]?.fileUrl ||
-                (["image", "video", "file"].includes(m.messageType)
+                (["image", "video", "file", "audio"].includes(m.messageType)
                   ? m.content
                   : undefined),
               fileName: extractFileName(m.attachments?.[0]?.fileUrl),
@@ -378,15 +380,22 @@ export const GroupsFeed = () => {
             };
           },
         );
-        if (String(targetChatId) === String(activeChatId)) {
+
+        // 💡 2. استبدال الشرط القديم بشرط المراقبة
+        if (isMounted) {
           setMessages(formatted);
         }
       } catch {
-        toast.error("Failed to load messages");
+        if (isMounted) toast.error("Failed to load messages");
       }
     };
 
     fetchMessages();
+
+    // 💡 3. دالة التنظيف (بتشتغل أوتوماتيك أول ما تطلع من الجروب)
+    return () => {
+      isMounted = false;
+    };
   }, [activeGroupId, activeChatId, currentUserId]);
 
   const filters = ["All", "Programming", "UI/UX", "Data", "Cyber", "Cloud"];
