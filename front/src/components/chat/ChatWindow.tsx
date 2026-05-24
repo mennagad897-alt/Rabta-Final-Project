@@ -36,8 +36,9 @@ export function getDownloadUrl(url?: string): string {
 
 export type MessageType = {
   id: string;
-  type: "text" | "file" | "audio" | "call_summary" | "image" | "video";
+  type: "text" | "file" | "audio" | "call_summary" | "image" | "video" | "post";
   content?: string;
+  postId?: any; // 💡 ضفنا دي عشان نمسك بيها الـ ID بتاع البوست
   fileName?: string;
   fileSize?: string;
   fileUrl?: string;
@@ -590,6 +591,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           "image",
           "video",
           "call_summary",
+          "post",
         ].includes(resolvedType)
           ? (resolvedType as MessageType["type"])
           : "text",
@@ -598,6 +600,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           incomingMsg.attachments?.[0]?.fileUrl ||
           (incomingMsg as any).audioUrl ||
           "",
+        postId: (incomingMsg as any).postId,
         fileUrl:
           incomingMsg.attachments?.[0]?.fileUrl ||
           (incomingMsg as any).audioUrl ||
@@ -834,14 +837,21 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           typeof m.senderId === "object" ? m.senderId?.fullName : undefined;
         return {
           id: m._id,
-          type: (["text", "audio", "file", "image", "video"].includes(
-            m.messageType,
-          )
+          type: ([
+            "text",
+            "audio",
+            "file",
+            "image",
+            "video",
+            "call_summary",
+            "post",
+          ].includes(m.messageType)
             ? m.messageType
             : m.content?.endsWith(".webm")
               ? "audio"
               : "text") as MessageType["type"],
           content: m.content || m.attachments?.[0]?.fileUrl || "",
+          postId: m.postId,
           fileUrl:
             m.attachments?.[0]?.fileUrl ||
             (["image", "video", "file"].includes(m.messageType)
@@ -1867,7 +1877,82 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                         Forwarded
                       </div>
                     )}
-                    {msg.type === "text" ? (
+                    {/* 💡 التعديل الثالث: رسم البوست كـ Card */}
+                    {msg.type === "post" ? (
+                      <div
+                        className={`relative ${msg.isMine ? "bg-white dark:bg-[#262626] border-[#7C3AED]/30" : "bg-white dark:bg-[#262626] border-gray-200 dark:border-gray-800"} border rounded-2xl p-4 shadow-sm w-full min-w-[280px] max-w-sm`}
+                      >
+                        {/* هيدر الكارد */}
+                        <div className="flex items-center gap-3 mb-3 border-b border-gray-100 dark:border-white/5 pb-3">
+                          <div className="w-8 h-8 rounded-full bg-[#7C3AED]/10 flex items-center justify-center shrink-0">
+                            <span className="material-icons-round text-[#7C3AED] text-sm">
+                              article
+                            </span>
+                          </div>
+                          <div className="flex flex-col">
+                            <span className="text-xs font-bold text-[#171717] dark:text-[#F5F5F5]">
+                              Shared a Post
+                            </span>
+                            <span className="text-[10px] text-gray-400">
+                              Rabta Community
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* صورة مصغرة إذا وجدت */}
+                        {msg.postId?.media?.length > 0 && (
+                          <div className="mb-3 rounded-xl overflow-hidden max-h-32 bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5">
+                            <img 
+                              src={msg.postId.media[0].fileUrl} 
+                              alt="Post media" 
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                        )}
+
+                        {/* محتوى البوست */}
+                        <p className="text-sm text-[#171717] dark:text-[#F5F5F5] mb-4 line-clamp-3 leading-relaxed whitespace-pre-wrap">
+                          {msg.content}
+                        </p>
+
+                        {/* زرار عرض البوست */}
+                        <button
+                          onClick={(e) => {
+                            e.preventDefault();
+                            const finalPostId =
+                              typeof msg.postId === "object"
+                                ? msg.postId?._id
+                                : msg.postId;
+                            if (finalPostId) {
+                              navigate(`/posts/${finalPostId}`);
+                            } else {
+                              toast.error("Error: Post ID is missing");
+                            }
+                          }}
+                          className="w-full py-2.5 text-xs font-bold text-[#7C3AED] dark:text-[#8B5CF6] bg-[#7C3AED]/10 dark:bg-[#8B5CF6]/10 hover:bg-[#7C3AED]/20 rounded-xl transition-colors shadow-sm"
+                        >
+                          View Full Post
+                        </button>
+
+                        {/* الوقت وحالة الإرسال */}
+                        <div
+                          className={`flex justify-end items-center gap-1 mt-2 text-gray-400`}
+                        >
+                          <span className="text-[10px]">{msg.time}</span>
+                          {msg.isMine && (
+                            <span
+                              className={`material-icons text-[12px] ${msg.status === "read" ? "text-blue-500" : ""}`}
+                            >
+                              {msg.isPending || msg.status === "sending"
+                                ? "schedule"
+                                : msg.status === "sent"
+                                  ? "done"
+                                  : "done_all"}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ) : msg.type === "text" ? (
                       <div
                         className={`relative ${msg.isMine ? "bg-[#7C3AED] text-white rounded-tr-none" : "bg-white dark:bg-[#262626] text-[#171717] dark:text-[#F5F5F5] border border-gray-200 dark:border-gray-800 rounded-tl-none"} rounded-xl p-3 pr-10 shadow-sm ${msg.isPending ? "opacity-70" : ""}`}
                       >
@@ -3202,15 +3287,87 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         </footer>
       </main>
 
+      {/* 💡 التعديل الرابع: إرسال البوست وتحديث الشات فوراً عند نجاح المودال */}
       {showCreatePost && (
         <CreatePostModal
           isOpen={showCreatePost}
           onClose={() => setShowCreatePost(false)}
           groupId={chatId}
           groupName={chatName}
-          onPostSuccess={() => {
+          onPostSuccess={async (postData) => {
             setShowCreatePost(false);
             toast.success("Post shared in chat");
+
+            // 1️⃣ رسم الكارد فوراً في شاشتك بشكل مبدئي (Optimistic UI)
+            const tempId = `temp-${Date.now()}`;
+            const newMsg: MessageType = {
+              id: tempId,
+              type: "post",
+              content: postData.content || "Shared a new post",
+              postId: postData._id,
+              time: new Date().toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+              }),
+              isMine: true,
+              isPending: true,
+              status: "sending",
+            };
+
+            if (setMessages) {
+              setMessages((prev) => [...prev, newMsg]);
+            }
+
+            // 2️⃣ إرسال الرسالة للباك إند لحفظها في شات الجروب وعبر السوكيت
+            try {
+              const response = await axiosInstance.post(
+                `/chats/${chatId}/send`,
+                {
+                  content: postData.content || "Shared a new post",
+                  type: "post",
+                  messageType: "post",
+                  postId: postData._id,
+                },
+              );
+
+              const saved = response.data.data
+                ? response.data.data.message
+                : response.data;
+
+              // تحديث الرسالة بالـ ID الحقيقي المستلم من الداتا بيز
+              if (setMessages) {
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.id === tempId
+                      ? {
+                          ...m,
+                          id: saved._id,
+                          isPending: false,
+                          status: saved.status || "sent",
+                        }
+                      : m,
+                  ),
+                );
+              }
+
+              // 3️⃣ بث الرسالة اللحظية (Socket Emit) لباقي المتواجدين في الشات
+              if (socket) {
+                socket.emit("send_message", {
+                  chatId,
+                  content: saved.content,
+                  messageType: "post",
+                  postId: postData._id,
+                  _id: saved._id,
+                  createdAt: saved.createdAt,
+                  senderId: saved.senderId,
+                });
+              }
+            } catch (error) {
+              console.error("Failed to send post message:", error);
+              toast.error("Failed to send post message to chat");
+              if (setMessages)
+                setMessages((prev) => prev.filter((m) => m.id !== tempId));
+            }
           }}
         />
       )}

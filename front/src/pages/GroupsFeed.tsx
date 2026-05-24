@@ -340,6 +340,7 @@ export const GroupsFeed = () => {
               fileSize?: number;
             }>;
             replyTo?: MessageType["replyTo"];
+            postId?: any;
           }) => {
             const isMine =
               (typeof m.senderId === "string"
@@ -349,7 +350,7 @@ export const GroupsFeed = () => {
               typeof m.senderId === "object" ? m.senderId?.fullName : undefined;
             return {
               id: m._id,
-              type: (["text", "audio", "file", "image", "video"].includes(
+              type: (["text", "audio", "file", "image", "video", "call_summary", "post"].includes(
                 m.messageType,
               )
                 ? m.messageType
@@ -357,6 +358,7 @@ export const GroupsFeed = () => {
                   ? "audio"
                   : "text") as MessageType["type"],
               content: m.content || m.attachments?.[0]?.fileUrl || "",
+              postId: m.postId,
               fileUrl:
                 m.attachments?.[0]?.fileUrl ||
                 (["image", "video", "file", "audio"].includes(m.messageType)

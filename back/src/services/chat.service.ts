@@ -1,4 +1,4 @@
-﻿import mongoose from "mongoose";
+import mongoose from "mongoose";
 import Chat from "../models/chat";
 import Message from "../models/Message";
 import Community from "../models/Community";
@@ -20,9 +20,7 @@ export const getClearedAtForUser = (
   chat: ChatClearContext,
   userId: string,
 ): Date | null => {
-  const entry = chat.clearStates?.find(
-    (s) => s.user?.toString() === userId,
-  );
+  const entry = chat.clearStates?.find((s) => s.user?.toString() === userId);
   return entry?.clearedAt ? new Date(entry.clearedAt) : null;
 };
 
@@ -51,9 +49,7 @@ export const buildVisibleMessageFilter = (
 
   const filter: Record<string, unknown> = {
     chatId:
-      typeof chatId === "string"
-        ? new mongoose.Types.ObjectId(chatId)
-        : chatId,
+      typeof chatId === "string" ? new mongoose.Types.ObjectId(chatId) : chatId,
   };
   if (andClauses.length) filter.$and = andClauses;
   return filter;
@@ -177,6 +173,7 @@ export const createMessage = async (data: {
   senderId: string;
   content?: string;
   messageType?: string;
+  postId?: string;
   status?: "sent" | "delivered" | "read" | "sending";
   audioUrl?: string;
   duration?: number;
@@ -218,6 +215,7 @@ export const createMessage = async (data: {
     attachments: data.attachments || [],
     replyTo: data.replyTo,
     isForwarded: data.isForwarded || false,
+    postId: data.postId,
     embedding: data.embedding,
   });
   await newMessage.save();
@@ -232,7 +230,8 @@ export const createMessage = async (data: {
       path: "replyTo",
       select: "content senderId messageType attachments",
       populate: { path: "senderId", select: "fullName" },
-    });
+    })
+    .populate("postId", "media content");
 
   return populatedMessage;
 };
@@ -245,7 +244,10 @@ type SocketEmitter = {
 export const emitNewCommunityMessage = async (
   io: SocketEmitter | undefined,
   chatId: string,
-  savedMessage: { toObject?: () => Record<string, unknown> } & Record<string, unknown>,
+  savedMessage: { toObject?: () => Record<string, unknown> } & Record<
+    string,
+    unknown
+  >,
 ) => {
   if (!io) return;
 
@@ -265,7 +267,12 @@ export const emitNewCommunityMessage = async (
     | undefined;
 
   let senderId: string;
-  let sender: { _id: string; fullName?: string; name?: string; avatar?: string };
+  let sender: {
+    _id: string;
+    fullName?: string;
+    name?: string;
+    avatar?: string;
+  };
 
   if (typeof rawSender === "object" && rawSender !== null) {
     senderId =
@@ -281,7 +288,9 @@ export const emitNewCommunityMessage = async (
     };
   } else {
     senderId = rawSender?.toString?.() ?? String(rawSender);
-    const userDoc = await User.findById(senderId).select("fullName avatar").lean();
+    const userDoc = await User.findById(senderId)
+      .select("fullName avatar")
+      .lean();
     const displayName = userDoc?.fullName;
     sender = {
       _id: senderId,
@@ -343,6 +352,7 @@ export const getChatMessages = async (
       select: "content senderId messageType attachments",
       populate: { path: "senderId", select: "fullName" },
     })
+    .populate("postId", "media content")
     // Fetch newest first so limit returns the latest persisted messages
     .sort({ createdAt: -1 })
     .limit(safeLimit);
@@ -861,7 +871,10 @@ export const getUserChats = async (userId: string) => {
     .populate("users", "fullName avatar status showOnlineStatus")
     .populate({
       path: "latestMessage",
-      populate: { path: "senderId", select: "fullName _id" },
+      populate: [
+        { path: "senderId", select: "fullName _id" },
+        { path: "postId", select: "media content" }
+      ],
     })
     .populate("admins", "fullName avatar")
     .sort("-updatedAt");
@@ -877,14 +890,11 @@ export const getUserChats = async (userId: string) => {
           (id: any) => id.toString() === userId.toString(),
         )
       ) {
-        const visibleFilter = buildVisibleMessageFilter(
-          chat._id,
-          userId,
-          chat,
-        );
+        const visibleFilter = buildVisibleMessageFilter(chat._id, userId, chat);
         const realLatestMessage = await Message.findOne(visibleFilter)
           .sort({ createdAt: -1 })
-          .populate("senderId", "fullName _id");
+          .populate("senderId", "fullName _id")
+          .populate("postId", "media content");
 
         latestMsg = realLatestMessage;
       }

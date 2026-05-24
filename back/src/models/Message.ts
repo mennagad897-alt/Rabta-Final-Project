@@ -5,18 +5,20 @@ export interface IMessage extends Document {
   senderId: mongoose.Types.ObjectId;
   content?: string;
   embedding: {
-      type: [Number],
-      default: [], // عشان لو رسالة مفيهاش نص ميعملش مشكلة
-      select: false // (اختياري) عشان الأرقام دي مترجعش للفرونت إند وتقلل سرعة الشات، إحنا محتاجينها في الباك إند بس للبحث
- },
+    type: [Number];
+    default: []; // عشان لو رسالة مفيهاش نص ميعملش مشكلة
+    select: false; // (اختياري) عشان الأرقام دي مترجعش للفرونت إند وتقلل سرعة الشات، إحنا محتاجينها في الباك إند بس للبحث
+  };
   audioUrl?: string;
+  postId?: mongoose.Types.ObjectId;
   messageType:
     | "text"
     | "code_snippet"
     | "image"
     | "file"
     | "audio"
-    | "call_summary";
+    | "call_summary"
+    | "post";
   attachments?: {
     fileUrl: string;
     fileType: string;
@@ -44,16 +46,25 @@ const MessageSchema: Schema = new Schema(
     chatId: { type: Schema.Types.ObjectId, ref: "Chat", required: true },
     senderId: { type: Schema.Types.ObjectId, ref: "User", required: true },
     content: { type: String },
-    embedding: { 
-      type: [Number], 
-      default: [] 
+    embedding: {
+      type: [Number],
+      default: [],
     },
     audioUrl: { type: String },
     messageType: {
       type: String,
-      enum: ["text", "code_snippet", "image", "file", "audio", "call_summary"],
+      enum: [
+        "text",
+        "code_snippet",
+        "image",
+        "file",
+        "audio",
+        "call_summary",
+        "post",
+      ],
       default: "text",
     },
+    postId: { type: Schema.Types.ObjectId, ref: "Post" }, // 💡 ربطنا الرسالة بالبوست
     attachments: [
       {
         fileUrl: String,

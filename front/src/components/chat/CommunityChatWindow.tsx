@@ -29,6 +29,42 @@ const isOnlyEmojis = (str: string) => {
 /** A single message bubble */
 const MessageBubble = React.memo(
   ({ msg, isMine }: { msg: ChatMessage; isMine: boolean }) => {
+    if (msg.messageType === "post") {
+      return (
+        <div className="flex justify-center w-full my-4">
+          <div className="w-full max-w-md bg-white dark:bg-[#262626] border border-gray-200 dark:border-white/10 rounded-2xl overflow-hidden shadow-lg hover:shadow-xl transition-shadow">
+            <div className="p-4 border-b border-gray-200 dark:border-white/5 flex items-center gap-3">
+               <div className="w-8 h-8 rounded-full bg-[#7C3AED]/10 flex items-center justify-center overflow-hidden">
+                  {getSenderAvatar(msg) ? (
+                    <img src={getSenderAvatar(msg)} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <span className="material-icons-round text-[#7C3AED] text-sm">person</span>
+                  )}
+               </div>
+               <div>
+                  <h4 className="text-xs font-bold text-[#171717] dark:text-[#F5F5F5]">
+                    {getSenderName(msg)}
+                  </h4>
+                  <p className="text-[10px] text-gray-400">
+                    Shared a post • {formatTime(msg.createdAt)}
+                  </p>
+               </div>
+            </div>
+            <div className="p-4">
+              <p className="text-sm text-[#171717] dark:text-[#F5F5F5] leading-relaxed whitespace-pre-wrap">
+                {msg.content}
+              </p>
+            </div>
+            <div className="px-4 pb-4">
+               <button onClick={() => window.location.href = `/posts/${msg.postId}`} className="w-full py-2 text-center text-xs font-bold text-[#7C3AED] dark:text-[#8B5CF6] bg-[#7C3AED]/5 dark:bg-[#8B5CF6]/10 rounded-xl hover:bg-[#7C3AED]/10 transition-colors">
+                 View Full Post & Comments
+               </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     // Check if it's a call system message
     const isVoiceCall = msg.content.toLowerCase().includes("voice call");
     const isVideoCall = msg.content.toLowerCase().includes("video call");
@@ -453,8 +489,14 @@ export const CommunityChatWindow: React.FC<CommunityChatWindowProps> = ({
         onClose={() => setIsPostModalOpen(false)}
         groupId={communityId}
         groupName={communityName}
-        onPostSuccess={() => {
-          console.log("Post created successfully from chat!");
+        onPostSuccess={(postData) => {
+          console.log("✅ Post created successfully!", postData);
+          sendMessage(
+            postData.content || "📌 New post shared",
+            "post",
+            postData._id
+          );
+          setIsPostModalOpen(false);
         }}
       />
     </div>
