@@ -74,7 +74,7 @@ const EmployerDashboard: React.FC = () => {
   const activeProjects = jobs.length;
   const totalApplicants = jobs.reduce((sum, job) => sum + (job.applicantsCount || 0), 0);
   const interviewsScheduled = 0; // Mock stat for now
-  const currentStatus = user?.isVerifiedEmployer ? 'approved' : (user?.verificationStatus || 'pending');
+  const currentStatus = user?.verificationStatus || 'pending';
 
   if (isLoading) {
     return (

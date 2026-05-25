@@ -14,6 +14,8 @@ export interface IJob extends Document {
     proposal: string;
     status: 'pending' | 'accepted' | 'rejected';
     appliedAt: Date;
+    matchScore?: number;
+    matchReason?: string;
   }[];
   createdAt: Date;
   updatedAt: Date;
@@ -36,7 +38,9 @@ const JobSchema: Schema = new Schema({
     userId: { type: Schema.Types.ObjectId, ref: 'User' },
     proposal: { type: String, required: true },
     status: { type: String, enum: ['pending', 'accepted', 'rejected'], default: 'pending' },
-    appliedAt: { type: Date, default: Date.now }
+    appliedAt: { type: Date, default: Date.now },
+    matchScore: { type: Number },
+    matchReason: { type: String }
   }]
 }, { timestamps: true });
 

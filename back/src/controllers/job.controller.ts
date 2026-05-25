@@ -3,6 +3,7 @@ import Job from '../models/Job';
 import { catchAsync } from '../utils/catchAsync';
 import { AppError } from '../utils/AppError';
 import * as chatService from '../services/chat.service';
+import * as jobAiService from '../services/Ai/job.ai.service';
 
 export const listJobs = catchAsync(async (req: Request, res: Response) => {
   const { search, types, experience, budget, sort, page = 1 } = req.query;
@@ -154,6 +155,30 @@ export const applyToJob = catchAsync(async (req: Request, res: Response, next: N
     message: 'Application submitted and sent to the employer via chat.',
     data: { message }
   });
+
+  // 5. Background AI Match Calculation
+  (async () => {
+    try {
+      const aiResult = await jobAiService.calculateMatchScore(job._id.toString(), currentUserId.toString());
+      if (aiResult) {
+        // Refetch job to avoid version conflicts
+        const freshJob = await Job.findById(job._id);
+        if (freshJob && freshJob.applicants) {
+          const applicantIndex = freshJob.applicants.findIndex(
+            a => a.userId.toString() === currentUserId.toString()
+          );
+          if (applicantIndex > -1) {
+            freshJob.applicants[applicantIndex].matchScore = aiResult.score;
+            freshJob.applicants[applicantIndex].matchReason = aiResult.reason;
+            await freshJob.save();
+            console.log(`✅ [Job Matching] Updated score ${aiResult.score} for user ${currentUserId} on job ${job._id}`);
+          }
+        }
+      }
+    } catch (err) {
+      console.error("❌ [Job Matching] Background AI Matching failed:", err);
+    }
+  })();
 });
 
 export const createJob = catchAsync(async (req: Request, res: Response, next: NextFunction) => {

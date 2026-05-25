@@ -62,8 +62,8 @@ export const PostJob: React.FC = () => {
   };
 
   const renderContent = () => {
-    if (user?.role === 'employer' && !user?.isVerified) {
-      if (user?.verificationLink) {
+    if (user?.role === 'employer' && user?.verificationStatus !== 'approved') {
+      if (user?.verificationStatus === 'pending' || user?.verificationLink) {
         // Pending State
         return (
           <div className="bg-white dark:bg-[#262626] rounded-2xl shadow-sm border border-orange-200 dark:border-orange-900/50 p-8 text-center">

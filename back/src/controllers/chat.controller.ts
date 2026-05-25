@@ -593,7 +593,11 @@ export const sendFileMessage = catchAsync(
     io.to(id).emit("receive-message", message);
 
     await chatService.emitNewCommunityMessage(io, id, message as any);
-
+    
+    // 🔥 Trigger automatic background AI ingestion for the uploaded file
+    const senderName = (req.user as any).fullName || (req.user as any).name || "User";
+    autoIngestSingleMessage(message, senderName);
+    
     res.status(201).json({
       status: "success",
       data: { message },

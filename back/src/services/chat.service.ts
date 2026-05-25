@@ -1,4 +1,4 @@
-﻿import mongoose from "mongoose";
+import mongoose from "mongoose";
 import Chat from "../models/chat";
 import Message from "../models/Message";
 import Community from "../models/Community";
@@ -20,9 +20,7 @@ export const getClearedAtForUser = (
   chat: ChatClearContext,
   userId: string,
 ): Date | null => {
-  const entry = chat.clearStates?.find(
-    (s) => s.user?.toString() === userId,
-  );
+  const entry = chat.clearStates?.find((s) => s.user?.toString() === userId);
   return entry?.clearedAt ? new Date(entry.clearedAt) : null;
 };
 
@@ -37,7 +35,7 @@ export const buildVisibleMessageFilter = (
   const andClauses: Record<string, unknown>[] = [...extraAnd];
 
   const clearedAt = getClearedAtForUser(chat, userId);
-  if (clearedAt) {
+  if (clearedAt && chat.isGroup) {
     andClauses.push({ createdAt: { $gt: clearedAt } });
   }
 
@@ -51,9 +49,7 @@ export const buildVisibleMessageFilter = (
 
   const filter: Record<string, unknown> = {
     chatId:
-      typeof chatId === "string"
-        ? new mongoose.Types.ObjectId(chatId)
-        : chatId,
+      typeof chatId === "string" ? new mongoose.Types.ObjectId(chatId) : chatId,
   };
   if (andClauses.length) filter.$and = andClauses;
   return filter;
@@ -177,6 +173,7 @@ export const createMessage = async (data: {
   senderId: string;
   content?: string;
   messageType?: string;
+  postId?: string;
   status?: "sent" | "delivered" | "read" | "sending";
   audioUrl?: string;
   duration?: number;
@@ -190,7 +187,9 @@ export const createMessage = async (data: {
   if (!chat) throw new AppError("Chat not found", 404);
 
   if (!chat.isGroup && chat.status === "pending") {
-    throw new AppError("This chat request has not been accepted yet", 403);
+    if (chat.initiatedBy && chat.initiatedBy.toString() !== data.senderId) {
+      throw new AppError("You must accept the chat request before sending messages", 403);
+    }
   }
 
   // Ø§Ù„ØªØ£ÙƒØ¯ Ø¥Ù† Ø§Ù„Ù…Ø±Ø³Ù„ Ø¹Ø¶Ùˆ ÙÙŠ Ø§Ù„Ø´Ø§Øª Ø¯Ù‡ (Ø­Ù…Ø§ÙŠØ© Ù…Ù‡Ù…Ø©)
@@ -218,6 +217,7 @@ export const createMessage = async (data: {
     attachments: data.attachments || [],
     replyTo: data.replyTo,
     isForwarded: data.isForwarded || false,
+    postId: data.postId,
     embedding: data.embedding,
   });
   await newMessage.save();
@@ -232,7 +232,8 @@ export const createMessage = async (data: {
       path: "replyTo",
       select: "content senderId messageType attachments",
       populate: { path: "senderId", select: "fullName" },
-    });
+    })
+    .populate("postId", "media content");
 
   return populatedMessage;
 };
@@ -245,7 +246,10 @@ type SocketEmitter = {
 export const emitNewCommunityMessage = async (
   io: SocketEmitter | undefined,
   chatId: string,
-  savedMessage: { toObject?: () => Record<string, unknown> } & Record<string, unknown>,
+  savedMessage: { toObject?: () => Record<string, unknown> } & Record<
+    string,
+    unknown
+  >,
 ) => {
   if (!io) return;
 
@@ -265,7 +269,12 @@ export const emitNewCommunityMessage = async (
     | undefined;
 
   let senderId: string;
-  let sender: { _id: string; fullName?: string; name?: string; avatar?: string };
+  let sender: {
+    _id: string;
+    fullName?: string;
+    name?: string;
+    avatar?: string;
+  };
 
   if (typeof rawSender === "object" && rawSender !== null) {
     senderId =
@@ -281,7 +290,9 @@ export const emitNewCommunityMessage = async (
     };
   } else {
     senderId = rawSender?.toString?.() ?? String(rawSender);
-    const userDoc = await User.findById(senderId).select("fullName avatar").lean();
+    const userDoc = await User.findById(senderId)
+      .select("fullName avatar")
+      .lean();
     const displayName = userDoc?.fullName;
     sender = {
       _id: senderId,
@@ -343,6 +354,7 @@ export const getChatMessages = async (
       select: "content senderId messageType attachments",
       populate: { path: "senderId", select: "fullName" },
     })
+    .populate("postId", "media content")
     // Fetch newest first so limit returns the latest persisted messages
     .sort({ createdAt: -1 })
     .limit(safeLimit);
@@ -499,6 +511,9 @@ export const addMemberToGroup = async (
 
   chat.users.push(new mongoose.Types.ObjectId(newMemberId));
   await chat.save();
+
+  // Set the "joinedAt" date via clearStates so they don't see history before joining
+  await upsertChatClearState(chatId, newMemberId);
 
   const updatedChat = await Chat.findById(chatId)
     .populate("users", "fullName avatar status showOnlineStatus")
@@ -861,7 +876,10 @@ export const getUserChats = async (userId: string) => {
     .populate("users", "fullName avatar status showOnlineStatus")
     .populate({
       path: "latestMessage",
-      populate: { path: "senderId", select: "fullName _id" },
+      populate: [
+        { path: "senderId", select: "fullName _id" },
+        { path: "postId", select: "media content" }
+      ],
     })
     .populate("admins", "fullName avatar")
     .sort("-updatedAt");
@@ -870,21 +888,19 @@ export const getUserChats = async (userId: string) => {
     chats.map(async (chat) => {
       let latestMsg: any = chat.latestMessage;
 
-      // If the globally stored latest message is hidden for this user, find the true latest visible message
-      if (
-        latestMsg &&
-        (latestMsg as any).hiddenFor?.some(
-          (id: any) => id.toString() === userId.toString(),
-        )
-      ) {
-        const visibleFilter = buildVisibleMessageFilter(
-          chat._id,
-          userId,
-          chat,
-        );
+      // If the globally stored latest message is hidden for this user, OR was sent before they joined the chat (clearedAt)
+      const clearedAt = chat.clearStates?.find(s => s.user?.toString() === userId.toString())?.clearedAt;
+      const isHiddenForUser = latestMsg && (latestMsg as any)?.hiddenFor?.some(
+        (id: any) => id.toString() === userId.toString(),
+      );
+      const isBeforeJoin = latestMsg && clearedAt && new Date((latestMsg as any)?.createdAt) < new Date(clearedAt);
+
+      if (latestMsg && (isHiddenForUser || isBeforeJoin)) {
+        const visibleFilter = buildVisibleMessageFilter(chat._id, userId, chat);
         const realLatestMessage = await Message.findOne(visibleFilter)
           .sort({ createdAt: -1 })
-          .populate("senderId", "fullName _id");
+          .populate("senderId", "fullName _id")
+          .populate("postId", "media content");
 
         latestMsg = realLatestMessage;
       }
@@ -1071,4 +1087,58 @@ export const getSharedContent = async (
   });
 
   return shared;
+};
+
+/**
+ * Mark a chat's messages as read by a specific user.
+ * Supports both 1-to-1 chats (status update) and Group chats (readBy array).
+ */
+export const markChatAsRead = async (chatId: string, userId: string, io?: any) => {
+  const chat = await Chat.findById(chatId);
+  if (!chat) return;
+
+  const userOid = new mongoose.Types.ObjectId(userId);
+  const chatOid = new mongoose.Types.ObjectId(chatId);
+
+  if (chat.isGroup) {
+    // For groups, push the userId to the readBy array
+    await Message.updateMany(
+      {
+        chatId: chatOid,
+        senderId: { $ne: userOid },
+        readBy: { $ne: userOid },
+      },
+      {
+        $addToSet: { readBy: userOid },
+      },
+    );
+  } else {
+    // For 1-to-1, just update status to 'read'
+    await Message.updateMany(
+      {
+        chatId: chatOid,
+        senderId: { $ne: userOid },
+        status: { $ne: "read" },
+      },
+      {
+        $set: { status: "read" },
+      },
+    );
+  }
+
+  if (io) {
+    // Notify the room that messages were read (UI updates)
+    io.to(chatId.toString()).emit("message-status-update", {
+      chatId: chatId.toString(),
+      status: "read",
+      readBy: userId,
+    });
+
+    // Notify ALL users (including the reader) so their local states sync
+    const allUsers = chat.users || [];
+    allUsers.forEach((id: any) => {
+      io.to(id.toString()).emit("messagesRead", { chatId: chatId.toString(), readBy: userId });
+      io.to(id.toString()).emit("messages-read", { chatId: chatId.toString(), readBy: userId });
+    });
+  }
 };

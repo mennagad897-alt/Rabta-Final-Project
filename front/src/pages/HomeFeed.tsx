@@ -37,6 +37,7 @@ export const HomeFeed = () => {
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const activeChatIdRef = useRef<string | null>(null);
   const [, setIsLoadingChats] = useState(true);
+  const [messagesRefetchTrigger, setMessagesRefetchTrigger] = useState(0);
 
   // 2. State: التحكم في النوافذ المنبثقة
   const [showNewMessage, setShowNewMessage] = useState(false);
@@ -113,6 +114,8 @@ export const HomeFeed = () => {
       unreadCount: chat.unreadCount || 0,
       lastMessageIsMine,
       lastMessageStatus,
+      status: chat.status,
+      initiatedBy: chat.initiatedBy,
     };
   };
 
@@ -250,13 +253,14 @@ export const HomeFeed = () => {
             reactions?: any[];
             attachments?: any[];
             replyTo?: any;
+            postId?: any;
           }) => {
             const isMine =
               (typeof m.senderId === "string" ? m.senderId : m.senderId._id) ===
               currentUser._id;
             return {
               id: m._id,
-              type: (["text", "audio", "file", "image", "video"].includes(
+              type: (["text", "audio", "file", "image", "video", "call_summary", "post"].includes(
                 m.messageType,
               )
                 ? m.messageType
@@ -268,8 +272,10 @@ export const HomeFeed = () => {
                 | "file"
                 | "image"
                 | "video"
-                | "call_summary",
+                | "call_summary"
+                | "post",
               content: m.content || m.attachments?.[0]?.fileUrl || "",
+              postId: m.postId,
               fileUrl:
                 m.attachments?.[0]?.fileUrl ||
                 (["image", "video", "file"].includes(m.messageType)
@@ -304,7 +310,7 @@ export const HomeFeed = () => {
     };
 
     fetchMessages();
-  }, [activeChatId]);
+  }, [activeChatId, messagesRefetchTrigger]);
 
   useEffect(() => {
     setIsChatSearchOpen(false);
@@ -570,6 +576,27 @@ export const HomeFeed = () => {
             isChatListOpen={isChatListOpen}
             onOpenChatList={() => setIsChatListOpen(true)}
             chats={chats}
+            chatStatus={activeChat.status as "pending" | "accepted"}
+            isChatInitiator={activeChat.initiatedBy === currentUserId}
+            isChatRecipient={activeChat.status === "pending" && activeChat.initiatedBy !== currentUserId}
+            onRespondToChatRequest={async (action) => {
+              try {
+                await axiosInstance.put(`/chats/${activeChatId}/request`, { action });
+                toast.success(action === "accept" ? "Chat request accepted" : "Chat request declined");
+                const response = await axiosInstance.get("/chats");
+                const formatted = response.data.data.chats
+                  .filter((chat: { isGroup?: boolean }) => !chat.isGroup)
+                  .map((chat: any) => formatChatFromApi(chat));
+                setChats(formatted);
+                if (action === "reject") {
+                  setActiveChatId(null);
+                } else if (action === "accept") {
+                  setMessagesRefetchTrigger(prev => prev + 1);
+                }
+              } catch (error: any) {
+                toast.error(error.response?.data?.message || "Failed to respond");
+              }
+            }}
             onOpenProfile={(userId) => {
               navigate(`/freelancer-profile/${userId}`);
             }}

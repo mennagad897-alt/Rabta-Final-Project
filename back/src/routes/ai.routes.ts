@@ -7,6 +7,8 @@ import {
 } from "../controllers/AI/community.ai.controller";
 import { createVectorStore } from "../controllers/AI/globalAi.controller";
 import * as aiController from "../controllers/AI/globalAi.controller";
+import multer from "multer";
+const uploadMemory = multer({ storage: multer.memoryStorage() });
 const router = Router();
 
 // Endpoint عشان نـ Generate الـ Vectors لجروب معين
@@ -39,5 +41,14 @@ router.post(
   "/chat/generate-reply",
   protect,
   chatAiController.generateChatReplies,
+);
+
+// Endpoint لتحويل الصوت إلى نص (Whisper STT)
+// بنستخدم upload.single('audio') عشان الفرونت إند هيبعت الملف في حقل اسمه 'audio'
+router.post(
+  "/chat/speech-to-text",
+  protect,
+  uploadMemory.single("audio"),
+  chatAiController.speechToText,
 );
 export default router;

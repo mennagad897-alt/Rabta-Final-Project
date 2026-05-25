@@ -234,7 +234,7 @@ io.on('connection', (socket) => {
   // ==========================================
   // 💬 إرسال واستقبال الرسائل (Chat Events)
   // ==========================================
-  socket.on('send-message', async (data: { chatId: string, content: string, messageType?: string, tempId?: string, replyTo?: string }) => {
+  socket.on('send-message', async (data: { chatId: string, content: string, messageType?: string, postId?: string, tempId?: string, replyTo?: string }) => {
       console.log('🚀 send-message received:', data.chatId);  // ← ضيفي ده
     try {
       const blockStatus = await chatService.checkDirectChatBlockStatus(authenticatedUserId, data.chatId);
@@ -248,11 +248,19 @@ io.on('connection', (socket) => {
    const ChatModel = require('./models/chat').default;
       const chat = await ChatModel.findById(data.chatId).select('users isGroup name');
 
-      // Set delivered instantly when the other participant is online
+      // Set delivered instantly when the other participant(s) is online
       let initialStatus: 'sent' | 'delivered' = 'sent';
       if (chat && !chat.isGroup) {
         const otherUserId = (chat.users || []).find((id: any) => id.toString() !== authenticatedUserId)?.toString();
         if (otherUserId && isUserOnline(otherUserId)) {
+          initialStatus = 'delivered';
+        }
+      } else if (chat && chat.isGroup) {
+        const isAnyOtherOnline = (chat.users || []).some((id: any) => {
+          const userId = id.toString();
+          return userId !== authenticatedUserId && isUserOnline(userId);
+        });
+        if (isAnyOtherOnline) {
           initialStatus = 'delivered';
         }
       }
@@ -263,6 +271,7 @@ io.on('connection', (socket) => {
         senderId: authenticatedUserId,
         content: data.content,
         messageType: data.messageType,
+        postId: data.postId,
         replyTo: data.replyTo,
         status: initialStatus
       });
@@ -382,30 +391,7 @@ io.on('connection', (socket) => {
 
   socket.on('markAsRead', async (data: { chatId: string, userId: string }) => {
     try {
-      const Message = require('./models/Message').default;
-      const Chat = require('./models/chat').default;
-      const chat = await Chat.findById(data.chatId);
-      if (!chat) return;
-
-      await Message.updateMany(
-        {
-          chatId: data.chatId,
-          senderId: { $ne: new (require('mongoose').Types.ObjectId)(data.userId) },
-          status: { $ne: 'read' }
-        },
-        { $set: { status: 'read' } }
-      );
-
-      const otherUserId = (chat.users || []).find((id: any) => id.toString() !== data.userId)?.toString();
-      if (otherUserId) {
-        const otherUserSocketIds = getUserSocketIds(otherUserId);
-        otherUserSocketIds.forEach((socketId) => {
-          io.to(socketId).emit('messagesRead', { chatId: data.chatId });
-          io.to(socketId).emit('messages-read', { chatId: data.chatId });
-        });
-      }
-
-      io.to(data.chatId).emit('message-status-update', { chatId: data.chatId, status: 'read', readBy: data.userId });
+      await chatService.markChatAsRead(data.chatId, data.userId, io);
     } catch (err) {
       console.error('Error in markAsRead:', err);
     }

@@ -26,15 +26,11 @@ const CommunityChunkSchema: Schema = new Schema(
     },
     content: { type: String, required: true },
     embedding: { type: [Number], required: true },
-    metadata: {
-      authorId: { type: Schema.Types.ObjectId, ref: "User" },
-      sourceId: { type: Schema.Types.ObjectId, required: true },
-      sourceType: {
-        type: String,
-        enum: ["community_info", "chat", "post", "file"],
-        required: true,
-      },
-      timestamp: { type: Date, default: Date.now },
+    
+    // 💡 التعديل هنا: جعلنا الـ metadata من نوع Mixed عشان تقبل أي داتا إضافية ومتمسحش الوقت أو الاسم
+    metadata: { 
+      type: mongoose.Schema.Types.Mixed, 
+      default: {} 
     },
   },
   { timestamps: true },

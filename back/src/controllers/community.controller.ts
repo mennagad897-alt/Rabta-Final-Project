@@ -11,6 +11,8 @@ import {
   countUnreadMessages,
   getChatMessages,
   leaveCommunity as leaveCommunityService,
+  upsertChatClearState,
+  buildVisibleMessageFilter,
 } from "../services/chat.service";
 
 // ==========================================
@@ -46,6 +48,8 @@ export const listCommunities = catchAsync(
     const communitiesWithUnread = await Promise.all(
       communities.map(async (community) => {
         let unreadCount = 0;
+        let finalLatestMessage = (community.chatId as any)?.latestMessage;
+
         if (community.chatId) {
           const chatId =
             typeof community.chatId === "object" && community.chatId !== null
@@ -56,9 +60,30 @@ export const listCommunities = catchAsync(
           );
           if (chatDoc) {
             unreadCount = await countUnreadMessages(chatId, userId, chatDoc);
+
+            // Hide latestMessage if it was sent before the user joined (clearedAt)
+            if (finalLatestMessage) {
+              const clearedAt = chatDoc.clearStates?.find(s => s.user?.toString() === userId.toString())?.clearedAt;
+              const isHiddenForUser = finalLatestMessage.hiddenFor?.some((id: any) => id.toString() === userId.toString());
+              const isBeforeJoin = clearedAt && new Date(finalLatestMessage.createdAt) < new Date(clearedAt);
+
+              if (isHiddenForUser || isBeforeJoin) {
+                const visibleFilter = buildVisibleMessageFilter(chatId, userId, chatDoc);
+                finalLatestMessage = await Message.findOne(visibleFilter)
+                  .sort({ createdAt: -1 })
+                  .populate("senderId", "fullName _id")
+                  .populate("postId", "media content");
+              }
+            }
           }
         }
-        return { ...community.toObject(), unreadCount };
+
+        const commObj = community.toObject();
+        if (commObj.chatId) {
+          (commObj.chatId as any).latestMessage = finalLatestMessage;
+        }
+
+        return { ...commObj, unreadCount };
       }),
     );
 
@@ -129,7 +154,8 @@ export const createCommunity = catchAsync(
       .filter((id: string) => id && id !== ownerIdStr)
       .map((id: string) => new mongoose.Types.ObjectId(id));
 
-    const memberIds = [owner, ...invitedIds];
+    // Only the owner is an active member initially
+    const memberIds = [owner];
 
     const communityChat = await Chat.create({
       isGroup: true,
@@ -148,23 +174,11 @@ export const createCommunity = catchAsync(
       owner,
       admins: [owner],
       members: memberIds,
+      invitedUsers: invitedIds, // Store invited users here instead
       chatId: communityChat._id,
     });
 
-    if (invitedIds.length > 0) {
-      const ownerUser = await User.findById(owner).select("fullName");
-      const ownerName = ownerUser?.fullName || "Someone";
-      const systemMessage = await Message.create({
-        chatId: communityChat._id,
-        senderId: owner,
-        content: `${ownerName} added you to the group`,
-        messageType: "text",
-        status: "sent",
-      });
-      await Chat.findByIdAndUpdate(communityChat._id, {
-        latestMessage: systemMessage._id,
-      });
-    }
+
 
     const populatedCommunity = await Community.findById(community._id)
       .populate("members", "fullName avatar")
@@ -181,7 +195,7 @@ export const createCommunity = catchAsync(
     if (io && invitedIds.length > 0) {
       const payload = { community: populatedCommunity };
       invitedIds.forEach((userId) => {
-        io.to(userId.toString()).emit("added-to-community", payload);
+        io.to(userId.toString()).emit("invited-to-community", payload);
       });
     }
 
@@ -243,6 +257,7 @@ export const joinCommunity = catchAsync(
       await Chat.findByIdAndUpdate(community.chatId, {
         $addToSet: { users: userId },
       });
+      await upsertChatClearState(community.chatId.toString(), userId.toString());
     }
 
     res.status(200).json({
@@ -303,6 +318,7 @@ export const manageJoinRequest = catchAsync(
         await Chat.findByIdAndUpdate(community.chatId, {
           $addToSet: { users: targetUserId },
         });
+        await upsertChatClearState(community.chatId.toString(), targetUserId.toString());
       }
 
       const populatedCommunity = await Community.findById(community._id)
@@ -451,6 +467,7 @@ export const acceptCommunityInvite = catchAsync(
       await Chat.findByIdAndUpdate(community.chatId, {
         $addToSet: { users: userId },
       });
+      await upsertChatClearState(community.chatId.toString(), userId.toString());
     }
 
     const populatedCommunity = await populateCommunityForClient(communityId);

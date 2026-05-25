@@ -10,15 +10,15 @@ import { embeddingsModel, llm } from "./core.ai.service"; // 👈 استيراد
 import { chatAiPromptTemplate } from "./prompts.ai"; // 👈 استيراد الـ Prompt بالإنجليزي
 
 // ==========================================
-// 1. Extract Text From PDF
+// 1. Extract Text From PDF (نسخة تشخيصية باللوجات)
 // ==========================================
 export const extractTextFromPDF = async (fileUrl: string): Promise<string> => {
   return new Promise(async (resolve) => {
     try {
+      console.log("🔄 [AI Ingestion] محاولة جلب وقراءة ملف PDF من الرابط:", fileUrl);
       let buffer: Buffer;
 
       if (fileUrl.startsWith("http://") || fileUrl.startsWith("https://")) {
-        // شيلنا الـ User-Agent اللي كان بيعمل قلق مع بعض السيرفرات
         const response = await fetch(fileUrl, {
           headers: {
             "User-Agent":
@@ -28,34 +28,37 @@ export const extractTextFromPDF = async (fileUrl: string): Promise<string> => {
         });
 
         if (!response.ok) {
-          throw new Error(
-            `Cloud Storage responded with status: ${response.status}`,
-          );
+          console.error(`❌ [AI Ingestion] فشل جلب الملف من السيرفر. الحالة: ${response.status}`);
+          throw new Error(`Cloud Storage responded with status: ${response.status}`);
         }
 
         const arrayBuffer = await response.arrayBuffer();
         buffer = Buffer.from(arrayBuffer);
+        console.log(`📦 [AI Ingestion] تم تحميل الملف بنجاح. حجم البافر: ${buffer.length} بايت`);
       } else {
         buffer = await fs.readFile(path.join(process.cwd(), fileUrl));
       }
 
       const pdfParser = new PDFParser(null, true);
+      
       pdfParser.on("pdfParser_dataError", (errData: any) => {
-        console.error(`❌ PDF Parser Error:`, errData.parserError);
+        console.error(`❌ [AI Ingestion] خطأ في مكتبة PDF Parser:`, errData.parserError);
         resolve("");
       });
+
       pdfParser.on("pdfParser_dataReady", () => {
         const text = pdfParser.getRawTextContent();
+        console.log(`🎯 [AI Ingestion] تم استخراج النص بنجاح! طول النص المستخرج: ${text?.trim()?.length || 0} حرف.`);
         resolve(text);
       });
+
       pdfParser.parseBuffer(buffer);
     } catch (error) {
-      console.error(`❌ Failed to parse PDF from URL (${fileUrl}):`, error);
+      console.error(`❌ [AI Ingestion] فشل كامل في معالجة الملف (${fileUrl}):`, error);
       resolve("");
     }
   });
 };
-
 // ==========================================
 // 2. Ingest Chat Data (Messages & PDFs)
 // ==========================================
@@ -73,24 +76,38 @@ export const ingestChatData = async (chatId: string) => {
 
   for (const msg of messages) {
     let text = msg.content ? `${msg.content}\n` : "";
-    if (msg.messageType === "file" && msg.attachments) {
-      for (const attachment of msg.attachments) {
-        if (
-          attachment.fileType === "application/pdf" ||
-          attachment.fileUrl.toLowerCase().endsWith(".pdf")
-        ) {
-          const pdfText = await extractTextFromPDF(attachment.fileUrl);
-          text += `[Attached PDF Content]: \n${pdfText}\n`;
+    const isFile = msg.messageType === "file" || (msg.attachments && msg.attachments.length > 0);
+    const senderName = (msg.senderId as any)?.fullName || "User";
+
+    if (isFile) {
+      const uploadTime = msg.createdAt ? new Date(msg.createdAt).toLocaleString("en-US") : "Unknown Date";
+      text += `[System Note: A file/document was uploaded and sent by ${senderName} on ${uploadTime}].\n`;
+      
+      if (msg.attachments) {
+        for (const attachment of msg.attachments) {
+          if (
+            attachment.fileType === "application/pdf" ||
+            attachment.fileUrl.toLowerCase().endsWith(".pdf")
+          ) {
+            const pdfText = await extractTextFromPDF(attachment.fileUrl);
+            if (pdfText.trim()) {
+              text += `[Attached PDF Content from ${senderName}]: \n${pdfText}\n`;
+            }
+          }
         }
       }
     }
     if (text.trim() === "") continue;
+
     rawTexts.push({
-      text: `Message from ${(msg.senderId as any)?.fullName || "User"}: ${text}`,
+      text: `Message from ${senderName}: ${text}`,
       metadata: {
-        sourceId: msg._id,
-        sourceType: "chat",
-        timestamp: msg.createdAt,
+        chatId: chatId.toString(),
+        sourceId: msg._id.toString(),
+        sourceType: isFile ? "file" : "chat",
+        senderId: (msg.senderId as any)?._id?.toString() || msg.senderId?.toString(),
+        timestamp: msg.createdAt ? new Date(msg.createdAt) : new Date(),
+        senderName: senderName
       },
     });
   }
@@ -156,16 +173,35 @@ export const askChatAi = async (
   let context = "No document context available.";
 
   if (results.length > 0) {
-    // 👈 هنا بنصيغ السياق بحيث يقرأ الـ content (اللي جواه اسم اليوزر) والوقت من الـ metadata
     context = results
       .map((r: any) => {
-        const time = r.metadata?.timestamp
-          ? new Date(r.metadata.timestamp).toLocaleTimeString("en-US", {
+        const timestamp = r.metadata?.timestamp || r.createdAt || r.metadata?.createdAt;
+        
+        if (!r.metadata || !timestamp) {
+          console.warn("⚠️ [AI Retrieval] Missing metadata or timestamp for chunk in Vector Search results:", JSON.stringify(r, null, 2));
+        }
+
+        const time = timestamp
+          ? new Date(timestamp).toLocaleString("en-US", {
+              year: "numeric",
+              month: "short",
+              day: "numeric",
               hour: "2-digit",
               minute: "2-digit",
             })
-          : "Unknown time";
-        return `[Time: ${time}] - ${r.content}`;
+          : "Unknown Date/Time";
+
+        // Extracting metadata to make context explicitly clear
+        const sourceType = r.metadata?.sourceType || "chat";
+        const senderName = r.metadata?.senderName || "Unknown User";
+        
+        // Ensure PDF/File content is explicitly tagged if the embedding string missed it
+        let contentStr = r.content;
+        if (sourceType === "file" && !contentStr.includes("[Attached PDF")) {
+          contentStr = `[Attached PDF from ${senderName}]: ${contentStr}`;
+        }
+
+        return `[Date/Time: ${time}] - ${contentStr}`;
       })
       .join("\n");
   }
@@ -184,33 +220,78 @@ export const askChatAi = async (
 };
 
 // ==========================================
-// 5. Auto-Ingest Single Message (Real-time)
+// 5. Auto-Ingest Single Message (Real-time نسخة باللوجات)
 // ==========================================
 export const autoIngestSingleMessage = async (
   messageDoc: any,
   senderName: string,
 ) => {
   try {
-    const text = `Message from ${senderName}: ${messageDoc.content}\n`;
-    const [embedding] = await embeddingsModel.embedDocuments([text]);
+    console.log(`📥 [AI Ingestion] تشغيل دالة التغذية الفورية للرسالة ID: ${messageDoc._id}`);
+    console.log(`ℹ️ [AI Ingestion] نوع الرسالة: ${messageDoc.messageType} | عدد المرفقات: ${messageDoc.attachments?.length || 0}`);
 
-    // 🔥 الخدعة هنا: بنعمل الأوبجكت كـ any في متغير منفصل الأول
-    const chunkData: any = {
+    let text = messageDoc.content ? `Message from ${senderName}: ${messageDoc.content}\n` : "";
+    const isFile = messageDoc.messageType === "file" || (messageDoc.attachments && messageDoc.attachments.length > 0);
+
+    if (isFile) {
+      const fallbackDate = messageDoc.createdAt ? new Date(messageDoc.createdAt) : new Date();
+      const uploadTime = fallbackDate.toLocaleString("en-US", {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+      text += `[System Note: A file/document was uploaded and sent by ${senderName} on ${uploadTime}].\n`;
+
+      if (messageDoc.attachments) {
+        for (const attachment of messageDoc.attachments) {
+          console.log(`📎 [AI Ingestion] جاري فحص المرفق: ${attachment.fileUrl} | نوعه: ${attachment.fileType}`);
+          
+          if (
+            attachment.fileType === "application/pdf" ||
+            attachment.fileUrl?.toLowerCase().endsWith(".pdf")
+          ) {
+            const pdfText = await extractTextFromPDF(attachment.fileUrl);
+            if (pdfText.trim()) {
+              text += `[Attached PDF Content from ${senderName}]: \n${pdfText}\n`;
+            } else {
+              console.warn("⚠️ [AI Ingestion] تنبيه: النص المستخرج من ملف الـ PDF فارغ تماماً!");
+            }
+          }
+        }
+      }
+    }
+
+    if (!text.trim()) {
+      console.log("🛑 [AI Ingestion] إلغاء العملية: لا يوجد نص أو محتوى صالح للأرشفة.");
+      return;
+    }
+
+    const chunks = text.match(/[\s\S]{1,500}/g) || [];
+    if (chunks.length === 0) return;
+
+    console.log(`🧱 [AI Ingestion] جاري تقسيم النص إلى ${chunks.length} فقرات (Chunks) وعمل Embeddings...`);
+
+    const embeddings = await embeddingsModel.embedDocuments(chunks);
+
+    const chunksToSave = chunks.map((chunk, index) => ({
       chatId: new mongoose.Types.ObjectId(messageDoc.chatId.toString()),
-      content: text,
-      embedding: embedding,
+      content: chunk,
+      embedding: embeddings[index],
       metadata: {
+        chatId: messageDoc.chatId.toString(),
         sourceId: new mongoose.Types.ObjectId(messageDoc._id.toString()),
-        sourceType: "chat",
-        timestamp: messageDoc.createdAt,
+        sourceType: isFile ? "file" : "chat",
+        senderId: messageDoc.senderId.toString(),
+        timestamp: messageDoc.createdAt || new Date(),
+        senderName: senderName
       },
-    };
+    }));
 
-    // وبعدين نبعته للـ create
-    await CommunityChunk.create(chunkData);
-
-    console.log(`✅ Message auto-ingested for AI: ${messageDoc._id}`);
+    await CommunityChunk.insertMany(chunksToSave);
+    console.log(`✅ [AI Ingestion] تمت العملية بنجاح وتخزين البيانات في الـ Vector Store.`);
   } catch (error) {
-    console.error("❌ Error auto-ingesting message:", error);
+    console.error("❌ [AI Ingestion] خطأ غير متوقع في دالة autoIngestSingleMessage:", error);
   }
 };

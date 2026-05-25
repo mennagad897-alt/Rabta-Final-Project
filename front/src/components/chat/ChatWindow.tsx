@@ -36,8 +36,9 @@ export function getDownloadUrl(url?: string): string {
 
 export type MessageType = {
   id: string;
-  type: "text" | "file" | "audio" | "call_summary" | "image" | "video";
+  type: "text" | "file" | "audio" | "call_summary" | "image" | "video" | "post";
   content?: string;
+  postId?: any; // 💡 ضفنا دي عشان نمسك بيها الـ ID بتاع البوست
   fileName?: string;
   fileSize?: string;
   fileUrl?: string;
@@ -53,6 +54,7 @@ export type MessageType = {
   replyTo?: any; // To store reference if replied
   isForwarded?: boolean;
   senderName?: string;
+  readBy?: string[];
 };
 
 interface ChatWindowProps {
@@ -162,6 +164,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
   // Reset AI states when chatId changes
   useEffect(() => {
+    setHasMore(true);
     setShowAiPopup(false);
     setSummaryResult("");
     setSummaryError("");
@@ -275,6 +278,11 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const [isSearchingUsers] = useState(false);
   const [searchResults] = useState<SearchUser[]>([]);
   const [isRecordingVoice, setIsRecordingVoice] = useState(false);
+  const [recordingMode, setRecordingMode] = useState<"normal" | "stt" | null>(
+    null,
+  );
+  const [isSttMenuOpen, setIsSttMenuOpen] = useState(false);
+  const [isLoadingStt, setIsLoadingStt] = useState(false);
   const [voiceBlob, setVoiceBlob] = useState<Blob | null>(null);
   const [voiceUrl, setVoiceUrl] = useState<string | null>(null);
   const [voiceDuration, setVoiceDuration] = useState<number>(0);
@@ -320,6 +328,13 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const msgRef = useRef<HTMLAudioElement>(null);
   const currentUser = JSON.parse(localStorage.getItem("user") || "{}");
+  // --- Pagination & Scroll States ---
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const topObserverRef = useRef<HTMLDivElement>(null);
+  const lastMessageIdRef = useRef<string | null>(null);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+
   const cannotReply = !isGroup && (blockedByMe || blockedMe);
 
   // Calculate if the current user can add members based on group privacy
@@ -490,11 +505,18 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   };
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    messagesEndRef.current?.scrollIntoView({ behavior: "auto" });
   };
 
   useEffect(() => {
-    scrollToBottom();
+    if (!messages.length) return;
+    const currentLastMsg = messages[messages.length - 1];
+
+    // ننزل لتحت فقط لو فيه رسالة جديدة انضافت في الآخر
+    if (lastMessageIdRef.current !== currentLastMsg.id) {
+      scrollToBottom();
+      lastMessageIdRef.current = currentLastMsg.id;
+    }
   }, [messages]);
 
   // 1. Join Room Effect (Depends on chatId)
@@ -570,13 +592,20 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           "image",
           "video",
           "call_summary",
+          "post",
         ].includes(resolvedType)
           ? (resolvedType as MessageType["type"])
           : "text",
-        content: resolvedContent || incomingMsg.attachments?.[0]?.fileUrl || "",
+        content:
+          resolvedContent ||
+          incomingMsg.attachments?.[0]?.fileUrl ||
+          (incomingMsg as any).audioUrl ||
+          "",
+        postId: (incomingMsg as any).postId,
         fileUrl:
           incomingMsg.attachments?.[0]?.fileUrl ||
-          (["image", "video", "file"].includes(resolvedType)
+          (incomingMsg as any).audioUrl ||
+          (["image", "video", "file", "audio"].includes(resolvedType)
             ? resolvedContent
             : undefined),
         fileName: extractFileName(incomingMsg.attachments?.[0]?.fileUrl),
@@ -589,6 +618,11 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         status: "delivered",
         replyTo: incomingMsg.replyTo,
         senderName,
+        isForwarded:
+          (incomingMsg as any).isForwarded ||
+          !!incomingMsg.replyTo?.isForwarded ||
+          false, // 💡 قراءة حالة الفوروارد من السوكيت
+        duration: (incomingMsg as any).duration,
       };
 
       // Functional state update avoids stale closure issues
@@ -681,12 +715,23 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     }) => {
       if (!setMessages) return;
       if (String(chatId) !== String(activeChatId)) return;
-      // Ignore when we marked incoming messages read ΓÇö only the other party reading our sends updates ticks
-      if (readBy && String(readBy) === String(currentUser._id)) return;
+
       setMessages((prev) =>
-        prev.map((m) =>
-          m.isMine ? { ...m, status: "read", isPending: false } : m,
-        ),
+        prev.map((m) => {
+          let newReadBy = m.readBy;
+          if (readBy) {
+            const currentReadBy = Array.isArray(m.readBy) ? m.readBy : [];
+            if (!currentReadBy.includes(readBy)) {
+              newReadBy = [...currentReadBy, readBy];
+            }
+          }
+
+          if (m.isMine && (!readBy || String(readBy) !== String(currentUser._id))) {
+            return { ...m, readBy: newReadBy, status: !isGroup ? "read" : m.status, isPending: false };
+          }
+          
+          return { ...m, readBy: newReadBy };
+        }),
       );
     };
 
@@ -713,17 +758,40 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   }, [socket, setMessages, activeChatId]);
 
   useEffect(() => {
-    if (!socket || !activeChatId || !messages.length) return;
-    if (document.visibilityState !== "visible" || !document.hasFocus()) return;
-    const hasUnreadFromOther = messages.some(
-      (m) => !m.isMine && m.status !== "read",
-    );
-    if (!hasUnreadFromOther) return;
-    socket.emit("markAsRead", {
-      chatId: activeChatId,
-      userId: currentUser._id,
-    });
-  }, [socket, setMessages, activeChatId, currentUser._id]);
+    const handleFocus = () => {
+      if (!socket || !activeChatId || !messages.length) return;
+      if (document.visibilityState !== "visible" || !document.hasFocus()) return;
+      
+      const hasUnreadFromOther = messages.some((m) => {
+        if (m.isMine) return false;
+        // In groups, ignore global status and strictly check readBy array
+        if (isGroup) {
+          return !m.readBy?.includes(currentUser._id);
+        }
+        // In 1-to-1, rely on global status
+        return m.status !== "read";
+      });
+      
+      if (hasUnreadFromOther) {
+        socket.emit("markAsRead", {
+          chatId: activeChatId,
+          userId: currentUser._id,
+        });
+      }
+    };
+
+    // Check immediately when messages change or component mounts
+    handleFocus();
+
+    // Listen for tab focus/visibility changes to mark as read when returning to app
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleFocus);
+
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleFocus);
+    };
+  }, [socket, activeChatId, currentUser._id, messages]);
 
   const handleRecordingComplete = (blob: Blob, durationSeconds: number) => {
     console.log("📥 [ChatWindow] handleRecordingComplete called!"); // ← ضيف ده
@@ -738,6 +806,168 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     setVoiceUrl(url);
     setIsRecordingVoice(false);
     console.log("✅ [ChatWindow] State updated, preview should show now"); // ← ضيف ده
+  };
+  const handleSttRecordingComplete = async (blob: Blob) => {
+    setIsRecordingVoice(false);
+    setRecordingMode(null);
+    setIsLoadingStt(true);
+    try {
+      const formData = new FormData();
+      formData.append("audio", blob, "audio.webm");
+
+      // ⚠️ تأكد أن هذا الراوت مطابق تماماً لما في الباك إند.
+      // لو الباك إند عندك بيبدأ بـ /api/v1، والـ axiosInstance بيكمل عليه، يبقى كده صح.
+      const response = await axiosInstance.post(
+        "/api/ai/chat/speech-to-text",
+        formData,
+        {
+          headers: { "Content-Type": "multipart/form-data" },
+        },
+      );
+
+      if (response.data?.data) {
+        setInputText((prev) => prev + (prev ? " " : "") + response.data.data);
+      }
+    } catch (error: any) {
+      // السطر ده هيطبعلك الإيرور الحقيقي اللي راجع من الباك إند
+      console.error(
+        "❌ STT Backend Error:",
+        error.response?.data || error.message,
+      );
+      toast.error(
+        error.response?.data?.message || "Failed to convert speech to text",
+      );
+    } finally {
+      setIsLoadingStt(false);
+    }
+  };
+
+  // ── Pagination & Scroll Restoration Logic ──
+  const loadOlderMessages = async () => {
+    if (!messages.length || !setMessages) return;
+    const oldestMsgId = messages[0].id;
+
+    // متعملش فيتش لو أول رسالة دي رسالة مؤقتة لسه متبعتتش
+    if (oldestMsgId.startsWith("temp-") || oldestMsgId.startsWith("socket-"))
+      return;
+
+    setIsLoadingMore(true);
+    try {
+      const res = await axiosInstance.get(`/chats/${chatId}/messages`, {
+        params: { before: oldestMsgId, limit: 30 },
+      });
+
+      const olderMessagesRaw = res.data?.data?.messages || [];
+      if (olderMessagesRaw.length === 0) {
+        setHasMore(false); // مفيش رسايل أقدم من كده
+        return;
+      }
+
+      // تجهيز الرسايل القديمة بنفس الفورمات
+      const formattedOlder: MessageType[] = olderMessagesRaw.map((m: any) => {
+        const isMine =
+          (typeof m.senderId === "string" ? m.senderId : m.senderId?._id) ===
+          currentUser._id;
+        const senderName =
+          typeof m.senderId === "object" ? m.senderId?.fullName : undefined;
+        return {
+          id: m._id,
+          type: ([
+            "text",
+            "audio",
+            "file",
+            "image",
+            "video",
+            "call_summary",
+            "post",
+          ].includes(m.messageType)
+            ? m.messageType
+            : m.content?.endsWith(".webm")
+              ? "audio"
+              : "text") as MessageType["type"],
+          content: m.content || m.attachments?.[0]?.fileUrl || "",
+          postId: m.postId,
+          fileUrl:
+            m.attachments?.[0]?.fileUrl ||
+            (["image", "video", "file"].includes(m.messageType)
+              ? m.content
+              : undefined),
+          fileName: extractFileName(m.attachments?.[0]?.fileUrl),
+          fileSize: formatFileSize(m.attachments?.[0]?.fileSize),
+          duration: m.duration,
+          isDeletedForEveryone: m.isDeletedForEveryone,
+          isEdited: m.isEdited,
+          isPinned: m.isPinned,
+          reactions: m.reactions || [],
+          replyTo: m.replyTo,
+          time: new Date(m.createdAt).toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
+          isMine,
+          status: m.status || (isMine ? "sent" : undefined),
+          senderName,
+          isForwarded: m.isForwarded,
+        };
+      });
+
+      const container = scrollContainerRef.current;
+      const prevScrollHeight = container?.scrollHeight || 0;
+
+      // دمج الرسايل القديمة "فوق" الرسايل الحالية
+      setMessages((prev) => {
+        const existingIds = new Set(prev.map((p) => p.id));
+        const uniqueOlder = formattedOlder.filter(
+          (old) => !existingIds.has(old.id),
+        );
+        return [...uniqueOlder, ...prev];
+      });
+
+      // 🎯 Scroll Restoration: تثبيت مكان الشاشة بعد إضافة رسايل فوق
+      setTimeout(() => {
+        if (container) {
+          container.scrollTop = container.scrollHeight - prevScrollHeight;
+        }
+      }, 0);
+    } catch (error) {
+      console.error("Failed to fetch older messages", error);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  };
+
+  // رادار مراقبة بداية الشات
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (
+          entries[0].isIntersecting &&
+          hasMore &&
+          !isLoadingMore &&
+          messages.length > 0
+        ) {
+          loadOlderMessages();
+        }
+      },
+      { threshold: 0.1 },
+    );
+    if (topObserverRef.current) observer.observe(topObserverRef.current);
+    return () => observer.disconnect();
+  }, [hasMore, isLoadingMore, messages]);
+  // ─────────────────────────────────────────
+
+  const isMessageFullyRead = (msg: MessageType) => {
+    if (!isGroup) return msg.status === "read";
+    if (!groupMembers || groupMembers.length <= 1) return false;
+    // Exclude sender (currentUser) from the required read list
+    const otherMembersIds = groupMembers
+      .map((m) => (typeof m === "string" ? m : m._id))
+      .filter((id) => String(id) !== String(currentUser._id));
+    const readByIds = msg.readBy || [];
+    return (
+      otherMembersIds.length > 0 &&
+      otherMembersIds.every((id) => readByIds.includes(String(id)))
+    );
   };
 
   const handleSendMessage = async () => {
@@ -872,7 +1102,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       setReplyingTo(null);
     } catch (error: any) {
       console.log("Text Message Send Error:", error?.response?.data || error);
-      toast.error("Failed to send message");
+      toast.error(error?.response?.data?.message || "Failed to send message");
       if (setMessages) {
         setMessages((prev) => prev.filter((m) => m.id !== tempId));
       }
@@ -962,6 +1192,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       const payload = {
         chatId: targetChatId,
         content: message.content,
+        type: message.type,
         messageType: message.type,
         isForwarded: true,
         audioUrl: message.type === "audio" ? message.fileUrl : undefined,
@@ -989,21 +1220,22 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           response.data?.data?.message ||
           response.data?.message ||
           response.data;
+        const mediaUrl = message.fileUrl || message.content || "";
         const newMsg: MessageType = {
-          id: newMsgData._id,
-          type: newMsgData.messageType || "text",
-          content:
-            newMsgData.content || newMsgData.attachments?.[0]?.fileUrl || "",
-          fileUrl: newMsgData.attachments?.[0]?.fileUrl || newMsgData.audioUrl,
-          fileName: extractFileName(newMsgData.attachments?.[0]?.fileUrl),
-          fileSize: formatFileSize(newMsgData.attachments?.[0]?.fileSize),
-          time: new Date(newMsgData.createdAt).toLocaleTimeString([], {
+          id: newMsgData._id || `forward-${Date.now()}`,
+          type: message.type, // 💡 إجبار الفرونت على رسمها بنوعها الأصلي (audio أو image)
+          content: message.type === "text" ? message.content : mediaUrl,
+          fileUrl: mediaUrl,
+          fileName: message.fileName,
+          fileSize: message.fileSize,
+          time: new Date().toLocaleTimeString([], {
             hour: "2-digit",
             minute: "2-digit",
           }),
           isMine: true,
           status: "sent",
-          isForwarded: true,
+          isForwarded: true, // 💡 تفعيل كلمة Forwarded فوق الرسالة فوراً
+          duration: message.duration,
         };
         setMessages((prev) => [...prev, newMsg]);
       }
@@ -1628,7 +1860,21 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           </div>
         )}
 
-        <div className="relative flex-1 overflow-y-auto hide-scrollbar p-6 space-y-4">
+        <div
+          ref={scrollContainerRef}
+          className="relative flex-1 overflow-y-auto hide-scrollbar p-6 space-y-4"
+        >
+          {/* اللمبة المخفية (الرادار) */}
+          <div ref={topObserverRef} className="w-full h-1" />
+
+          {isLoadingMore && (
+            <div className="flex justify-center py-2">
+              <span className="material-icons-round animate-spin text-[#7C3AED] text-2xl">
+                sync
+              </span>
+            </div>
+          )}
+
           <div className="flex justify-center my-4">
             <span className="bg-gray-200 dark:bg-gray-800 text-gray-600 dark:text-gray-400 text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider">
               Today
@@ -1680,7 +1926,82 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                         Forwarded
                       </div>
                     )}
-                    {msg.type === "text" ? (
+                    {/* 💡 التعديل الثالث: رسم البوست كـ Card */}
+                    {msg.type === "post" ? (
+                      <div
+                        className={`relative ${msg.isMine ? "bg-white dark:bg-[#262626] border-[#7C3AED]/30" : "bg-white dark:bg-[#262626] border-gray-200 dark:border-gray-800"} border rounded-2xl p-4 shadow-sm w-full min-w-[280px] max-w-sm`}
+                      >
+                        {/* هيدر الكارد */}
+                        <div className="flex items-center gap-3 mb-3 border-b border-gray-100 dark:border-white/5 pb-3">
+                          <div className="w-8 h-8 rounded-full bg-[#7C3AED]/10 flex items-center justify-center shrink-0">
+                            <span className="material-icons-round text-[#7C3AED] text-sm">
+                              article
+                            </span>
+                          </div>
+                          <div className="flex flex-col">
+                            <span className="text-xs font-bold text-[#171717] dark:text-[#F5F5F5] uppercase">
+                              Shared a Post
+                            </span>
+                            <span className="text-[10px] text-gray-400">
+                              Rabta Community
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* صورة مصغرة إذا وجدت */}
+                        {msg.postId?.media?.length > 0 && (
+                          <div className="mb-3 rounded-xl overflow-hidden max-h-32 bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5">
+                            <img 
+                              src={msg.postId.media[0].fileUrl} 
+                              alt="Post media" 
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                        )}
+
+                        {/* محتوى البوست */}
+                        <p className="text-sm text-[#171717] dark:text-[#F5F5F5] mb-4 line-clamp-3 leading-relaxed whitespace-pre-wrap">
+                          {msg.content}
+                        </p>
+
+                        {/* زرار عرض البوست */}
+                        <button
+                          onClick={(e) => {
+                            e.preventDefault();
+                            const finalPostId =
+                              typeof msg.postId === "object"
+                                ? msg.postId?._id
+                                : msg.postId;
+                            if (finalPostId) {
+                              navigate(`/posts/${finalPostId}`);
+                            } else {
+                              toast.error("Error: Post ID is missing");
+                            }
+                          }}
+                          className="w-full py-2.5 text-xs font-bold text-[#7C3AED] dark:text-[#8B5CF6] bg-[#7C3AED]/10 dark:bg-[#8B5CF6]/10 hover:bg-[#7C3AED]/20 rounded-xl transition-colors shadow-sm"
+                        >
+                          View Full Post
+                        </button>
+
+                        {/* الوقت وحالة الإرسال */}
+                        <div
+                          className={`flex justify-end items-center gap-1 mt-2 text-gray-400`}
+                        >
+                          <span className="text-[10px]">{msg.time}</span>
+                          {msg.isMine && (
+                            <span
+                              className={`material-icons text-[12px] ${isMessageFullyRead(msg) ? "text-blue-500" : ""}`}
+                            >
+                              {msg.isPending || msg.status === "sending"
+                                ? "schedule"
+                                : msg.status === "sent"
+                                  ? "done"
+                                  : "done_all"}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ) : msg.type === "text" ? (
                       <div
                         className={`relative ${msg.isMine ? "bg-[#7C3AED] text-white rounded-tr-none" : "bg-white dark:bg-[#262626] text-[#171717] dark:text-[#F5F5F5] border border-gray-200 dark:border-gray-800 rounded-tl-none"} rounded-xl p-3 pr-10 shadow-sm ${msg.isPending ? "opacity-70" : ""}`}
                       >
@@ -1800,14 +2121,14 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                                     if (isAudio)
                                       return (
                                         <span className="truncate block">
-                                          ≡ƒÄñ Voice Message
+                                          Voice Message
                                         </span>
                                       );
 
                                     if (isDoc) {
                                       return (
                                         <span className="inline-flex items-center gap-1 align-middle truncate max-w-full">
-                                          <span>≡ƒôä Document</span>
+                                          <span>Document</span>
                                         </span>
                                       );
                                     }
@@ -1865,7 +2186,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                                   }}
                                   className="text-[10px] underline block hover:opacity-80 transition-opacity mt-1"
                                 >
-                                  Show Original / ╪╣╪▒╪╢ ╪º┘ä╪ú╪╡┘ä┘è
+                                  Show Original
                                 </button>
                               </div>
                             ) : (
@@ -1884,7 +2205,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                           )}
                           {msg.isMine && (
                             <span
-                              className={`material-icons text-[12px] ${msg.status === "read" ? "text-blue-300" : ""}`}
+                              className={`material-icons text-[12px] ${isMessageFullyRead(msg) ? "text-blue-300" : ""}`}
                             >
                               {msg.isPending || msg.status === "sending"
                                 ? "schedule"
@@ -2406,7 +2727,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                 </button>
               </div>
             </div>
-          ) : isChatInitiator && chatStatus === "pending" ? (
+          ) : isChatInitiator && chatStatus === "pending" && messages.length > 0 ? (
             <div className="max-w-4xl mx-auto py-4 px-4 rounded-xl bg-[#7C3AED]/10 text-center text-sm text-[#7C3AED] border border-[#7C3AED]/20 font-medium">
               Request Sent... waiting for approval
             </div>
@@ -2597,8 +2918,17 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                 <div className="flex-1 bg-[#FAFAFA] dark:bg-[#171717] rounded-xl border border-gray-200 dark:border-gray-700 flex items-center px-4 py-1.5 focus-within:border-[#7C3AED] transition-colors min-w-0 relative">
                   {isRecordingVoice ? (
                     <VoiceRecorder
-                      onRecordingComplete={handleRecordingComplete}
-                      onCancel={() => setIsRecordingVoice(false)}
+                      onRecordingComplete={(blob, duration) => {
+                        if (recordingMode === "stt") {
+                          handleSttRecordingComplete(blob);
+                        } else {
+                          handleRecordingComplete(blob, duration);
+                        }
+                      }}
+                      onCancel={() => {
+                        setIsRecordingVoice(false);
+                        setRecordingMode(null);
+                      }}
                     />
                   ) : voiceUrl ? (
                     <div className="flex items-center w-full gap-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg px-2 py-1">
@@ -2617,7 +2947,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                   ) : (
                     <>
                       {showAiPopup && (
-                        <div className="absolute bottom-[calc(100%+12px)] left-4 right-4 md:left-auto md:right-0 w-[calc(100%-2rem)] md:w-[440px] bg-white/95 dark:bg-[#131316]/98 backdrop-blur-xl rounded-2xl shadow-[0_20px_50px_rgba(124,58,237,0.18)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.5)] border border-gray-100 dark:border-white/[0.08] overflow-hidden flex flex-col z-50 animate-in fade-in zoom-in-95 duration-200">
+                        <div className="fixed top-24 right-6 w-[380px] md:w-[420px] max-h-[calc(100vh-160px)] bg-white/95 dark:bg-[#131316]/98 backdrop-blur-xl rounded-2xl shadow-[0_20px_50px_rgba(124,58,237,0.18)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.5)] border border-gray-100 dark:border-white/[0.08] overflow-hidden flex flex-col z-[100] animate-in fade-in slide-in-from-right-8 duration-300">
                           {/* Gradient Header Banner */}
                           <div className="bg-gradient-to-r from-[#7C3AED] via-[#8B5CF6] to-[#6366F1] p-4 text-white flex justify-between items-center relative overflow-hidden shadow-[0_4px_20px_rgba(124,58,237,0.25)] shrink-0">
                             {/* Mesh Overlay */}
@@ -2648,7 +2978,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                             </button>
                           </div>
 
-                          <div className="p-5 space-y-4 max-h-[500px] overflow-y-auto hide-scrollbar">
+                          <div className="p-5 space-y-4 flex-1 overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-200 dark:[&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-thumb]:rounded-full">
                             {/* Scope Disclaimer */}
                             <div className="bg-[#7C3AED]/5 dark:bg-[#7C3AED]/10 text-purple-700 dark:text-purple-300 p-3.5 rounded-2xl text-xs leading-relaxed flex gap-3 border border-purple-500/10 dark:border-[#7C3AED]/20 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)]">
                               <span className="material-icons-round text-base text-[#7C3AED] dark:text-[#a78bfa] shrink-0 mt-0.5">
@@ -2863,7 +3193,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                                       </div>
                                       <div
                                         dir="auto"
-                                        className="text-xs text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap max-h-48 overflow-y-auto scrollbar-thin pr-1"
+                                        className="text-xs text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap max-h-60 overflow-y-auto pr-2 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-300 dark:[&::-webkit-scrollbar-thumb]:bg-gray-600 [&::-webkit-scrollbar-thumb]:rounded-full"
                                       >
                                         {searchResult}
                                       </div>
@@ -2894,20 +3224,25 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                         </div>
                       )}
                       <textarea
-                        disabled={cannotReply}
-                        value={inputText}
+                        disabled={cannotReply || isLoadingStt}
+                        value={
+                          isLoadingStt
+                            ? "Extracting text from audio... ⏳"
+                            : inputText
+                        }
                         onChange={(e) => setInputText(e.target.value)}
                         onKeyDown={(e) => {
                           if (
                             e.key === "Enter" &&
                             !e.shiftKey &&
-                            !cannotReply
+                            !cannotReply &&
+                            !isLoadingStt
                           ) {
                             e.preventDefault();
                             handleSendMessage();
                           }
                         }}
-                        className={`w-full bg-transparent border-none focus:ring-0 text-sm py-2 resize-none text-[#171717] dark:text-[#F5F5F5] placeholder-gray-400 outline-none hide-scrollbar ${cannotReply ? "opacity-50 cursor-not-allowed" : ""}`}
+                        className={`w-full bg-transparent border-none focus:ring-0 text-sm py-2 resize-none text-[#171717] dark:text-[#F5F5F5] placeholder-gray-400 outline-none hide-scrollbar ${cannotReply || isLoadingStt ? "opacity-50 cursor-not-allowed text-[#7C3AED] font-medium animate-pulse" : ""}`}
                         placeholder={
                           cannotReply
                             ? blockedByMe
@@ -2931,12 +3266,48 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                       >
                         <span className="material-icons-round">bolt</span>
                       </button>
-                      <button
-                        onClick={() => setIsRecordingVoice(true)}
-                        className="ml-4 text-gray-400 hover:text-[#7C3AED] transition-colors shrink-0"
-                      >
-                        <span className="material-icons">mic</span>
-                      </button>
+                      <div className="relative ml-4 flex items-center">
+                        {isSttMenuOpen && (
+                          <div className="absolute bottom-full right-0 mb-2 w-48 bg-white dark:bg-[#262626] border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg flex flex-col overflow-hidden z-50">
+                            <button
+                              onClick={() => {
+                                setIsSttMenuOpen(false);
+                                setRecordingMode("normal");
+                                setIsRecordingVoice(true);
+                              }}
+                              className="flex items-center gap-3 px-4 py-3 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-[#171717] transition-colors w-full text-left"
+                            >
+                              <span className="material-icons-round text-[18px] text-[#7C3AED]">
+                                mic
+                              </span>
+                              <span>Voice Message</span>
+                            </button>
+                            <div className="h-[1px] bg-gray-100 dark:bg-gray-700 w-full"></div>
+                            <button
+                              onClick={() => {
+                                setIsSttMenuOpen(false);
+                                setRecordingMode("stt");
+                                setIsRecordingVoice(true);
+                              }}
+                              className="flex items-center gap-3 px-4 py-3 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-[#171717] transition-colors w-full text-left"
+                            >
+                              <span className="material-icons-round text-[18px] text-purple-500">
+                                auto_awesome
+                              </span>
+                              <span>AI Speech-to-Text</span>
+                            </button>
+                          </div>
+                        )}
+                        <button
+                          onClick={() => setIsSttMenuOpen(!isSttMenuOpen)}
+                          disabled={isLoadingStt}
+                          className={`transition-colors shrink-0 flex items-center justify-center ${isSttMenuOpen ? "text-[#7C3AED]" : "text-gray-400 hover:text-[#7C3AED]"} ${isLoadingStt ? "opacity-50 cursor-not-allowed animate-pulse" : ""}`}
+                        >
+                          <span className="material-icons">
+                            {isLoadingStt ? "hourglass_empty" : "mic"}
+                          </span>
+                        </button>
+                      </div>
                     </>
                   )}
                 </div>
@@ -2954,8 +3325,8 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                 <button
                   type="button"
                   onClick={handleSendMessage}
-                  disabled={cannotReply}
-                  className={`bg-[#7C3AED] text-white w-10 h-10 rounded-xl flex items-center justify-center hover:opacity-90 shadow-md shrink-0 ${cannotReply ? "opacity-40 pointer-events-none" : ""}`}
+                  disabled={cannotReply || isLoadingStt}
+                  className={`bg-[#7C3AED] text-white w-10 h-10 rounded-xl flex items-center justify-center hover:opacity-90 shadow-md shrink-0 ${cannotReply || isLoadingStt ? "opacity-40 pointer-events-none" : ""}`}
                 >
                   <span className="material-icons text-xl">send</span>
                 </button>
@@ -2965,15 +3336,87 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         </footer>
       </main>
 
+      {/* 💡 التعديل الرابع: إرسال البوست وتحديث الشات فوراً عند نجاح المودال */}
       {showCreatePost && (
         <CreatePostModal
           isOpen={showCreatePost}
           onClose={() => setShowCreatePost(false)}
           groupId={chatId}
           groupName={chatName}
-          onPostSuccess={() => {
+          onPostSuccess={async (postData) => {
             setShowCreatePost(false);
             toast.success("Post shared in chat");
+
+            // 1️⃣ رسم الكارد فوراً في شاشتك بشكل مبدئي (Optimistic UI)
+            const tempId = `temp-${Date.now()}`;
+            const newMsg: MessageType = {
+              id: tempId,
+              type: "post",
+              content: postData.content || "Shared a new post",
+              postId: postData._id,
+              time: new Date().toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+              }),
+              isMine: true,
+              isPending: true,
+              status: "sending",
+            };
+
+            if (setMessages) {
+              setMessages((prev) => [...prev, newMsg]);
+            }
+
+            // 2️⃣ إرسال الرسالة للباك إند لحفظها في شات الجروب وعبر السوكيت
+            try {
+              const response = await axiosInstance.post(
+                `/chats/${chatId}/send`,
+                {
+                  content: postData.content || "Shared a new post",
+                  type: "post",
+                  messageType: "post",
+                  postId: postData._id,
+                },
+              );
+
+              const saved = response.data.data
+                ? response.data.data.message
+                : response.data;
+
+              // تحديث الرسالة بالـ ID الحقيقي المستلم من الداتا بيز
+              if (setMessages) {
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.id === tempId
+                      ? {
+                          ...m,
+                          id: saved._id,
+                          isPending: false,
+                          status: saved.status || "sent",
+                        }
+                      : m,
+                  ),
+                );
+              }
+
+              // 3️⃣ بث الرسالة اللحظية (Socket Emit) لباقي المتواجدين في الشات
+              if (socket) {
+                socket.emit("send_message", {
+                  chatId,
+                  content: saved.content,
+                  messageType: "post",
+                  postId: postData._id,
+                  _id: saved._id,
+                  createdAt: saved.createdAt,
+                  senderId: saved.senderId,
+                });
+              }
+            } catch (error) {
+              console.error("Failed to send post message:", error);
+              toast.error("Failed to send post message to chat");
+              if (setMessages)
+                setMessages((prev) => prev.filter((m) => m.id !== tempId));
+            }
           }}
         />
       )}

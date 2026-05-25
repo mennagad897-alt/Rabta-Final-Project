@@ -18,6 +18,8 @@ export interface ChatItem {
   unreadCount?: number;
   lastMessageIsMine?: boolean;
   lastMessageStatus?: 'sending' | 'sent' | 'delivered' | 'read';
+  status?: 'pending' | 'accepted';
+  initiatedBy?: string;
 }
 
 interface ChatsListProps {

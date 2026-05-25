@@ -163,7 +163,7 @@ export const JobsBoard: React.FC = () => {
   };
 
   // --- Current Status Helper ---
-  const currentStatus = user?.isVerifiedEmployer ? 'approved' : (user?.verificationStatus || 'pending');
+  const currentStatus = user?.verificationStatus || 'pending';
 
   return (
     <div className="flex-1 overflow-y-auto relative custom-scrollbar bg-[#F8F7FC] dark:bg-[#121212] transition-colors duration-300">

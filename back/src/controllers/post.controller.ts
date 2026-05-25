@@ -1,12 +1,14 @@
 import { Request, Response, NextFunction } from 'express';
 import Post from '../models/Post';
+import Message from '../models/Message';
 import { catchAsync } from '../utils/catchAsync';
 import { AppError } from '../utils/AppError';
 
 export const getPostDetail = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
   const post = await Post.findById(req.params.id)
     .populate('authorId', 'fullName avatar jobTitle')
-    .populate('comments.userId', 'fullName avatar jobTitle');
+    .populate('comments.userId', 'fullName avatar jobTitle')
+    .populate('likes', 'fullName');
   
   if (!post) return next(new AppError('Post not found', 404));
 
@@ -64,8 +66,8 @@ export const createPost = catchAsync(async (req: Request, res: Response) => {
   let media: any[] = [];
   if (req.files && Array.isArray(req.files)) {
     media = (req.files as Express.Multer.File[]).map(file => ({
-      url: `/uploads/avatars/${file.filename}`, // Using existing avatar path for now
-      type: file.mimetype.startsWith('image') ? 'image' : 'file'
+      fileUrl: `/uploads/avatars/${file.filename}`, // Using existing avatar path for now
+      fileType: file.mimetype.startsWith('image') ? 'image' : 'file'
     }));
   }
 
@@ -79,5 +81,22 @@ export const createPost = catchAsync(async (req: Request, res: Response) => {
   res.status(201).json({
     status: 'success',
     data: { post }
+  });
+});
+
+export const deletePost = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+  const post = await Post.findById(req.params.id);
+  if (!post) return next(new AppError('Post not found', 404));
+
+  if (post.authorId?.toString() !== (req.user as any)._id.toString()) {
+    return next(new AppError('You are not authorized to delete this post', 403));
+  }
+
+  await Post.findByIdAndDelete(req.params.id);
+  await Message.deleteMany({ postId: req.params.id });
+
+  res.status(204).json({
+    status: 'success',
+    data: null
   });
 });

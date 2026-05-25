@@ -13,23 +13,23 @@ import { HomeFeed } from "./pages/HomeFeed";
 import { GroupsFeed } from "./pages/GroupsFeed";
 import { Splash } from "./pages/Splash";
 
-// استدعاء الصفحات اللي ESLint بيطلع فيها Error
-import Profile from './pages/Profile'; 
-import EditProfile from './pages/EditProfile';
-import SetupProfile from './pages/SetupProfile';   
-import { SavedContent } from './pages/SavedPage'; 
-import { Notifications } from './pages/Notifications';
-import { Privacy } from './pages/Privacy';
-import { JobsBoard } from './pages/JobsBoard';
-import { JobDetails } from './pages/JobDetails';
-import { CallsPage } from './pages/CallsPage';
-import { SharedChatRedirect } from './pages/SharedChatRedirect';
-import { NewContact } from './pages/NewContact';
+// استدعاء الصفحات
+import Profile from "./pages/Profile";
+import EditProfile from "./pages/EditProfile";
+import SetupProfile from "./pages/SetupProfile";
+import { SavedContent } from "./pages/SavedPage";
+import { Notifications } from "./pages/Notifications";
+import { Privacy } from "./pages/Privacy";
+import { JobsBoard } from "./pages/JobsBoard";
+import { JobDetails } from "./pages/JobDetails";
+import { CallsPage } from "./pages/CallsPage";
+import { SharedChatRedirect } from "./pages/SharedChatRedirect";
+import { NewContact } from "./pages/NewContact";
+import { PostDetails } from "./pages/PostDetails";
 
-
-import CreateGroup from './components/Groups/CreateGroup'; 
-import JoinGroup from './components/Groups/JoinGroup';
-import GroupDetails from './components/Groups/GroupDetails';
+import CreateGroup from "./components/Groups/CreateGroup";
+import JoinGroup from "./components/Groups/JoinGroup";
+import GroupDetails from "./components/Groups/GroupDetails";
 
 import RequestAccess from "./pages/employer/RequestAccess";
 import EmployerRegister from "./pages/employer/EmployerRegister";
@@ -63,94 +63,97 @@ function App() {
 
   return (
     <>
-      <Toaster 
-        position="top-right" 
+      <Toaster
+        position="top-right"
         toastOptions={{
-          className: 'dark:bg-[#141419] dark:text-white dark:border dark:border-white/10',
+          className:
+            "dark:bg-[#141419] dark:text-white dark:border dark:border-white/10",
           style: {
-            background: 'var(--tw-bg-opacity)',
-            color: 'var(--tw-text-opacity)',
+            background: "var(--tw-bg-opacity)",
+            color: "var(--tw-text-opacity)",
           },
-        }} 
+        }}
       />
       <Routes>
+        {/* صفحة السبلاتش */}
         <Route path="/" element={<Splash />} />
 
-      {/* صفحة الـ Login والـ Signup */}
-      <Route path="/login-success" element={<LoginSuccess />} />
-      {/* Fully public — must work even when logged in (e.g. from reset email link) */}
-      <Route path="/reset-password/:token" element={<ResetPassword />} />
-      <Route element={<PublicRoute />}>
-        <Route path="/login" element={<Login />} />
-        <Route path="/signup" element={<Signup />} />
-        <Route path="/forgot-password" element={<ForgotPassword />} />
-        <Route path="/employer/request-access" element={<RequestAccess />} />
-        <Route path="/employer/register" element={<EmployerRegister />} />
-      </Route>
-
-      {/* الصفحات المحمية */}
-      <Route element={<ProtectedRoute />}>
-        <Route element={<MainLayout />}>
-          <Route path="/chats" element={<HomeFeed />} />
-          <Route path="/chats/new-contact" element={<NewContact />} />
-          <Route path="/contact/:userId" element={<FreelancerProfile />} />
-          <Route path="/groups" element={<GroupsFeed />} />
-          <Route path="/groups/:id" element={<GroupDetails />} />
-          <Route path="/jobs" element={<JobsBoard />} />
-          <Route path="/jobs/:jobId" element={<JobDetails />} />
-          <Route path="/calls" element={<CallsPage />} />
-          <Route path="/shared/:id" element={<SharedChatRedirect />} />
-          
-          {/* 👇 المسارات الجديدة للجروبات عشان الزرار يشتغل وميرجعكيش للرئيسية */}
-          <Route path="/create-group" element={<CreateGroup />} />
-          <Route path="/join-group" element={<JoinGroup />} />
-          
-         
-          <Route 
-            path="/profile" 
-            element={user?.role === 'employer' ? <EmployerProfile /> : <Profile />} 
-          />
-          <Route path="/edit-profile" element={<EditProfile />} />
-          <Route path="/setup-profile" element={<SetupProfile />} />
-          <Route path="/bookmarks" element={<SavedContent />} />
-          <Route path="/notifications" element={<Notifications />} />
-          <Route path="/privacy" element={<Privacy />} />
-          
-          <Route path="/settings" element={<Settings />} />
-          <Route path="/employer/setup" element={<EmployerSetup />} />
-          
-          {user?.role !== 'admin' && (
-            <>
-              <Route path="/employer-dashboard" element={<EmployerDashboard />} />
-              <Route path="/post-job" element={<PostJob />} />
-              <Route path="/manage-project/:id" element={<ManageProject />} />
-              <Route path="/edit-project/:id" element={<EditProject />} />
-              <Route path="/freelancer-profile/:id" element={<FreelancerProfile />} />
-              <Route path="/applied-projects" element={<AppliedProjects />} />
-              <Route path="/freelancer-dashboard" element={<FreelancerDashboard />} />
-            </>
-          )}
+        {/* صفحة الـ Login والـ Signup والـ Public Routes */}
+        <Route path="/login-success" element={<LoginSuccess />} />
+        <Route path="/reset-password/:token" element={<ResetPassword />} />
+        
+        <Route element={<PublicRoute />}>
+          <Route path="/login" element={<Login />} />
+          <Route path="/signup" element={<Signup />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/employer/request-access" element={<RequestAccess />} />
+          <Route path="/employer/register" element={<EmployerRegister />} />
         </Route>
-      </Route>
 
-      {/* 🛡️ Admin Dashboard (Isolated) */}
-      <Route element={<AdminRoute />}>
-        <Route path="/admin" element={<AdminLayout />}>
-          <Route index element={<Navigate to="overview" replace />} />
-          <Route path="overview" element={<AdminOverview />} />
-          <Route path="users" element={<AdminUsers />} />
-          <Route path="jobs" element={<AdminJobs />} />
-          <Route path="groups" element={<AdminGroups />} />
-          <Route path="logs" element={<AdminLogs />} />
-          <Route path="add-admin" element={<AddAdmin />} />
-          <Route path="verifications" element={<AdminVerifications />} />
-          <Route path="ai-training" element={<AdminAITraining />} />
+        {/* المسارات المحمية الموحدة (بدون تكرار) */}
+        <Route element={<ProtectedRoute />}>
+          <Route element={<MainLayout />}>
+            <Route path="/chats" element={<HomeFeed />} />
+            <Route path="/chats/new-contact" element={<NewContact />} />
+            <Route path="/contact/:userId" element={<FreelancerProfile />} />
+            <Route path="/groups" element={<GroupsFeed />} />
+            <Route path="/groups/:id" element={<GroupDetails />} />
+            <Route path="/jobs" element={<JobsBoard />} />
+            <Route path="/jobs/:jobId" element={<JobDetails />} />
+            <Route path="/calls" element={<CallsPage />} />
+            <Route path="/shared/:id" element={<SharedChatRedirect />} />
+            <Route path="/posts/:postId" element={<PostDetails />} /> {/* ميزة زميلك الجديدة مدمجة هنا */}
+            
+            {/* مسارات الجروبات لعدم الرجوع للرئيسية */}
+            <Route path="/create-group" element={<CreateGroup />} />
+            <Route path="/join-group" element={<JoinGroup />} />
+            
+            {/* مسار الـ Profile الديناميكي */}
+            <Route 
+              path="/profile" 
+              element={user?.role === 'employer' ? <EmployerProfile /> : <Profile />} 
+            />
+            <Route path="/edit-profile" element={<EditProfile />} />
+            <Route path="/setup-profile" element={<SetupProfile />} />
+            <Route path="/bookmarks" element={<SavedContent />} />
+            <Route path="/notifications" element={<Notifications />} />
+            <Route path="/privacy" element={<Privacy />} />
+            <Route path="/settings" element={<Settings />} />
+            <Route path="/employer/setup" element={<EmployerSetup />} />
+            
+            {/* لوحات التحكم للأدوار المختلفة (عدا الأدمن) */}
+            {user?.role !== 'admin' && (
+              <>
+                <Route path="/employer-dashboard" element={<EmployerDashboard />} />
+                <Route path="/post-job" element={<PostJob />} />
+                <Route path="/manage-project/:id" element={<ManageProject />} />
+                <Route path="/edit-project/:id" element={<EditProject />} />
+                <Route path="/freelancer-profile/:id" element={<FreelancerProfile />} />
+                <Route path="/applied-projects" element={<AppliedProjects />} />
+                <Route path="/freelancer-dashboard" element={<FreelancerDashboard />} />
+              </>
+            )}
+          </Route>
         </Route>
-      </Route>
 
-      {/* استخدام Navigate هنا عشان أي لينك غلط يرجع للسبلاش */}
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+        {/* لوحة تحكم الأدمن */}
+        <Route element={<AdminRoute />}>
+          <Route path="/admin" element={<AdminLayout />}>
+            <Route index element={<Navigate to="overview" replace />} />
+            <Route path="overview" element={<AdminOverview />} />
+            <Route path="users" element={<AdminUsers />} />
+            <Route path="jobs" element={<AdminJobs />} />
+            <Route path="groups" element={<AdminGroups />} />
+            <Route path="logs" element={<AdminLogs />} />
+            <Route path="add-admin" element={<AddAdmin />} />
+            <Route path="verifications" element={<AdminVerifications />} />
+            <Route path="ai-training" element={<AdminAITraining />} />
+          </Route>
+        </Route>
+
+        {/* إعادة توجيه أي مسار خاطئ للرئيسية */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
     </>
   );
 }

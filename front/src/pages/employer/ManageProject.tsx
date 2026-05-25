@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axiosInstance from '../../api/axiosInstance';
 import toast from 'react-hot-toast';
+import MatchScoreBadge from '../../components/shared/MatchScoreBadge';
 
 const ManageProject: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -10,6 +11,7 @@ const ManageProject: React.FC = () => {
   const [project, setProject] = useState<any>(null);
   const [applicants, setApplicants] = useState<any[]>([]);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [sortByScore, setSortByScore] = useState(false);
 
   useEffect(() => {
     const fetchProjectDetails = async () => {
@@ -111,12 +113,25 @@ const ManageProject: React.FC = () => {
 
         {/* Right Column: Applicants List */}
         <div className="lg:col-span-2">
-          <div className="bg-white dark:bg-[#262626] rounded-2xl shadow-sm border border-gray-100 dark:border-white/5 overflow-hidden">
-            <div className="p-6 border-b border-gray-100 dark:border-gray-800">
+          <div className="bg-white dark:bg-[#262626] rounded-2xl shadow-sm border border-gray-100 dark:border-white/5 overflow-visible">
+            <div className="p-6 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
               <h2 className="text-xl font-bold flex items-center gap-2">
                 <span className="material-icons-round text-[#7C3AED]">groups</span>
                 Applicants ({applicants.length})
               </h2>
+              {applicants.length > 0 && (
+                <button 
+                  onClick={() => setSortByScore(!sortByScore)}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-bold flex items-center gap-1.5 transition-colors border ${
+                    sortByScore 
+                      ? 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-900/30 dark:text-purple-400 dark:border-purple-800/50' 
+                      : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50 dark:bg-[#262626] dark:text-gray-400 dark:border-gray-700 dark:hover:bg-[#1f1f1f]'
+                  }`}
+                >
+                  <span className="material-icons-round text-[16px]">sort</span>
+                  Sort by Match
+                </button>
+              )}
             </div>
             <div className="divide-y divide-gray-100 dark:divide-gray-800">
               {applicants.length === 0 ? (
@@ -124,11 +139,20 @@ const ManageProject: React.FC = () => {
                   No applicants yet.
                 </div>
               ) : (
-                applicants.map((applicant: any) => {
+                [...applicants]
+                  .sort((a, b) => {
+                    if (sortByScore) {
+                      const scoreA = a.matchScore || 0;
+                      const scoreB = b.matchScore || 0;
+                      return scoreB - scoreA;
+                    }
+                    return new Date(b.appliedAt).getTime() - new Date(a.appliedAt).getTime();
+                  })
+                  .map((applicant: any) => {
                   const user = applicant.userId;
                   if (!user) return null; // Safe guard
                   return (
-                    <div key={applicant._id || user._id} className="p-6 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-[#1f1f1f]/50 transition-colors">
+                    <div key={applicant._id || user._id} className="p-6 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-[#1f1f1f]/50 transition-colors last:rounded-b-2xl">
                       <div className="flex items-center gap-4">
                         <div className="w-12 h-12 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center text-purple-600 dark:text-purple-400 font-bold overflow-hidden">
                           {user.avatar ? (
@@ -144,11 +168,8 @@ const ManageProject: React.FC = () => {
                       </div>
                       <div className="flex items-center gap-6">
                         <div className="text-right hidden sm:block">
-                          <div className="text-sm font-bold text-green-600 dark:text-green-400">
-                            {/* Mocking match % for now since backend doesn't store match per applicant */}
-                            {Math.floor(Math.random() * 40) + 60}% Match
-                          </div>
-                          <div className="text-xs text-gray-500 dark:text-gray-400">
+                          <MatchScoreBadge score={applicant.matchScore} reason={applicant.matchReason} />
+                          <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                             Applied {new Date(applicant.appliedAt).toLocaleDateString()}
                           </div>
                         </div>
