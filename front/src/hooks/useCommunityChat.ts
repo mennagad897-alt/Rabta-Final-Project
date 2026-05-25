@@ -16,6 +16,10 @@ export interface ChatMessage {
   content: string;
   messageType: "text" | "code_snippet" | "image" | "file" | "post";
   postId?: any; // 💡 شايل بيانات البوست
+  mediaUrl?: string;
+  likesCount?: number;
+  commentsCount?: number;
+  likesData?: { _id: string; fullName: string }[];
   createdAt: string;
   isPending?: boolean; // True while the server hasn't confirmed yet
 }
@@ -26,7 +30,7 @@ interface UseCommunityChat {
   isSending: boolean;
   typingUsers: string[];
   isConnectedToRoom: boolean;
-  sendMessage: (content: string, type?: string, postId?: string) => void;
+  sendMessage: (content: string, type?: string, postId?: string, mediaUrl?: string) => void;
   emitTyping: () => void;
   emitStopTyping: () => void;
 }
@@ -192,7 +196,7 @@ export const useCommunityChat = (
 
   // ── 5. Send a message (optimistic UI) ─────────────────────────────
   const sendMessage = useCallback(
-    (content: string, type: string = "text", postId?: string) => {
+    (content: string, type: string = "text", postId?: string, mediaUrl?: string) => {
       // 💡 عدلنا الـ Validation عشان يقبل لو مفيش text بس فيه postId
       if (
         (!content.trim() && !postId) ||
@@ -211,6 +215,7 @@ export const useCommunityChat = (
         content: content.trim(),
         messageType: type as any,
         postId: postId,
+        mediaUrl: mediaUrl,
         createdAt: new Date().toISOString(),
         isPending: true,
       };
@@ -228,6 +233,7 @@ export const useCommunityChat = (
         content: content.trim(),
         messageType: type,
         postId: postId,
+        mediaUrl: mediaUrl,
         tempId: tempId,
       });
 

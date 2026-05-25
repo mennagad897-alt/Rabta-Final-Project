@@ -174,6 +174,7 @@ export const createMessage = async (data: {
   content?: string;
   messageType?: string;
   postId?: string;
+  mediaUrl?: string;
   status?: "sent" | "delivered" | "read" | "sending";
   audioUrl?: string;
   duration?: number;
@@ -216,8 +217,23 @@ export const createMessage = async (data: {
     replyTo: data.replyTo,
     isForwarded: data.isForwarded || false,
     postId: data.postId,
+    mediaUrl: data.mediaUrl,
     embedding: data.embedding,
   });
+
+  if (data.postId) {
+    const Post = require('../models/Post').default;
+    const post = await Post.findById(data.postId).populate('likes', 'fullName').lean();
+    if (post) {
+      newMessage.likesCount = post.likes?.length || 0;
+      newMessage.commentsCount = post.comments?.length || 0;
+      newMessage.likesData = post.likes || [];
+      if (!data.mediaUrl && post.media?.[0]?.fileUrl) {
+        newMessage.mediaUrl = post.media[0].fileUrl;
+      }
+    }
+  }
+
   await newMessage.save();
 
   // ØªØ­Ø¯ÙŠØ« Ø¢Ø®Ø± Ø±Ø³Ø§Ù„Ø© ÙÙŠ Ø§Ù„Ø´Ø§Øª Ø¹Ø´Ø§Ù† Ø§Ù„ÙØ±ÙˆÙ†Øª Ø¥Ù†Ø¯ ÙŠØ¹Ø±Ø¶Ù‡Ø§ ÙÙŠ Ù‚Ø§Ø¦Ù…Ø© Ø§Ù„Ù…Ø­Ø§Ø¯Ø«Ø§Øª

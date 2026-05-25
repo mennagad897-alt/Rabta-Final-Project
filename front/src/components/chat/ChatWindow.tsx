@@ -851,7 +851,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
               ? "audio"
               : "text") as MessageType["type"],
           content: m.content || m.attachments?.[0]?.fileUrl || "",
-          postId: m.postId,
+          postId: typeof m.postId === "object" ? m.postId?._id : m.postId,
           fileUrl:
             m.attachments?.[0]?.fileUrl ||
             (["image", "video", "file"].includes(m.messageType)
@@ -1900,11 +1900,11 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                         </div>
 
                         {/* صورة مصغرة إذا وجدت */}
-                        {msg.postId?.media?.length > 0 && (
-                          <div className="mb-3 rounded-xl overflow-hidden max-h-32 bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5">
-                            <img 
-                              src={msg.postId.media[0].fileUrl} 
-                              alt="Post media" 
+                        {msg.postId?.media && msg.postId.media.length > 0 && (
+                          <div className="mb-3 w-full h-40 rounded-xl overflow-hidden border border-black/5 dark:border-white/5">
+                            <img
+                              src={msg.postId.media[0].fileUrl}
+                              alt="Post Attachment"
                               className="w-full h-full object-cover"
                             />
                           </div>
@@ -3304,7 +3304,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
               id: tempId,
               type: "post",
               content: postData.content || "Shared a new post",
-              postId: postData._id,
+              postId: postData,
               time: new Date().toLocaleTimeString([], {
                 hour: "2-digit",
                 minute: "2-digit",
@@ -3356,7 +3356,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                   chatId,
                   content: saved.content,
                   messageType: "post",
-                  postId: postData._id,
+                  postId: postData,
                   _id: saved._id,
                   createdAt: saved.createdAt,
                   senderId: saved.senderId,

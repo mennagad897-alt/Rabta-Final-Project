@@ -11,6 +11,10 @@ export interface IMessage extends Document {
   };
   audioUrl?: string;
   postId?: mongoose.Types.ObjectId;
+  mediaUrl?: string;
+  likesCount?: number;
+  commentsCount?: number;
+  likesData?: { _id: mongoose.Types.ObjectId; fullName: string }[];
   messageType:
     | "text"
     | "code_snippet"
@@ -65,6 +69,15 @@ const MessageSchema: Schema = new Schema(
       default: "text",
     },
     postId: { type: Schema.Types.ObjectId, ref: "Post" }, // 💡 ربطنا الرسالة بالبوست
+    mediaUrl: { type: String },
+    likesCount: { type: Number, default: 0 },
+    commentsCount: { type: Number, default: 0 },
+    likesData: [
+      {
+        _id: { type: Schema.Types.ObjectId, ref: "User" },
+        fullName: String,
+      },
+    ],
     attachments: [
       {
         fileUrl: String,

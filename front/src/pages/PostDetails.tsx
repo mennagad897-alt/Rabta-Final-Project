@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-import axiosInstance from '../api/axiosInstance';
-import toast from 'react-hot-toast';
+import React, { useState, useEffect, useRef } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import axiosInstance from "../api/axiosInstance";
+import toast from "react-hot-toast";
 
 // ==========================================
 // Interfaces
@@ -31,8 +31,8 @@ interface Post {
   commentsCount: number;
   likedByText: string;
   createdAt: string;
-  media?: { fileUrl: string, fileType: string }[];
-  likesData?: { _id: string, fullName: string }[];
+  media?: { fileUrl: string; fileType: string }[];
+  likesData?: { _id: string; fullName: string }[];
 }
 
 // ==========================================
@@ -45,62 +45,92 @@ export const PostDetails: React.FC = () => {
   // States
   const [post, setPost] = useState<Post | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
-  const [commentText, setCommentText] = useState('');
+  const [commentText, setCommentText] = useState("");
   const [isLiked, setIsLiked] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const commentsRef = useRef<HTMLElement>(null);
 
-  const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+  const currentUser = JSON.parse(localStorage.getItem("user") || "{}");
   const currentUserId = currentUser?._id;
+  const currentUserAvatar = currentUser?.avatar;
 
   useEffect(() => {
-    if (!postId) return;
+    if (!postId || postId === "undefined" || postId === "null") {
+      setError("Post ID is missing");
+      setIsLoading(false);
+      return;
+    }
 
     const fetchPostDetails = async () => {
       try {
         setIsLoading(true);
+        setError(null);
         const res = await axiosInstance.get(`/posts/${postId}`);
         const fetchedPost = res.data.data.post;
+
+        if (!fetchedPost) {
+          setError("Post not found");
+          setIsLoading(false);
+          return;
+        }
 
         setPost({
           _id: fetchedPost._id,
           author: {
-            _id: fetchedPost.authorId?._id || '',
-            fullName: fetchedPost.authorId?.fullName || 'Unknown User',
-            avatar: fetchedPost.authorId?.avatar || '',
-            role: fetchedPost.authorId?.jobTitle || '',
+            _id: fetchedPost.authorId?._id || "",
+            fullName: fetchedPost.authorId?.fullName || "Unknown User",
+            avatar: fetchedPost.authorId?.avatar || "",
+            role: fetchedPost.authorId?.jobTitle || "",
           },
           content: fetchedPost.content,
           tags: fetchedPost.tags || [],
           likesCount: fetchedPost.likes?.length || 0,
           commentsCount: fetchedPost.comments?.length || 0,
-          likedByText: '', // Will calculate below
+          likedByText: "", // Will calculate below
           createdAt: new Date(fetchedPost.createdAt).toLocaleDateString(),
           media: fetchedPost.media || [],
           likesData: fetchedPost.likes || [],
         });
 
         // 3. Like logic
-        let calculatedLikedBy = fetchedPost.likes?.length > 0 ? `${fetchedPost.likes.length} Likes` : 'No likes yet';
-        if (fetchedPost.authorId?._id === currentUserId && fetchedPost.likes?.length > 0) {
-          const names = fetchedPost.likes.map((u: any) => u.fullName).filter(Boolean);
+        let calculatedLikedBy =
+          fetchedPost.likes?.length > 0
+            ? `${fetchedPost.likes.length} Likes`
+            : "No likes yet";
+        if (
+          fetchedPost.authorId?._id === currentUserId &&
+          fetchedPost.likes?.length > 0
+        ) {
+          const names = fetchedPost.likes
+            .map((u: any) => u.fullName)
+            .filter(Boolean);
           if (names.length === 1) calculatedLikedBy = `Liked by ${names[0]}`;
-          else if (names.length === 2) calculatedLikedBy = `Liked by ${names[0]} and ${names[1]}`;
-          else if (names.length > 2) calculatedLikedBy = `Liked by ${names[0]}, ${names[1]} and ${names.length - 2} others`;
+          else if (names.length === 2)
+            calculatedLikedBy = `Liked by ${names[0]} and ${names[1]}`;
+          else if (names.length > 2)
+            calculatedLikedBy = `Liked by ${names[0]}, ${names[1]} and ${names.length - 2} others`;
         }
 
-        setPost((prev: any) => prev ? { ...prev, likedByText: calculatedLikedBy } : prev);
+        setPost((prev: any) =>
+          prev ? { ...prev, likedByText: calculatedLikedBy } : prev,
+        );
 
-        setIsLiked(fetchedPost.likes?.some((u: any) => u._id === currentUserId || u === currentUserId));
+        setIsLiked(
+          fetchedPost.likes?.some(
+            (u: any) => u._id === currentUserId || u === currentUserId,
+          ),
+        );
 
         if (fetchedPost.comments) {
           const mappedComments = fetchedPost.comments.map((c: any) => ({
             _id: c._id,
             author: {
-              _id: c.userId?._id || '',
-              fullName: c.userId?.fullName || 'Unknown User',
-              avatar: c.userId?.avatar || '',
-              role: c.userId?.jobTitle || '',
+              _id: c.userId?._id || "",
+              fullName: c.userId?.fullName || "Unknown User",
+              avatar: c.userId?.avatar || "",
+              role: c.userId?.jobTitle || "",
             },
             content: c.commentText,
             createdAt: new Date(c.createdAt).toLocaleDateString(),
@@ -110,7 +140,8 @@ export const PostDetails: React.FC = () => {
           setComments(mappedComments);
         }
       } catch (error) {
-        toast.error('Failed to load post details');
+        setError("Post not found");
+        toast.error("Failed to load post details");
       } finally {
         setIsLoading(false);
       }
@@ -122,22 +153,24 @@ export const PostDetails: React.FC = () => {
   const handleSubmitComment = async () => {
     if (!commentText.trim() || !postId) return;
     try {
-      await axiosInstance.post(`/posts/${postId}/comments`, { content: commentText });
-      setCommentText('');
-      toast.success('Comment added successfully!');
-      
+      await axiosInstance.post(`/posts/${postId}/comments`, {
+        content: commentText,
+      });
+      setCommentText("");
+      toast.success("Comment added successfully!");
+
       // Refetch post to get populated new comments
       const res = await axiosInstance.get(`/posts/${postId}`);
       const refetchedPost = res.data.data.post;
-      
+
       if (refetchedPost.comments) {
         const mappedComments = refetchedPost.comments.map((c: any) => ({
           _id: c._id,
           author: {
-            _id: c.userId?._id || '',
-            fullName: c.userId?.fullName || 'Unknown User',
-            avatar: c.userId?.avatar || '',
-            role: c.userId?.jobTitle || '',
+            _id: c.userId?._id || "",
+            fullName: c.userId?.fullName || "Unknown User",
+            avatar: c.userId?.avatar || "",
+            role: c.userId?.jobTitle || "",
           },
           content: c.commentText,
           createdAt: new Date(c.createdAt).toLocaleDateString(),
@@ -145,10 +178,14 @@ export const PostDetails: React.FC = () => {
           isAuthor: c.userId?._id === refetchedPost.authorId?._id,
         }));
         setComments(mappedComments);
-        setPost((prev: any) => prev ? { ...prev, commentsCount: refetchedPost.comments.length } : prev);
+        setPost((prev: any) =>
+          prev
+            ? { ...prev, commentsCount: refetchedPost.comments.length }
+            : prev,
+        );
       }
     } catch (error) {
-      toast.error('Failed to add comment');
+      toast.error("Failed to add comment");
     }
   };
 
@@ -157,14 +194,31 @@ export const PostDetails: React.FC = () => {
       const res = await axiosInstance.post(`/posts/${postId}/like`);
       const updatedPost = res.data.data.post;
       setIsLiked(updatedPost.likes?.some((id: string) => id === currentUserId));
-      setPost((prev: any) => prev ? {
-        ...prev,
-        likesCount: updatedPost.likes?.length || 0,
-        likedByText: updatedPost.likes?.length > 0 ? `${updatedPost.likes.length} Likes` : 'No likes yet'
-      } : prev);
+      setPost((prev: any) =>
+        prev
+          ? {
+              ...prev,
+              likesCount: updatedPost.likes?.length || 0,
+              likedByText:
+                updatedPost.likes?.length > 0
+                  ? `${updatedPost.likes.length} Likes`
+                  : "No likes yet",
+            }
+          : prev,
+      );
     } catch (error) {
-      toast.error('Failed to toggle like');
+      toast.error("Failed to toggle like");
     }
+  };
+
+  const scrollToComments = () => {
+    commentsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setTimeout(() => {
+      const textarea = document.querySelector(
+        'textarea[placeholder*="Share your thoughts"]',
+      ) as HTMLTextAreaElement;
+      textarea?.focus();
+    }, 500);
   };
 
   const handleDeletePost = async () => {
@@ -182,15 +236,19 @@ export const PostDetails: React.FC = () => {
     return (
       <main className="flex-1 overflow-y-auto relative custom-scrollbar bg-[#FAFAFA] dark:bg-[#171717]">
         <div className="max-w-3xl mx-auto px-6 py-12 flex flex-col gap-8 justify-center items-center h-full">
-          <span className="material-icons-round animate-spin text-[#7C3AED] text-4xl">sync</span>
-          <p className="text-gray-500 font-medium mt-4">Loading post details...</p>
+          <span className="material-icons-round animate-spin text-[#7C3AED] text-4xl">
+            sync
+          </span>
+          <p className="text-gray-500 font-medium mt-4">
+            Loading post details...
+          </p>
         </div>
       </main>
     );
   }
 
   // حالة عدم وجود البوست
-  if (!post) {
+  if (error || !post) {
     return (
       <main className="flex-1 overflow-y-auto relative custom-scrollbar bg-[#FAFAFA] dark:bg-[#171717]">
         <div className="max-w-3xl mx-auto px-6 py-12 flex flex-col gap-8">
@@ -198,17 +256,25 @@ export const PostDetails: React.FC = () => {
             onClick={() => navigate(-1)}
             className="inline-flex items-center gap-2 text-[#7C3AED] dark:text-[#8B5CF6] hover:opacity-80 font-medium transition-all duration-300 w-fit group"
           >
-            <span className="material-icons-round text-xl transform group-hover:-translate-x-1 transition-transform">arrow_back</span>
+            <span className="material-icons-round text-xl transform group-hover:-translate-x-1 transition-transform">
+              arrow_back
+            </span>
             Back to Group
           </button>
 
-          {/* Empty State */}
+          {/* Empty State / Error State */}
           <div className="bg-white dark:bg-[#262626] rounded-2xl shadow-sm border border-black/5 dark:border-white/5 p-10 transition-all duration-500 flex flex-col items-center justify-center text-center">
             <div className="w-20 h-20 bg-[#7C3AED]/10 dark:bg-[#8B5CF6]/20 rounded-full flex items-center justify-center mb-4">
-              <span className="material-icons-round text-4xl text-[#7C3AED] dark:text-[#8B5CF6]">article</span>
+              <span className="material-icons-round text-4xl text-[#7C3AED] dark:text-[#8B5CF6]">
+                error_outline
+              </span>
             </div>
-            <p className="text-lg font-bold text-gray-400 dark:text-gray-500 mb-2">Post not found</p>
-            <p className="text-sm text-gray-300 dark:text-gray-600">This post may have been removed or is loading.</p>
+            <p className="text-lg font-bold text-gray-400 dark:text-gray-500 mb-2">
+              {error || "Post not found"}
+            </p>
+            <p className="text-sm text-gray-300 dark:text-gray-600">
+              This post may have been removed or the ID is invalid.
+            </p>
           </div>
         </div>
       </main>
@@ -218,13 +284,14 @@ export const PostDetails: React.FC = () => {
   return (
     <main className="flex-1 overflow-y-auto relative custom-scrollbar bg-[#FAFAFA] dark:bg-[#171717]">
       <div className="max-w-3xl mx-auto px-6 py-12 flex flex-col gap-8">
-
         {/* Back Button */}
         <button
           onClick={() => navigate(-1)}
           className="inline-flex items-center gap-2 text-[#7C3AED] dark:text-[#8B5CF6] hover:opacity-80 font-medium transition-all duration-300 w-fit group"
         >
-          <span className="material-icons-round text-xl transform group-hover:-translate-x-1 transition-transform">arrow_back</span>
+          <span className="material-icons-round text-xl transform group-hover:-translate-x-1 transition-transform">
+            arrow_back
+          </span>
           Back to Group
         </button>
 
@@ -237,28 +304,40 @@ export const PostDetails: React.FC = () => {
           <div className="flex items-start justify-between mb-8">
             <div className="flex items-center gap-5">
               <div className="p-1 bg-gradient-to-tr from-[#7C3AED]/20 to-transparent dark:from-[#8B5CF6]/20 rounded-full">
-                <img src={post.author.avatar} alt={post.author.fullName} className="w-14 h-14 rounded-full object-cover border-4 border-white dark:border-[#262626]" />
+                <img
+                  src={post.author.avatar}
+                  alt={post.author.fullName}
+                  className="w-14 h-14 rounded-full object-cover border-4 border-white dark:border-[#262626]"
+                />
               </div>
               <div>
-                <h3 className="font-bold text-xl leading-tight hover:text-[#7C3AED] dark:hover:text-[#8B5CF6] cursor-pointer transition-colors duration-300 text-[#171717] dark:text-[#F5F5F5]">{post.author.fullName}</h3>
-                <p className="text-sm opacity-70 mt-1 font-medium tracking-wide">{post.author.role} • {post.createdAt}</p>
+                <h3 className="font-bold text-xl leading-tight hover:text-[#7C3AED] dark:hover:text-[#8B5CF6] cursor-pointer transition-colors duration-300 text-[#171717] dark:text-[#F5F5F5]">
+                  {post.author.fullName}
+                </h3>
+                <p className="text-sm opacity-70 mt-1 font-medium tracking-wide">
+                  {post.author.role} • {post.createdAt}
+                </p>
               </div>
             </div>
             <div className="relative">
-              <button 
+              <button
                 onClick={() => setIsMenuOpen(!isMenuOpen)}
                 className="p-2 hover:bg-black/5 dark:hover:bg-white/10 rounded-full transition-colors duration-300"
               >
-                <span className="material-icons-round text-xl opacity-60">more_vert</span>
+                <span className="material-icons-round text-xl opacity-60">
+                  more_vert
+                </span>
               </button>
-              
+
               {isMenuOpen && post.author._id === currentUserId && (
                 <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-[#262626] rounded-xl shadow-lg border border-black/5 dark:border-white/5 py-2 z-10">
-                  <button 
+                  <button
                     onClick={handleDeletePost}
                     className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors flex items-center gap-2 font-medium"
                   >
-                    <span className="material-icons-round text-[18px]">delete</span>
+                    <span className="material-icons-round text-[18px]">
+                      delete
+                    </span>
                     Delete Post
                   </button>
                 </div>
@@ -268,13 +347,19 @@ export const PostDetails: React.FC = () => {
 
           {/* Post Content */}
           <div className="mb-6">
-            <p className="leading-loose text-lg font-light text-[#171717] dark:text-[#F5F5F5]">{post.content}</p>
+            <p className="leading-loose text-lg font-light text-[#171717] dark:text-[#F5F5F5]">
+              {post.content}
+            </p>
           </div>
 
           {/* Media Images */}
           {post.media && post.media.length > 0 && (
             <div className="mb-8 rounded-2xl overflow-hidden border border-black/5 dark:border-white/5 shadow-sm max-h-96 flex justify-center bg-black/5 dark:bg-white/5">
-              <img src={post.media[0].fileUrl} alt="Post Attachment" className="max-w-full h-auto object-contain max-h-96" />
+              <img
+                src={post.media[0].fileUrl}
+                alt="Post Attachment"
+                className="max-w-full h-auto object-contain max-h-96"
+              />
             </div>
           )}
 
@@ -282,7 +367,10 @@ export const PostDetails: React.FC = () => {
           {post.tags.length > 0 && (
             <div className="flex flex-wrap gap-3 mb-8">
               {post.tags.map((tag, i) => (
-                <span key={i} className="bg-[#7C3AED]/5 text-[#7C3AED] dark:bg-[#8B5CF6]/10 dark:text-[#8B5CF6] border border-[#7C3AED]/20 dark:border-[#8B5CF6]/20 rounded-lg px-4 py-1.5 text-sm font-medium cursor-pointer hover:bg-[#7C3AED]/20 dark:hover:bg-[#8B5CF6]/30 transition-all duration-300">
+                <span
+                  key={i}
+                  className="bg-[#7C3AED]/5 text-[#7C3AED] dark:bg-[#8B5CF6]/10 dark:text-[#8B5CF6] border border-[#7C3AED]/20 dark:border-[#8B5CF6]/20 rounded-lg px-4 py-1.5 text-sm font-medium cursor-pointer hover:bg-[#7C3AED]/20 dark:hover:bg-[#8B5CF6]/30 transition-all duration-300"
+                >
                   #{tag}
                 </span>
               ))}
@@ -293,39 +381,57 @@ export const PostDetails: React.FC = () => {
           <div className="bg-[#FAFAFA] dark:bg-[#171717] rounded-xl py-4 px-6 flex items-center gap-6 text-sm font-medium opacity-90 mb-6">
             <span>{post.likedByText}</span>
             <span className="opacity-60">•</span>
-            <span><strong>{post.commentsCount}</strong> Comments</span>
+            <span>
+              <strong>{post.commentsCount}</strong> Comments
+            </span>
           </div>
 
           {/* Action Buttons */}
           <div className="flex items-center justify-between gap-4 pt-2 border-t border-black/5 dark:border-white/5">
             <button
               onClick={handleToggleLike}
-              className={`flex-1 flex items-center justify-center gap-3 py-3 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl transition-all duration-500 font-semibold tracking-wide text-sm group ${isLiked ? 'text-[#7C3AED] dark:text-[#8B5CF6]' : ''}`}
+              className={`flex-1 flex items-center justify-center gap-3 py-3 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl transition-all duration-500 font-semibold tracking-wide text-sm group ${isLiked ? "text-[#7C3AED] dark:text-[#8B5CF6]" : ""}`}
             >
-              <span className={`material-icons-round text-xl ${isLiked ? '' : 'opacity-70 group-hover:text-[#7C3AED] dark:group-hover:text-[#8B5CF6]'} transition-colors`}>
-                {isLiked ? 'thumb_up' : 'thumb_up_off_alt'}
+              <span
+                className={`material-icons-round text-xl ${isLiked ? "" : "opacity-70 group-hover:text-[#7C3AED] dark:group-hover:text-[#8B5CF6]"} transition-colors`}
+              >
+                {isLiked ? "thumb_up" : "thumb_up_off_alt"}
               </span>
               Like
             </button>
-            <button className="flex-1 flex items-center justify-center gap-3 py-3 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl transition-all duration-500 font-semibold tracking-wide text-sm text-[#7C3AED] dark:text-[#8B5CF6]">
-              <span className="material-icons-round text-xl">chat_bubble_outline</span>
+            <button
+              onClick={scrollToComments}
+              className="flex-1 flex items-center justify-center gap-3 py-3 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl transition-all duration-500 font-semibold tracking-wide text-sm text-[#7C3AED] dark:text-[#8B5CF6]"
+            >
+              <span className="material-icons-round text-xl">
+                chat_bubble_outline
+              </span>
               Comment
-            </button>
-            <button className="flex-1 flex items-center justify-center gap-3 py-3 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl transition-all duration-500 font-semibold tracking-wide text-sm group">
-              <span className="material-icons-round text-xl opacity-70 group-hover:text-[#7C3AED] dark:group-hover:text-[#8B5CF6] transition-colors">share</span>
-              Share
             </button>
           </div>
         </article>
 
         {/* Comments Section */}
-        <section className="bg-white dark:bg-[#262626] rounded-2xl shadow-sm border border-black/5 dark:border-white/5 p-8 sm:p-10 transition-all duration-500 relative overflow-hidden">
-          <h4 className="text-2xl font-bold mb-8 tracking-tight text-[#171717] dark:text-[#F5F5F5]">Comments ({comments.length})</h4>
+        <section
+          ref={commentsRef}
+          className="bg-white dark:bg-[#262626] rounded-2xl shadow-sm border border-black/5 dark:border-white/5 p-8 sm:p-10 transition-all duration-500 relative overflow-hidden"
+        >
+          <h4 className="text-2xl font-bold mb-8 tracking-tight text-[#171717] dark:text-[#F5F5F5]">
+            Comments ({comments.length})
+          </h4>
 
           {/* Comment Input */}
           <div className="flex gap-5 mb-10">
-            <div className="w-12 h-12 rounded-full bg-[#7C3AED] flex items-center justify-center text-white text-sm font-bold shrink-0 shadow-sm border-2 border-white dark:border-[#262626]">
-              U
+            <div className="w-12 h-12 rounded-full bg-[#7C3AED] flex items-center justify-center text-white text-sm font-bold shrink-0 shadow-sm border-2 border-white dark:border-[#262626] overflow-hidden">
+              {currentUserAvatar ? (
+                <img
+                  src={currentUserAvatar}
+                  alt="Your avatar"
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <span className="material-icons-round text-2xl">person</span>
+              )}
             </div>
             <div className="flex-grow flex flex-col gap-4">
               <textarea
@@ -350,32 +456,55 @@ export const PostDetails: React.FC = () => {
           <div className="flex flex-col gap-8">
             {comments.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-8 text-center">
-                <span className="material-icons-round text-4xl text-gray-200 dark:text-gray-700 mb-3">chat_bubble_outline</span>
-                <p className="text-sm text-gray-400 dark:text-gray-500">No comments yet. Be the first to share your thoughts!</p>
+                <span className="material-icons-round text-4xl text-gray-200 dark:text-gray-700 mb-3">
+                  chat_bubble_outline
+                </span>
+                <p className="text-sm text-gray-400 dark:text-gray-500">
+                  No comments yet. Be the first to share your thoughts!
+                </p>
               </div>
             ) : (
               comments.map((comment) => (
-                <div key={comment._id} className={`flex gap-5 group ${comment.isAuthor ? '' : ''}`}>
-                  <img src={comment.author.avatar} alt={comment.author.fullName} className="w-12 h-12 rounded-full object-cover shrink-0 mt-1 shadow-sm border-2 border-white dark:border-[#262626]" />
+                <div
+                  key={comment._id}
+                  className={`flex gap-5 group ${comment.isAuthor ? "" : ""}`}
+                >
+                  <img
+                    src={comment.author.avatar}
+                    alt={comment.author.fullName}
+                    className="w-12 h-12 rounded-full object-cover shrink-0 mt-1 shadow-sm border-2 border-white dark:border-[#262626]"
+                  />
                   <div className="flex-grow">
-                    <div className={`bg-[#FAFAFA] dark:bg-[#171717] p-6 rounded-2xl rounded-tl-sm border border-black/5 dark:border-white/5 shadow-sm transition-all duration-300 group-hover:shadow-md ${comment.isAuthor ? 'border-l-4 border-l-[#7C3AED] dark:border-l-[#8B5CF6]' : ''}`}>
+                    <div
+                      className={`bg-[#FAFAFA] dark:bg-[#171717] p-6 rounded-2xl rounded-tl-sm border border-black/5 dark:border-white/5 shadow-sm transition-all duration-300 group-hover:shadow-md ${comment.isAuthor ? "border-l-4 border-l-[#7C3AED] dark:border-l-[#8B5CF6]" : ""}`}
+                    >
                       <div className="flex justify-between items-start mb-2">
                         <h5 className="font-bold text-base text-[#171717] dark:text-[#F5F5F5] flex items-center gap-2">
                           {comment.author.fullName}
                           {comment.isAuthor && (
-                            <span className="bg-[#7C3AED] text-white text-[10px] px-3 py-1 rounded-full uppercase tracking-wider font-bold shadow-sm">Author</span>
+                            <span className="bg-[#7C3AED] text-white text-[10px] px-3 py-1 rounded-full uppercase tracking-wider font-bold shadow-sm">
+                              Author
+                            </span>
                           )}
                         </h5>
-                        <span className="text-sm opacity-60 font-medium">{comment.createdAt}</span>
+                        <span className="text-sm opacity-60 font-medium">
+                          {comment.createdAt}
+                        </span>
                       </div>
-                      <p className="text-base leading-relaxed text-[#171717] dark:text-[#F5F5F5] font-light">{comment.content}</p>
+                      <p className="text-base leading-relaxed text-[#171717] dark:text-[#F5F5F5] font-light">
+                        {comment.content}
+                      </p>
                     </div>
                     <div className="flex gap-6 mt-3 px-4 text-xs font-bold opacity-70 tracking-wider">
                       <button className="hover:text-[#7C3AED] dark:hover:text-[#8B5CF6] transition-colors duration-300 flex items-center gap-1">
-                        <span className="material-icons-round text-sm">favorite_border</span>
+                        <span className="material-icons-round text-sm">
+                          favorite_border
+                        </span>
                         Like ({comment.likesCount})
                       </button>
-                      <button className="hover:text-[#7C3AED] dark:hover:text-[#8B5CF6] transition-colors duration-300">Reply</button>
+                      <button className="hover:text-[#7C3AED] dark:hover:text-[#8B5CF6] transition-colors duration-300">
+                        Reply
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -383,7 +512,6 @@ export const PostDetails: React.FC = () => {
             )}
           </div>
         </section>
-
       </div>
     </main>
   );

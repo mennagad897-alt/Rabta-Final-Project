@@ -207,13 +207,6 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({
             >
               <span className="material-icons-round">image</span>
             </button>
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className="w-10 h-10 rounded-xl bg-[#262626] hover:bg-[#333333] border border-white/5 flex items-center justify-center text-gray-400 hover:text-white transition-colors"
-              title="Add File"
-            >
-              <span className="material-icons-round">attach_file</span>
-            </button>
           </div>
 
           <button

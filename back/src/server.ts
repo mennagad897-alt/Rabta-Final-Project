@@ -234,7 +234,7 @@ io.on('connection', (socket) => {
   // ==========================================
   // 💬 إرسال واستقبال الرسائل (Chat Events)
   // ==========================================
-  socket.on('send-message', async (data: { chatId: string, content: string, messageType?: string, postId?: string, tempId?: string, replyTo?: string }) => {
+  socket.on('send-message', async (data: { chatId: string, content: string, messageType?: string, postId?: string, mediaUrl?: string, tempId?: string, replyTo?: string }) => {
       console.log('🚀 send-message received:', data.chatId);  // ← ضيفي ده
     try {
       const blockStatus = await chatService.checkDirectChatBlockStatus(authenticatedUserId, data.chatId);
@@ -264,6 +264,7 @@ io.on('connection', (socket) => {
         content: data.content,
         messageType: data.messageType,
         postId: data.postId,
+        mediaUrl: data.mediaUrl,
         replyTo: data.replyTo,
         status: initialStatus
       });
